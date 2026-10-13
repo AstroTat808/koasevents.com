@@ -8,6 +8,7 @@ const checks=[
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
+  ['mobile-bar-pricing','Mobile Bar pricing regression','npm',['run','test:mobile-bar-pricing']],
   ['theme-regression','Theme regression','npm',['run','test:theme']],
   ['health-dashboard-regression','System Health dashboard regression','npm',['run','test:health-dashboard']],
   ['turnstile-history-regression','Turnstile append-only history regression','npm',['run','test:turnstile-history']],

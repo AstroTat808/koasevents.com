@@ -2,7 +2,7 @@
 
 Status: **ACTIVE WORKING SOURCE OF TRUTH FOR WEBSITE REBUILD**
 
-Last updated: 2026-09-17 Hawaiʻi time.
+Last updated: 2026-10-10 Hawaiʻi time.
 
 ## Status definitions
 
@@ -55,48 +55,54 @@ All public package prices should be presented as **starting at** until the cost/
 | Sound level | Event Day Checklist states under 75 dB | CONFIRMED IN CHECKLIST |
 | Setup | No earlier than 12 PM unless approved | CONFIRMED |
 
-## Mobile Bar — approved operating policy
+## Mobile Bar — approved commercial rules
 
 Koa’s Mobile Bar is a **dry-bar service**. Koa’s does not sell alcohol. The client purchases the alcohol; Koa’s provides professional bar service, planning, setup and the supplies included in the selected package.
 
-The following policy was approved by Christopher on 2026-09-17:
+The following commercial rules are synchronized with KoaSMobileBar.com as of 2026-10-10:
 
-- **Bartender labor:** included within standard package assumptions.
-- **Gratuity:** optional.
-- **Tip jar:** no tip jar by default; a client may request one.
-- **Additional/custom staffing:** quoted when guest count, menu complexity, service time or logistics require more staffing.
-
-The prior 10%/25% bartender-fee language is retired from the redesigned website.
+- **Package prices:** Oahu $1,500; Maui $2,000; Big Island $2,500.
+- **Guests included:** up to 100.
+- **Additional guests:** Oahu $10/person; Maui $12/person; Big Island $15/person.
+- **Service time:** 4 hours.
+- **Additional service hour:** $200 plus bartender labor.
+- **Bartender labor:** $65/hour/bartender.
+- **Travel:** first 20 miles each way included; $2.00 per excess round-trip mile; +$150 when the event is more than 60 miles one-way.
+- **Gratuity:** 10% with a tip jar or 25% with no tip jar.
+- **Ice:** up to 150 lbs.
+- **Mixers:** choice of five.
+- **Setup + cleanup, water station, standard bar supplies and general liability insurance:** included in the service foundation.
 
 ## Mobile Bar packages
 
-| Package | Starting price | Current published beverage scope | Status |
-|---|---:|---|---|
-| Oahu | $1,200 | Beer, champagne, wine | PUBLISHED CURRENT |
-| Maui | $1,500 | Beer, champagne, wine, 2 signature drinks | PUBLISHED CURRENT |
-| Big Island | $1,800 | Beer, champagne, wine, 2 signature drinks, mixed cocktails | PUBLISHED CURRENT |
+| Package | Starting price | Beverage / experience scope | Additional guests |
+|---|---:|---|---:|
+| Oahu | $1,500 | Beer, champagne, wine | $10/person |
+| Maui | $2,000 | Oahu scope + 2 signature drinks | $12/person |
+| Big Island | $2,500 | Maui scope + mixed cocktails, enhanced garnish presentation, one zero-proof signature companion, custom cocktail naming + menu curation | $15/person |
 
-## Mobile Bar framework still pending commercial review
+## Mobile Bar published enhancements
 
-| Item | Current working rule |
-|---|---|
-| Standard guest framework | Up to 100 guests |
-| Over 100 guests | Custom service/staffing quote; current legacy pricing also lists $8/additional guest for consumables |
-| Service duration | 4 hours |
-| Additional hour | Legacy/current public price: $200 |
-| Travel | Legacy/current public rule: no fee within 20 miles; $1.50/mile after first 20 |
-| Ice | Up to 150 lbs |
-| Mixers | Choice of 5 |
-| Water station | Included |
-| General liability insurance | Included / carried |
+| Enhancement | Published price |
+|---|---:|
+| Champagne toast | $150 up to 50 guests; +$3/guest thereafter |
+| Champagne tower wall | Starting at $350 |
+| Upgraded tossware | $2/guest; $100 minimum |
+| Vinyl logo | Starting at $150 |
+| Personalized stirrers | $3/guest; $175 minimum |
+| Drink accessories | Starting at $125 |
+| Balloon garland | Starting at $350 |
+| Soda station | $4/guest; $200 minimum |
+| Juice / punch station | $5/guest; $250 minimum |
+| Coffee bar | $6/guest; $300 minimum |
+| Bar décor | Starting at $250 |
+| Standard Mobile Bar glassware | $3/piece |
+| Premium / specialty Mobile Bar glassware | $4.50/piece |
+| Acrylic bar menu | Starting at $125 |
 
 ## Remaining decisions before commercial lock
 
-1. Final package margin review and whether starting prices change.
-2. Final Plumeria vendor-provided inclusions and exact quantities.
-3. Whether the $8/additional-guest consumables rule remains after 100 guests.
-4. Exact travel origin and mileage calculation language.
-5. Which Mobile Bar add-ons get fixed public prices vs. quote-only pricing.
-6. Kamaʻāina benefit/discount strategy.
-7. Whether the reservation retainer remains 10% for future bookings or is increased.
-8. Whether the 75 dB rule should be added to the controlling agreement rather than living only in the checklist.
+1. Final Plumeria vendor-provided inclusions and exact quantities.
+2. Kamaʻāina benefit/discount strategy.
+3. Whether the reservation retainer remains 10% for future bookings or is increased.
+4. Whether the 75 dB rule should be added to the controlling agreement rather than living only in the checklist.

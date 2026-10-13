@@ -1,0 +1,133 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Mobile Bar Pricing Experiments | Koa’s Events" description="Pricing-test readiness for Koa’s Mobile Bar using conversion analytics." canonical="https://koasevents.com/admin/mobile-bar-pricing-experiments/">
+<main class="min-h-screen bg-[var(--koa-sand)] py-10 sm:py-12">
+  <div class="container-shell grid gap-6">
+    <header class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <div>
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+        <h1 class="display mt-3 text-4xl text-[var(--koa-forest)] sm:text-5xl">Pricing Experiment Readiness</h1>
+        <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60">Use actual quote behavior to decide when there is enough baseline volume to test package prices, guest surcharges or bartender labor without guessing.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="/admin/mobile-bar-conversion/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Conversion Analytics</a>
+        <a href="/admin/crm/" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Business CRM</a>
+      </div>
+    </header>
+
+    <section data-pricing-status class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)]">
+      <p class="eyebrow text-[var(--koa-clay)]">Experiment guardrail</p>
+      <p data-pricing-status-message class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Loading pricing readiness…</p>
+    </section>
+
+    <section data-pricing-unauthorized class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+      <strong class="text-[var(--koa-forest)]">Business CRM access required.</strong>
+    </section>
+
+    <div data-pricing-ui class="hidden grid gap-6">
+      <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Baseline window</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">When is there enough data?</h2>
+            <p data-window-meta class="mt-2 text-xs text-[var(--koa-ink)]/50"></p>
+          </div>
+          <div class="flex gap-2" role="group" aria-label="Pricing readiness date range">
+            <button data-range="30" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">30 days</button>
+            <button data-range="90" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white">90 days</button>
+            <button data-range="180" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">180 days</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Tracked sessions</p><p data-kpi-sessions class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+        <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Package selections</p><p data-kpi-selections class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+        <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">100+ guest estimates</p><p data-kpi-over100 class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+        <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Completed inquiries</p><p data-kpi-completed class="display mt-3 text-4xl">0</p></article>
+      </section>
+
+      <section data-levers class="grid gap-5 xl:grid-cols-3"></section>
+
+      <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+        <p class="eyebrow text-[var(--koa-clay)]">Package baseline</p>
+        <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Which package has enough traffic first?</h2>
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full min-w-[620px] border-collapse text-left text-sm">
+            <thead><tr class="border-b border-[var(--koa-line)] text-[.62rem] uppercase tracking-[.09em] text-[var(--koa-ink)]/50"><th class="py-3">Package</th><th class="py-3">Selection sessions</th><th class="py-3">Tracked submissions</th><th class="py-3">Conversion</th></tr></thead>
+            <tbody data-package-baselines></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="grid gap-5 lg:grid-cols-2">
+        <article class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Testing discipline</p>
+          <h2 class="display mt-3 text-3xl">Change one pricing lever at a time.</h2>
+          <p class="mt-4 text-sm leading-7 text-white/65">Do not raise package base price, guest surcharge and bartender labor in the same experiment. A single-variable test tells you which change caused the conversion movement.</p>
+        </article>
+        <article class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Decision standard</p>
+          <h2 class="display mt-3 text-3xl text-[var(--koa-forest)]">“Ready to start” is different from “enough to decide.”</h2>
+          <p data-methodology class="mt-4 text-sm leading-7 text-[var(--koa-ink)]/62"></p>
+        </article>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script is:inline>
+(() => {
+  let days=90;
+  const status=document.querySelector('[data-pricing-status-message]');
+  const ui=document.querySelector('[data-pricing-ui]');
+  const unauthorized=document.querySelector('[data-pricing-unauthorized]');
+  const fmt=n=>Number(n||0).toLocaleString();
+  const rate=n=>n===null||n===undefined?'—':Number(n).toFixed(1)+'%';
+  const toneClass=tone=>tone==='green'?'border-emerald-200 bg-emerald-50':tone==='amber'?'border-amber-200 bg-amber-50':'border-rose-200 bg-rose-50';
+
+  async function load(){
+    status.textContent='Loading pricing readiness…';
+    const response=await fetch('/api/admin-mobile-bar-pricing-experiments?days='+days,{credentials:'same-origin'});
+    if(response.status===401||response.status===403){
+      unauthorized.classList.remove('hidden');ui.classList.add('hidden');status.textContent='Business CRM access required.';return;
+    }
+    if(!response.ok){status.textContent='Pricing readiness could not be loaded.';return;}
+    const data=await response.json();
+    unauthorized.classList.add('hidden');ui.classList.remove('hidden');
+    status.textContent='Ready. This dashboard is advisory only; it does not change live pricing.';
+    document.querySelector('[data-window-meta]').textContent='Last '+data.days+' days · generated '+new Date(data.generatedAt).toLocaleString();
+    document.querySelector('[data-kpi-sessions]').textContent=fmt(data.metrics.trackedSessions);
+    document.querySelector('[data-kpi-selections]').textContent=fmt(data.metrics.quoteSelections);
+    document.querySelector('[data-kpi-over100]').textContent=fmt(data.metrics.over100EstimateSessions);
+    document.querySelector('[data-kpi-completed]').textContent=fmt(data.metrics.completedInquiries);
+
+    document.querySelector('[data-levers]').innerHTML=data.levers.map(row =>
+      '<article class="rounded-[1.5rem] border p-6 shadow-[var(--shadow-soft)] '+toneClass(row.tone)+'">'+
+      '<div class="flex items-start justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">'+row.label+'</p><h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">'+row.status+'</h3></div><span class="rounded-full bg-white/80 px-3 py-1 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+row.score+'/100</span></div>'+
+      '<div class="mt-5 grid gap-3 text-sm"><p><strong>Current:</strong> '+row.current+'</p><p><strong>Candidate:</strong> '+row.candidate+'</p><p><strong>Eligible sessions:</strong> '+fmt(row.eligibleSessions)+' · <strong>tracked submissions:</strong> '+fmt(row.successes)+'</p><p><strong>Baseline conversion:</strong> '+rate(row.conversionRate)+' · <strong>95% interval:</strong> '+(row.confidence95.low===null?'—':row.confidence95.low.toFixed(1)+'–'+row.confidence95.high.toFixed(1)+'%')+'</p><p><strong>Decision-grade target:</strong> '+fmt(row.samplePerVariant)+' sessions per variant</p><p><strong>At current traffic:</strong> '+(row.estimatedDaysToDecision?fmt(row.estimatedDaysToDecision)+' days to fill both variants':'not enough eligible traffic yet')+'</p></div></article>'
+    ).join('');
+
+    document.querySelector('[data-package-baselines]').innerHTML=data.packageBaselines.map(row =>
+      '<tr class="border-b border-[var(--koa-line)]"><td class="py-4 font-bold text-[var(--koa-forest)]">'+row.label+'</td><td class="py-4">'+fmt(row.selectionSessions)+'</td><td class="py-4">'+fmt(row.successes)+'</td><td class="py-4">'+rate(row.conversionRate)+'</td></tr>'
+    ).join('');
+
+    document.querySelector('[data-methodology]').textContent=data.methodology.baselineMinimum+' '+data.methodology.decisionTarget+' '+data.methodology.rule;
+  }
+
+  document.querySelectorAll('[data-range]').forEach(button=>button.addEventListener('click',()=>{
+    days=Number(button.dataset.range||90);
+    document.querySelectorAll('[data-range]').forEach(b=>{
+      const active=Number(b.dataset.range)===days;
+      b.classList.toggle('bg-[var(--koa-forest)]',active);
+      b.classList.toggle('text-white',active);
+      b.classList.toggle('bg-white',!active);
+      b.classList.toggle('text-[var(--koa-forest)]',!active);
+    });
+    load();
+  }));
+  load().catch(()=>{status.textContent='Pricing readiness could not be loaded.';});
+})();
+</script>
+</BaseLayout>

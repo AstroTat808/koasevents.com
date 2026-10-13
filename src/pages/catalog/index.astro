@@ -44,6 +44,8 @@ const catalogClientData = catalogItems.map((item) => ({
   estimatedUnitPrice: item.estimatedUnitPrice || null,
   estimatedUnitLabel: item.estimatedUnitLabel || '',
   publishedUnitPrice: item.publishedUnitPrice || null,
+  publishedMinimumPrice: item.publishedMinimumPrice || null,
+  publishedIncludedQuantity: item.publishedIncludedQuantity || null,
   specs: item.specs || [],
 }));
 const bundleClientData = catalogBundles;
@@ -1207,8 +1209,13 @@ const badgeClass = {
       if (entry.auto) return 0;
       const item = itemById.get(id);
       const unit = Number(item?.publishedUnitPrice || 0);
-      if (!unit || !['fixed', 'per-item'].includes(item?.priceType)) return 0;
-      return unit * Math.max(1, Number(entry.quantity || 1));
+      const minimum = Number(item?.publishedMinimumPrice || 0);
+      const included = Math.max(0, Number(item?.publishedIncludedQuantity || 0));
+      const quantity = Math.max(1, Number(entry.quantity || 1));
+      if (!unit && !minimum) return 0;
+      if (!['fixed', 'per-item', 'starting'].includes(item?.priceType)) return 0;
+      if (included > 0) return minimum + Math.max(0, quantity - included) * unit;
+      return Math.max(minimum, unit * quantity);
     }
 
     function packageCustomQuoteNotes(entries = [...selected.entries()]) {

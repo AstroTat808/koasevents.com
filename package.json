@@ -32,7 +32,8 @@
     "test:theme": "node scripts/test_theme_system.mjs",
     "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs",
     "test:deploy-recovery": "node scripts/test_production_deploy_recovery.mjs",
-    "test:build-diagnostics": "node scripts/test_build_failure_diagnostics.mjs"
+    "test:build-diagnostics": "node scripts/test_build_failure_diagnostics.mjs",
+    "test:mobile-bar-pricing": "node scripts/test_mobile_bar_pricing_sync.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
