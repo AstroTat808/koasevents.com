@@ -563,8 +563,10 @@ function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId
 
 async function independentReleaseHistoryPersistence(context:Context,deployments:any,releases:any[]) {
   // An exact ready deploy is not proof that its certification was stored.
-  const sha=String(deployments?.current?.commit||Netlify.env.get('COMMIT_REF')||'').trim().toLowerCase();
-  const deployId=String(deployments?.current?.deployId||context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'').trim();
+  // The live function runtime is authoritative. Cached Netlify metadata may
+  // describe a previously deployed release and must not certify that stale ID.
+  const sha=String(Netlify.env.get('COMMIT_REF')||deployments?.current?.commit||'').trim().toLowerCase();
+  const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||deployments?.current?.deployId||'').trim();
   const publishedAt=String(deployments?.current?.deployTime||deployments?.current?.builtAt||'');
   const release=(releases||[]).find((row:any)=>row?.commit===sha&&row?.deployId===deployId)||null;
   let statuses:any[]=[];
