@@ -62,6 +62,17 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/delete_sha_pinned_branches.py --execute
+      - name: Retain exact branch retirement and final remote-tip reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: koa-branch-retirement-reconciliation-${{ github.run_id }}
+          path: |
+            /tmp/koa-branch-retirement/outcomes.json
+            /tmp/koa-branch-retirement/reconciliation.json
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Summarize audit ledger
         if: always()
         shell: bash
