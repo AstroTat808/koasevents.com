@@ -31,6 +31,9 @@ const rules=[
       /accounting-adjustment-diagnostics\.json/i,
       /accounting-repair-bulk-preview\.json/i,
       /production-accounting-audits\.json/i,
+      /critical-integration-real-rollback-drill\.json/i,
+      /netlify-sandbox-self-heal-drill\.json/i,
+      /\bQBO-CUST-\d+\b/i,
       /(?:^|[\/])system-health-dashboard\.json\b/im,
     ],
   },
@@ -78,12 +81,27 @@ for(const file of walk(workflowsDir)){
     if(!protectedEndpoint.test(lines[i])) continue;
     const start=Math.max(0,i-12);
     const block=lines.slice(start,i+1).join('\n');
-    if(/curl\s/i.test(block) && !/(?:^|\s)-o\s+/m.test(block) && !/--output\s+/m.test(block)){
+    const outputMatch=block.match(/(?:^|\s)(?:-o|--output)\s+(?:"([^"]+)"|'([^']+)'|([^\s\\]+))/m);
+    if(!/curl\s/i.test(block))continue;
+    if(!outputMatch){
       findings.push({
-        file:rel,
-        line:i+1,
-        rule:'protected-api-stdout',
+        file:rel,line:i+1,rule:'protected-api-stdout',
         description:'protected production API call without an explicit output file',
+      });
+      continue;
+    }
+    const dest=outputMatch[1]||outputMatch[2]||outputMatch[3]||'';
+    const variable=dest.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/)?.[1]||'';
+    const assignments=variable?lines.slice(0,i).filter(line=>
+      new RegExp('^\\\\s*'+variable+'\\\\s*=').test(line)
+    ):[];
+    const last=assignments[assignments.length-1]||'';
+    const privateOutput=dest.startsWith('/tmp/')
+      ||(variable&&/(?:mktemp|\/tmp\/)/.test(last)&&!/(?:visual-results|artifacts|uploads)/i.test(last));
+    if(!privateOutput){
+      findings.push({
+        file:rel,line:i+1,rule:'protected-api-output-destination',
+        description:'authenticated production response may only be written to a private temporary file, not an uploaded artifact path',
       });
     }
   }
