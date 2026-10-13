@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { evaluateReleaseHistoryPersistence, RELEASE_HISTORY_CONTEXT } from '../netlify/functions/_shared/release-history-integrity.mjs';
+import { persistenceStatusForOutcome } from './publish_release_history_status.mjs';
 import {
   evaluateProductionReleaseGate,
   isSuccessfulNetlifyState,
@@ -124,5 +126,61 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
+
+
+const historyAttestation={
+  status:'verified',expectedSha:sha,deployId,liveDeployId:deployId,
+  matchingDeployId:true,productionGateState:'success',visualQaConclusion:'success',
+  visualQaRunId:'777',verifiedAt:'2026-10-12T10:00:00Z',
+  systemHealth:{overall:'healthy',passed:82,failed:0},
+};
+const release={commit:sha,deployId,publishedAt:'2026-10-12T09:55:00Z',releaseAttestation:historyAttestation};
+const statuses=(state)=>[{context:RELEASE_HISTORY_CONTEXT,state}];
+const historyGood=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release,statuses:statuses('success'),now:Date.parse('2026-10-12T10:10:00Z'),
+});
+assert(historyGood.state==='healthy'&&historyGood.verified===true,
+  'Only a matching durable record with independent green GitHub status may show Healthy.');
+const historyFailed=evaluateReleaseHistoryPersistence({commit:sha,deployId,release,statuses:statuses('failure')});
+assert(historyFailed.state==='failed'&&historyFailed.severity==='critical',
+  'A failed persistence check must be critical even when the production deploy is ready.');
+const historyMissing=evaluateReleaseHistoryPersistence({commit:sha,deployId,release:null,statuses:statuses('success')});
+assert(historyMissing.state==='failed'&&historyMissing.severity==='critical',
+  'Successful GitHub status without a durable record must be critical.');
+const historyRecent=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release:null,statuses:statuses('pending'),
+  publishedAt:'2026-10-12T10:00:00Z',now:Date.parse('2026-10-12T10:15:00Z'),
+});
+assert(historyRecent.state==='pending'&&historyRecent.verified===false,
+  'Pending releases may not appear certified before durable persistence.');
+const historyOverdue=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release:null,statuses:[],
+  publishedAt:'2026-10-12T09:00:00Z',now:Date.parse('2026-10-12T10:00:00Z'),
+});
+assert(historyOverdue.state==='failed'&&historyOverdue.severity==='critical',
+  'Uncertified production deploy older than 45 minutes must be critical.');
+const mismatch=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release:{...release,releaseAttestation:{...historyAttestation,deployId:'other'}},
+  statuses:statuses('success'),
+});
+assert(mismatch.state==='failed','Exact deploy mismatch must never display a green certificate.');
+assert(persistenceStatusForOutcome('success').state==='success'
+    &&persistenceStatusForOutcome('failure').state==='failure'
+    &&persistenceStatusForOutcome('skipped').state==='failure',
+  'Only a completed successful durable recorder can publish independent success.');
+assert(workflow.includes('id: persist-history')
+    &&workflow.includes('Publish independent release-history persistence status')
+    &&workflow.includes('node scripts/publish_release_history_status.mjs')
+    &&workflow.includes('steps.persist-history.outcome'),
+  'Production workflow must publish independent status after the history persistence step.');
+assert(server.includes('const persistedReleases=await readProductionReleases(context,100)'),
+  'Production recorder must read the durable certification back before returning success.');
+const healthApi=readFileSync('netlify/functions/admin-health.mts','utf8');
+assert(healthApi.includes('releaseHistoryPersistence')
+    &&healthApi.includes('independentReleaseHistoryPersistence')
+    &&healthPage.includes('data-release-history-persistence-card')
+    &&healthPage.includes('data-release-history-persistence-status')
+    &&healthPage.includes('Critical — not certified'),
+  'System Health must show a dedicated independent persistence failure even when deployment succeeds.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');
