@@ -159,6 +159,22 @@ const historyOverdue=evaluateReleaseHistoryPersistence({
 });
 assert(historyOverdue.state==='failed'&&historyOverdue.severity==='critical',
   'Uncertified production deploy older than 45 minutes must be critical.');
+const stillTesting=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release:null,
+  statuses:[
+    {context:'System Health production release gate',state:'pending'},
+  ],
+  publishedAt:'2026-10-12T09:00:00Z',now:Date.parse('2026-10-12T10:30:00Z'),
+});
+assert(stillTesting.state==='pending'&&stillTesting.verified===false,
+  'Long-running Chromium/WebKit release certification must remain pending, never false critical.');
+const failedGate=evaluateReleaseHistoryPersistence({
+  commit:sha,deployId,release:null,
+  statuses:[{context:'System Health production release gate',state:'failure'}],
+});
+assert(failedGate.state==='failed'&&failedGate.severity==='critical',
+  'A failed exact production gate must be independently visible before any durable record exists.');
+
 const mismatch=evaluateReleaseHistoryPersistence({
   commit:sha,deployId,release:{...release,releaseAttestation:{...historyAttestation,deployId:'other'}},
   statuses:statuses('success'),
