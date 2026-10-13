@@ -6,6 +6,11 @@ export const RELEASE_WORKFLOWS=[
   'Branch hygiene',
   'VenueLoom tenant isolation CI',
 ];
+// Historical merged certificates retain their original policy; new candidates
+// must additionally carry the current safety/browser workflows.
+export const CURRENT_RELEASE_WORKFLOWS=[...RELEASE_WORKFLOWS,
+  'Critical Integrations rollback drill','Calendar contrast regression','CI privacy gate',
+];
 export const NETLIFY_SITE_ID='d1f3ab06-be2a-41c4-b770-59e6a6acd1b9';
 export const RULESET_ID=23722583;
 
@@ -156,13 +161,16 @@ export function productionSummary(mainSha,deploys,health,publishedDeploy=null){
 export function releaseRow({pr,runs,deploys,comparison,attestation,prod,certError}){
   const head=String(pr?.head?.sha||'');
   const number=Number(pr?.number||0),merged=Boolean(pr?.merged_at),isOpen=pr?.state==='open';
-  const checks=Object.fromEntries(RELEASE_WORKFLOWS.map(name=>[name,checkSummary(latestRun(runs,name,head))]));
+  const policy=isOpen?CURRENT_RELEASE_WORKFLOWS:RELEASE_WORKFLOWS;
+  const checks=Object.fromEntries(policy.map(name=>[name,checkSummary(latestRun(runs,name,head))]));
   const preview=netlifyPreview(deploys,number,head);
   const qa=qaFromAttestation(attestation,head);
   const behind=isOpen?(comparison&&Number.isInteger(comparison.behind_by)?comparison.behind_by:null):null;
   const failing=Object.values(checks).some(c=>c.status==='failed')||preview.status==='failed'||qa.status==='failed';
   const checked=Object.values(checks).every(c=>c.status==='passed');
-  const certified=checked&&preview.exact&&qa.status==='passed'&&!certError&&(isOpen?behind===0:Boolean(attestation));
+  const currentBase=Boolean(prod?.mainSha&&attestation?.main===prod.mainSha);
+  const candidateAllowed=!pr?.draft&&pr?.base?.ref==='main'&&behind===0&&currentBase;
+  const certified=checked&&preview.exact&&qa.status==='passed'&&!certError&&(isOpen?candidateAllowed:Boolean(attestation));
   const mergeSha=String(pr?.merge_commit_sha||'');
   const deployed=Boolean(merged&&mergeSha&&prod?.sha===mergeSha);
   const deployStatus=merged?(deployed?'live':prod?.mainSha===mergeSha?'awaiting-production':'superseded'):'not-merged';

@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { deflateRawSync } from 'node:zlib';
 import {
   latestRun,checkSummary,netlifyPreview,extractAttestationZip,qaFromAttestation,
-  releaseRow,productionSummary,dashboardTotals,RELEASE_WORKFLOWS,NETLIFY_SITE_ID,
+  releaseRow,productionSummary,dashboardTotals,RELEASE_WORKFLOWS,CURRENT_RELEASE_WORKFLOWS,NETLIFY_SITE_ID,
 } from '../netlify/functions/_shared/release-dashboard.mjs';
 
 function archive(name,content){
@@ -27,7 +27,7 @@ function archive(name,content){
 }
 const HEAD='a'.repeat(40),MAIN='b'.repeat(40),MERGE='c'.repeat(40);
 const attestation={
-  head:HEAD,main:MAIN,checkedAt:'2026-10-08T19:18:51.783Z',
+  head:HEAD,main:MERGE,checkedAt:'2026-10-08T19:18:51.783Z',
   evidence:{
     serviceFailure:true,failedQaStatus:422,
     browsers:['chromium','webkit'].map(browser=>({
@@ -51,7 +51,7 @@ const preview={id:'d'.repeat(24),context:'deploy-preview',review_id:249,commit_r
 assert.equal(netlifyPreview([preview],249,HEAD).exact,true);
 assert.equal(netlifyPreview([preview],249,MERGE).status,'stale');
 assert.equal(netlifyPreview(null,249,HEAD).status,'unavailable');
-const workflowRuns=RELEASE_WORKFLOWS.map((name,i)=>({
+const workflowRuns=CURRENT_RELEASE_WORKFLOWS.map((name,i)=>({
   name,head_sha:HEAD,event:'pull_request',run_number:i+1,id:10+i,
   status:'completed',conclusion:'success',
 }));
@@ -78,6 +78,16 @@ const pr={
 const ready=releaseRow({pr,runs:workflowRuns,deploys:[preview],comparison:{behind_by:0},attestation,prod});
 assert.equal(ready.certified,true);
 assert.equal(ready.releaseStatus,'ready');
+for(const name of ['Critical Integrations rollback drill','Calendar contrast regression','CI privacy gate']){
+  const without=releaseRow({pr,runs:workflowRuns.filter(run=>run.name!==name),deploys:[preview],comparison:{behind_by:0},attestation,prod});
+  assert.equal(without.certified,false,'Missing current workflow must block: '+name);
+  assert.equal(without.checks[name].status,'missing');
+}
+for(const blockedPr of [{...pr,draft:true},{...pr,base:{ref:'old-stack'}}]){
+  assert.equal(releaseRow({pr:blockedPr,runs:workflowRuns,deploys:[preview],comparison:{behind_by:0},attestation,prod}).certified,false);
+}
+assert.equal(releaseRow({pr,runs:workflowRuns,deploys:[preview],comparison:{behind_by:0},attestation:{...attestation,main:MAIN},prod}).certified,false,
+  'An attestation of an earlier main must not certify a new open-PR candidate.');
 const behind=releaseRow({pr,runs:workflowRuns,deploys:[preview],comparison:{behind_by:1},attestation,prod});
 assert.equal(behind.certified,false);
 assert.equal(behind.releaseStatus,'pending');
@@ -87,7 +97,7 @@ const failed=releaseRow({pr,runs:[...workflowRuns.filter(x=>x.name!=='Production
 assert.equal(failed.releaseStatus,'blocked');
 const merged=releaseRow({
   pr:{...pr,state:'closed',merged_at:'2026-10-08T19:00:00Z',merge_commit_sha:MERGE},
-  runs:workflowRuns,deploys:[preview],comparison:null,attestation,prod,
+  runs:workflowRuns.filter(run=>RELEASE_WORKFLOWS.includes(run.name)),deploys:[preview],comparison:null,attestation,prod,
 });
 assert.equal(merged.certified,true,'A merged PR must retain its historical certification.');
 assert.equal(merged.deployStatus,'live');
