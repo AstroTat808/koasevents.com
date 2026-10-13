@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""One-time, fail-closed branch retirement from a verified GitHub Actions snapshot.
-
-Destructive execution requires the certified production workflow_run, an exact
-195-branch whitelist, fresh current-main branch hygiene, and per-ref Git leases.
-No delete-by-name without comparing the expected 40-character tip is allowed.
-"""
+"""One-time, fail-closed retirement of the frozen, verified 195-ref whitelist."""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +11,13 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
+
+from branch_retirement_safety import (
+    RetirementLedger, RetirementStopped, has_active_dependency,
+    paginated_list, self_test as test_durable_retirement,
+)
 
 REPO = "AstroTat808/koasevents.com"
 SNAPSHOT_RUN = 38237894943
@@ -25,8 +26,9 @@ SNAPSHOT_SHA256 = "6dbf4cbcd41b883d7302c9d5189c21681ddb713a722f2d117d304cf0ae856
 SNAPSHOT_MAIN = "1b2d17c14beb0b31687f7eb5dae55c831aa872b0"
 PRODUCTION_RUN_261 = 38237525321
 APPROVED_COUNT = 195
-LEDGER_TITLE = "[Audit] Koa exact-SHA branch retirement — 2026-10-12 approved 195"
+LEDGER_TITLE = "[Audit] Koa exact-SHA branch retirement \u2014 2026-10-12 approved 195"
 SHA = re.compile(r"^[0-9a-f]{40}$")
+REQUIRED_PRS = (268, 273, 266, 269, 270, 271, 272)
 REQUIRED_STATUSES = (
     "System Health production release gate",
     "System Health responsive audit",
@@ -35,11 +37,9 @@ REQUIRED_STATUSES = (
 
 
 def run(args, *, input_text=None, check=True, timeout=180):
-    p = subprocess.run(
-        args, input=input_text, text=True, capture_output=True, timeout=timeout
-    )
+    p = subprocess.run(args, input=input_text, text=True, capture_output=True, timeout=timeout)
     if check and p.returncode:
-        raise RuntimeError(f"Command {args[0]} failed ({p.returncode}): {p.stderr[:450]}")
+        raise RuntimeError(f"Command {args[0]} failed ({p.returncode}); no raw response logged")
     return p
 
 
@@ -61,14 +61,24 @@ def check_sha(sha):
     return sha
 
 
+def remote_tip(branch):
+    ref = "refs/heads/" + branch
+    rows = git("ls-remote", "--heads", "origin", ref).stdout.strip().splitlines()
+    if not rows:
+        return ""
+    if len(rows) != 1:
+        raise RetirementStopped("Remote branch evidence is ambiguous")
+    fields = rows[0].split()
+    if len(fields) != 2 or fields[1] != ref:
+        raise RetirementStopped("Remote branch evidence does not match requested ref")
+    return check_sha(fields[0])
+
+
 def select_approved(snapshot):
     if snapshot.get("main_sha") != SNAPSHOT_MAIN:
         raise RuntimeError("Approved snapshot main does not match pinned baseline")
-    approved = [
-        row for row in snapshot.get("rows", [])
-        if row.get("group") == "safe-to-delete"
-        and row.get("flag_after_7_days") is True
-    ]
+    approved = [row for row in snapshot.get("rows", [])
+                if row.get("group") == "safe-to-delete" and row.get("flag_after_7_days") is True]
     if len(approved) != APPROVED_COUNT:
         raise RuntimeError(f"Expected exactly {APPROVED_COUNT} approved refs; found {len(approved)}")
     names = set()
@@ -99,133 +109,174 @@ def gate_current_candidate(approved, live):
     return ""
 
 
+def require_current_release(expected_sha, workflow):
+    if gh(f"/repos/{REPO}/commits/main").get("sha") != expected_sha:
+        raise RetirementStopped("Main changed after certification")
+    canonical = gh(f"/repos/{REPO}/actions/runs/{workflow['id']}")
+    if (canonical.get("status") != "completed" or canonical.get("conclusion") != "success"
+            or canonical.get("head_sha") != expected_sha or canonical.get("event") != "push"
+            or canonical.get("head_branch") != "main" or canonical.get("name") != "Production visual QA"
+            or canonical.get("run_attempt") != workflow.get("run_attempt")
+            or (canonical.get("head_repository") or {}).get("full_name") != REPO):
+        raise RetirementStopped("Canonical exact-main production workflow is not the certified successful attempt")
+    statuses = gh(f"/repos/{REPO}/commits/{expected_sha}/status")
+    newest = {}
+    for status in statuses.get("statuses", []):
+        newest.setdefault(status.get("context"), status.get("state"))
+    if any(newest.get(name) != "success" for name in REQUIRED_STATUSES):
+        raise RetirementStopped("Current main lacks successful release, responsive, or history status")
+
+
 def verify_release_trigger():
-    if os.environ.get("GITHUB_REPOSITORY") != REPO:
-        raise RuntimeError("Unexpected repository")
-    if os.environ.get("GITHUB_EVENT_NAME") != "workflow_run":
-        raise RuntimeError("Deletion is only authorized by a successful production workflow_run")
+    if os.environ.get("GITHUB_REPOSITORY") != REPO or os.environ.get("GITHUB_EVENT_NAME") != "workflow_run":
+        raise RuntimeError("Deletion requires this repository's successful production workflow_run")
     event_path = Path(os.environ.get("GITHUB_EVENT_PATH", ""))
     if not event_path.is_file():
         raise RuntimeError("Missing authenticated workflow_run event")
-    event = json.loads(event_path.read_text())
-    w = event.get("workflow_run") or {}
-    event_sha = check_sha(w.get("head_sha"))
-    if (w.get("name") != "Production visual QA"
-        or w.get("event") != "push"
-        or w.get("head_branch") != "main"
-        or w.get("conclusion") != "success"
-        or (w.get("head_repository") or {}).get("full_name") != REPO):
+    workflow = json.loads(event_path.read_text()).get("workflow_run") or {}
+    event_sha = check_sha(workflow.get("head_sha"))
+    if (workflow.get("name") != "Production visual QA" or workflow.get("event") != "push"
+            or workflow.get("head_branch") != "main" or workflow.get("conclusion") != "success"
+            or type(workflow.get("id")) is not int or type(workflow.get("run_attempt")) is not int
+            or (workflow.get("head_repository") or {}).get("full_name") != REPO):
         raise RuntimeError("Trigger is not a successful trusted production main workflow")
-    remote_main = (gh(f"/repos/{REPO}/commits/main") or {}).get("sha")
-    if remote_main != event_sha or git("rev-parse", "HEAD").stdout.strip() != event_sha:
-        raise RuntimeError("Main moved after production certification; do not delete")
+    if git("rev-parse", "HEAD").stdout.strip() != event_sha:
+        raise RuntimeError("Checkout is not the exact certified production SHA")
+    require_current_release(event_sha, workflow)
     if git("merge-base", "--is-ancestor", SNAPSHOT_MAIN, "HEAD", check=False).returncode:
         raise RuntimeError("Approved main SHA is not an ancestor of the current release")
-    prod261 = gh(f"/repos/{REPO}/actions/runs/{PRODUCTION_RUN_261}")
-    if prod261.get("status") != "completed":
+    if gh(f"/repos/{REPO}/actions/runs/{PRODUCTION_RUN_261}").get("status") != "completed":
         raise RuntimeError("Original PR #261 production workflow is still unresolved")
-    # The original #261 run failed in an indented Bash heredoc despite green
-    # functional QA. Its immutable SHA cannot be retroactively patched. A later
-    # fully certified production release must contain both the #268 repair and #266.
-    for pr_number in (268, 266, 269, 270):
+    # The original #261 run remains historically failed. A fully successful
+    # superseding release must include every authorized prerequisite below.
+    for pr_number in REQUIRED_PRS:
         pr = gh(f"/repos/{REPO}/pulls/{pr_number}")
         if pr.get("merged") is not True:
             raise RuntimeError(f"PR #{pr_number} must merge before retirement")
         merged_sha = check_sha(pr.get("merge_commit_sha"))
         if git("merge-base", "--is-ancestor", merged_sha, "HEAD", check=False).returncode:
             raise RuntimeError(f"PR #{pr_number} merge is missing from certified main")
-    commit_status = gh(f"/repos/{REPO}/commits/{event_sha}/status")
-    newest = {}
-    for status in commit_status.get("statuses", []):
-        newest.setdefault(status.get("context"), status.get("state"))
-    if any(newest.get(name) != "success" for name in REQUIRED_STATUSES):
-        raise RuntimeError("Current main lacks green production and responsive System Health statuses")
-    return event_sha
+    return event_sha, workflow
 
 
 def load_approved_report(folder):
     folder.mkdir(parents=True, exist_ok=True)
-    run(
-        ["gh", "run", "download", str(SNAPSHOT_RUN), "--repo", REPO,
-         "--name", SNAPSHOT_ARTIFACT, "--dir", str(folder)],
-        timeout=120,
-    )
-    target = folder / "report.json"
-    raw = target.read_bytes()
+    run(["gh", "run", "download", str(SNAPSHOT_RUN), "--repo", REPO,
+         "--name", SNAPSHOT_ARTIFACT, "--dir", str(folder)], timeout=120)
+    raw = (folder / "report.json").read_bytes()
     if hashlib.sha256(raw).hexdigest() != SNAPSHOT_SHA256:
         raise RuntimeError("Approved GitHub Actions artifact digest mismatch")
     return json.loads(raw)
 
 
 def fresh_classification(folder, expected_main):
-    run(
-        [sys.executable, "scripts/branch_hygiene.py", "--repo", REPO,
-         "--out", str(folder)],
-        timeout=900,
-    )
+    run([sys.executable, "scripts/branch_hygiene.py", "--repo", REPO, "--out", str(folder)], timeout=900)
     report = json.loads((folder / "report.json").read_text())
     if report.get("main_sha") != expected_main:
         raise RuntimeError("Main changed during fresh branch classification")
     return {row["branch"]: row for row in report.get("rows", [])}
 
 
-def existing_issue():
-    query = urllib.parse.quote(f'repo:{REPO} is:issue in:title "{LEDGER_TITLE}"')
-    result = gh(f"/search/issues?q={query}&per_page=100")
-    exact = [x for x in result.get("items", []) if x.get("title") == LEDGER_TITLE]
-    if len(exact) > 1:
-        raise RuntimeError("Duplicate permanent branch-deletion ledger issues")
-    return exact[0] if exact else None
-
-
 def issue_comment(number, body):
-    gh(f"/repos/{REPO}/issues/{number}/comments", "POST", {"body": body})
+    # Serialize content creation and verify durable readback before continuing.
+    time.sleep(1.1)
+    created = gh(f"/repos/{REPO}/issues/{number}/comments", "POST", {"body": body})
+    comment_id = created.get("id")
+    if type(comment_id) is not int or created.get("body") != body:
+        raise RetirementStopped("Issue comment creation was not confirmed")
+    persisted = gh(f"/repos/{REPO}/issues/comments/{comment_id}")
+    if persisted.get("id") != comment_id or persisted.get("body") != body:
+        raise RetirementStopped("Issue comment durable readback did not match")
+    return True
 
 
 def ensure_ledger(approved, release_sha):
-    issue = existing_issue()
-    if issue:
-        if "RETIREMENT COMPLETED" in (issue.get("body") or ""):
-            return issue["number"], True
-        issue_comment(issue["number"], f"Resuming fail-closed cleanup on {release_sha}; tips and branch protections will be rechecked.")
-        return issue["number"], False
-    lines = [
-        "<!-- koa-branch-retirement-20261012 -->",
-        "# SHA-pinned Koa branch retirement",
-        "",
-        "Execution requires current certified production: PR #268 repair, #266 accordion behavior, #269 independent history and #270 durable screenshots.",
-        f"Approved main baseline: `{SNAPSHOT_MAIN}`",
-        f"Exact certified execution main: `{release_sha}`",
-        f"Source audit run: https://github.com/{REPO}/actions/runs/{SNAPSHOT_RUN}",
-        f"Verified source report SHA256: `{SNAPSHOT_SHA256}`",
-        f"Frozen authorized branch count: **{APPROVED_COUNT}**",
-        "",
-        "## Immutable approved refs (each guarded by an explicit Git force-with-lease)",
-        "",
-    ]
-    lines.extend(f"- `{row['branch']}` — `{row['sha']}`" for row in approved)
-    lines.extend(["", "## Execution result", "", "IN PROGRESS — see chronological issue comments for batch outcomes."])
-    issue = gh(f"/repos/{REPO}/issues", "POST", {"title": LEDGER_TITLE, "body": "\n".join(lines)})
-    return issue["number"], False
+    # Enumerate all issues rather than relying on an eventually consistent search.
+    issues = paginated_list(gh, f"/repos/{REPO}/issues?state=all")
+    exact = [row for row in issues if row.get("title") == LEDGER_TITLE and not row.get("pull_request")]
+    if len(exact) > 1:
+        raise RetirementStopped("Duplicate permanent branch-deletion ledger issues")
+    if exact:
+        issue = gh(f"/repos/{REPO}/issues/{exact[0]['number']}")
+        body = issue.get("body") or ""
+        if SNAPSHOT_SHA256 not in body or SNAPSHOT_MAIN not in body:
+            raise RetirementStopped("Existing issue ledger does not match the pinned authorization")
+        return issue["number"]
+    lines = ["<!-- koa-branch-retirement-20261012 -->", "# SHA-pinned Koa branch retirement", "",
+             "Execution requires merged/reachable PRs " + ", ".join(f"#{number}" for number in REQUIRED_PRS) + ".",
+             f"Approved main baseline: `{SNAPSHOT_MAIN}`", f"Exact certified execution main: `{release_sha}`",
+             f"Source audit run: https://github.com/{REPO}/actions/runs/{SNAPSHOT_RUN}",
+             f"Verified source report SHA256: `{SNAPSHOT_SHA256}`",
+             f"Frozen authorized branch count: **{APPROVED_COUNT}**", "",
+             "## Immutable approved refs (each guarded by an explicit Git force-with-lease)", ""]
+    lines.extend(f"- `{row['branch']}` - `{row['sha']}`" for row in approved)
+    lines += ["", "## Execution result", "", "IN PROGRESS - see durable per-ref intent and outcome events."]
+    body = "\n".join(lines)
+    created = gh(f"/repos/{REPO}/issues", "POST", {"title": LEDGER_TITLE, "body": body})
+    number = created.get("number")
+    if type(number) is not int or gh(f"/repos/{REPO}/issues/{number}").get("body") != body:
+        raise RetirementStopped("Permanent whitelist was not durably verified")
+    return number
+
+
+def retire_candidate(row, current, release_sha, workflow):
+    branch, expected = row["branch"], check_sha(row["sha"])
+    result = {"branch": branch, "expected_sha": expected, "outcome": "SKIPPED", "detail": ""}
+    try:
+        tip = remote_tip(branch)
+        result["present_before"] = bool(tip)
+        reason = gate_current_candidate(row, current.get(branch))
+        if reason or tip != expected:
+            return {**result, "detail": reason or "Last-moment exact-SHA mismatch or already absent ref"}
+        require_current_release(release_sha, workflow)
+        open_prs = paginated_list(gh, f"/repos/{REPO}/pulls?state=open")
+        if has_active_dependency(open_prs, branch):
+            return {**result, "detail": "Active pull request dependency"}
+        info = gh(f"/repos/{REPO}/branches/{urllib.parse.quote(branch, safe='')}")
+        if info.get("protected") is not False or (info.get("commit") or {}).get("sha") != expected:
+            return {**result, "detail": "Protection was not false or exact branch SHA changed"}
+        if remote_tip(branch) != expected:
+            return {**result, "detail": "Last-moment Git ref lease mismatch"}
+        require_current_release(release_sha, workflow)
+    except Exception:
+        return {**result, "outcome": "REFUSED", "detail": "Fresh release, protection, or complete PR evidence unavailable"}
+    ref = "refs/heads/" + branch
+    try:
+        op = git("push", "--porcelain", f"--force-with-lease={ref}:{expected}", "origin", ":" + ref, check=False)
+        after = remote_tip(branch)
+    except Exception:
+        return {**result, "outcome": "UNKNOWN", "detail": "Git remote acceptance could not be confirmed"}
+    if op.returncode == 0 and not after:
+        return {**result, "outcome": "DELETED", "detail": "Exact-SHA Git lease accepted and absence confirmed"}
+    if op.returncode != 0 and after:
+        return {**result, "outcome": "REJECTED", "detail": "Git rejected deletion; remote ref remains present"}
+    return {**result, "outcome": "UNKNOWN", "detail": "Git result and observed remote presence are inconsistent"}
+
+
+def write_json_atomic(path, data):
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w") as handle:
+        json.dump(data, handle, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
 
 
 def test_git_lease_deletion():
-    # This exercise operates only on a temporary local bare Git repository.
-    # A stale expected SHA must never delete a newer pushed branch tip.
     with tempfile.TemporaryDirectory(prefix="koa-branch-lease-") as root:
-        remote = str(Path(root) / "remote.git")
-        work = str(Path(root) / "client")
+        remote, work = str(Path(root) / "remote.git"), str(Path(root) / "client")
         run(["git", "init", "--bare", remote])
         run(["git", "clone", remote, work])
         run(["git", "-C", work, "config", "user.name", "Koa branch lease test"])
         run(["git", "-C", work, "config", "user.email", "lease-test@koasevents.test"])
-        (Path(work) / "sample.txt").write_text("one\\n")
+        (Path(work) / "sample.txt").write_text("one\n")
         run(["git", "-C", work, "add", "sample.txt"])
         run(["git", "-C", work, "commit", "-m", "first"])
         run(["git", "-C", work, "branch", "lease-test"])
         run(["git", "-C", work, "push", "origin", "lease-test"])
         old_tip = run(["git", "-C", work, "rev-parse", "lease-test"]).stdout.strip()
-        (Path(work) / "sample.txt").write_text("two\\n")
+        (Path(work) / "sample.txt").write_text("two\n")
         run(["git", "-C", work, "commit", "-am", "second"])
         run(["git", "-C", work, "branch", "-f", "lease-test", "HEAD"])
         run(["git", "-C", work, "push", "origin", "lease-test"])
@@ -234,168 +285,151 @@ def test_git_lease_deletion():
         assert stale.returncode != 0, "A moved branch was deleted despite stale expected SHA"
         ref = run(["git", "-C", work, "ls-remote", "--heads", "origin", "refs/heads/lease-test"]).stdout.strip()
         actual = ref.split()[0]
-        assert actual != old_tip and SHA.fullmatch(actual), "Remote ref changed unexpectedly"
-        run(["git", "-C", work, "push", f"--force-with-lease=refs/heads/lease-test:{actual}",
-             "origin", ":refs/heads/lease-test"])
-        after = run(["git", "-C", work, "ls-remote", "--heads", "origin", "refs/heads/lease-test"]).stdout.strip()
-        assert not after, "Exact expected SHA did not permit conditional ref deletion"
+        assert actual != old_tip and SHA.fullmatch(actual)
+        run(["git", "-C", work, "push", f"--force-with-lease=refs/heads/lease-test:{actual}", "origin", ":refs/heads/lease-test"])
+        assert not run(["git", "-C", work, "ls-remote", "--heads", "origin", "refs/heads/lease-test"]).stdout.strip()
+
+
+def test_candidate_boundary():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    row = {"branch": "feature/one", "sha": "a" * 40, "group": "safe-to-delete",
+           "flag_after_7_days": True, "evidence": {"contained": True}}
+    current = {row["branch"]: row}
+    first_page = [{"id": n, "head": {"ref": f"other/{n}"}, "base": {"ref": "main"}} for n in range(1, 101)]
+
+    def evidence(path):
+        if "/pulls?" in path:
+            return []
+        return {"protected": False, "commit": {"sha": row["sha"]}}
+
+    module = sys.modules[__name__]
+    for code, tips, expected in [
+        (0, [row["sha"], row["sha"], ""], "DELETED"),
+        (1, [row["sha"], row["sha"], "b" * 40], "REJECTED"),
+        (1, [row["sha"], row["sha"], ""], "UNKNOWN"),
+        (0, [row["sha"], row["sha"], "b" * 40], "UNKNOWN"),
+    ]:
+        with patch.object(module, "require_current_release"), patch.object(module, "gh", side_effect=evidence), \
+             patch.object(module, "remote_tip", side_effect=tips), \
+             patch.object(module, "git", return_value=SimpleNamespace(returncode=code)) as push:
+            result = retire_candidate(row, current, "c" * 40, {"id": 1, "run_attempt": 1})
+            assert result["outcome"] == expected
+            assert push.call_count == 1
+            assert push.call_args.args == ("push", "--porcelain", "--force-with-lease=refs/heads/feature/one:" + row["sha"], "origin", ":refs/heads/feature/one")
+    with patch.object(module, "require_current_release", side_effect=RetirementStopped("Main moved")), \
+         patch.object(module, "remote_tip", return_value=row["sha"]), patch.object(module, "git") as push:
+        assert retire_candidate(row, current, "c" * 40, {})["outcome"] == "REFUSED"
+        push.assert_not_called()
+    for side in ("head", "base"):
+        last = {"id": 101, "head": {"ref": "other/last"}, "base": {"ref": "main"}}
+        last[side]["ref"] = row["branch"]
+        def all_prs(path):
+            return first_page if path.endswith("page=1") else [last]
+        with patch.object(module, "require_current_release"), patch.object(module, "gh", side_effect=all_prs), \
+             patch.object(module, "remote_tip", return_value=row["sha"]), patch.object(module, "git") as push:
+            assert retire_candidate(row, current, "c" * 40, {})["detail"] == "Active pull request dependency"
+            push.assert_not_called()
+    for protection in (True, None):
+        def guarded(path):
+            return [] if "/pulls?" in path else {"protected": protection, "commit": {"sha": row["sha"]}}
+        with patch.object(module, "require_current_release"), patch.object(module, "gh", side_effect=guarded), \
+             patch.object(module, "remote_tip", return_value=row["sha"]), patch.object(module, "git") as push:
+            assert retire_candidate(row, current, "c" * 40, {})["outcome"] == "SKIPPED"
+            push.assert_not_called()
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--execute", action="store_true", help="Only in certified production workflow_run")
+    parser.add_argument("--execute", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
-        sample = {"sha": "a"*40, "group": "safe-to-delete", "flag_after_7_days": True,
-                  "evidence": {"contained": True}}
+        sample = {"sha": "a"*40, "group": "safe-to-delete", "flag_after_7_days": True, "evidence": {"contained": True}}
         assert not gate_current_candidate(sample, dict(sample))
         assert gate_current_candidate(sample, {**sample, "sha": "b"*40})
         assert gate_current_candidate(sample, {**sample, "flag_after_7_days": False})
         assert gate_current_candidate(sample, {**sample, "group": "keep"})
         test_git_lease_deletion()
-        print("Exact-SHA, seven-day, preservation, and atomic Git lease tests passed")
+        test_durable_retirement()
+        test_candidate_boundary()
+        print("Exact-SHA, seven-day, preservation, full pagination, durable resume and atomic lease tests passed")
         return
-
     if not args.execute:
-        raise RuntimeError("This workflow is fail-closed; explicitly pass --execute from the certified production job")
-    release_sha = verify_release_trigger()
+        raise RuntimeError("Deletion requires explicit --execute in a certified production workflow_run")
+    release_sha, workflow = verify_release_trigger()
     folder = Path("/tmp/koa-branch-retirement")
-    approved = select_approved(load_approved_report(folder / "approved"))
+    original = load_approved_report(folder / "approved")
+    approved = select_approved(original)
     current = fresh_classification(folder / "fresh", release_sha)
-    ledger_num, completed = ensure_ledger(approved, release_sha)
-    if completed:
-        print(f"Previously completed ledger #{ledger_num}; no branch deletion performed.")
-        return
-
+    ledger_num = ensure_ledger(approved, release_sha)
+    comments = paginated_list(gh, f"/repos/{REPO}/issues/{ledger_num}/comments")
+    ledger = RetirementLedger(approved, SNAPSHOT_SHA256, comments, lambda body: issue_comment(ledger_num, body))
+    ledger.preflight(remote_tip)
     outcomes = []
-    for index, row in enumerate(approved, 1):
-        if (index - 1) % 15 == 0:
-            planned = approved[index - 1:index + 14]
-            intent = "\n".join(
-                f"- `{candidate['branch']}` at `{candidate['sha']}`"
-                for candidate in planned
-            )
-            issue_comment(
-                ledger_num,
-                f"## Pre-deletion intent (batch {index}–{index + len(planned) - 1})\n\n"
-                "Only refs that still satisfy every current gate and exact Git lease may be deleted.\n\n"
-                + intent,
-            )
-        branch, expected = row["branch"], check_sha(row["sha"])
-        result = {"branch": branch, "expected_sha": expected, "outcome": "", "detail": ""}
-        reason = gate_current_candidate(row, current.get(branch))
-        if reason:
-            result.update(outcome="SKIPPED", detail=reason)
-        else:
-            # Check main and open-PR dependencies again immediately before each irreversible change.
-            main_tip = gh(f"/repos/{REPO}/commits/main").get("sha")
-            if main_tip != release_sha:
-                raise RuntimeError("Main changed during cleanup; stopping immediately")
-            open_prs = gh(f"/repos/{REPO}/pulls?state=open&per_page=100")
-            if any(p.get("head", {}).get("ref") == branch or p.get("base", {}).get("ref") == branch for p in open_prs):
-                result.update(outcome="SKIPPED", detail="Active pull request dependency")
-            else:
-                info = gh(f"/repos/{REPO}/branches/{urllib.parse.quote(branch, safe='')}")
-                sha = (info.get("commit") or {}).get("sha")
-                if info.get("protected") is True or sha != expected:
-                    result.update(outcome="SKIPPED", detail="Ref protected or exact SHA changed")
-                else:
-                    ref = "refs/heads/" + branch
-                    remote = git("ls-remote", "--heads", "origin", ref).stdout.strip().splitlines()
-                    if len(remote) != 1 or remote[0].split()[0] != expected:
-                        result.update(outcome="SKIPPED", detail="Last-moment git ref lease mismatch")
-                    else:
-                        # This is a remote compare-and-swap deletion. Any concurrent push rejects the lease.
-                        op = git("push", "--porcelain", f"--force-with-lease={ref}:{expected}",
-                                 "origin", ":" + ref, check=False)
-                        if op.returncode:
-                            result.update(outcome="REJECTED", detail="Git remote rejected exact-SHA deletion")
-                        else:
-                            result.update(outcome="DELETED", detail="Git remote accepted exact-SHA lease")
+
+    def checkpoint(result):
         outcomes.append(result)
-        if index % 15 == 0 or index == len(approved):
-            batch = outcomes[-(index % 15 or 15):]
-            text = "\n".join(
-                f"- **{x['outcome']}** `{x['branch']}` at `{x['expected_sha']}`: {x['detail']}"
-                for x in batch
-            )
-            issue_comment(ledger_num, f"## Audited batch ending at {index}/{APPROVED_COUNT}\n\n{text}")
-            print(json.dumps({"batch_end": index, "deleted": sum(x["outcome"] == "DELETED" for x in outcomes),
-                              "skipped": sum(x["outcome"] != "DELETED" for x in outcomes)}))
+        write_json_atomic(folder / "outcomes.json", {"release_sha": release_sha, "approved_count": len(approved), "outcomes": outcomes})
 
-    out = folder / "outcomes.json"
-    out.write_text(json.dumps({"release_sha": release_sha, "approved_count": len(approved),
-                               "outcomes": outcomes}, indent=2) + "\n")
-    # Independent final reconciliation: actual remote tips vs every pinned
-    # deletion outcome, and preservation of all 22+64+20 excluded branches.
-    original=json.loads((folder / "approved" / "report.json").read_text())
-    original_preserved={
-        row["branch"]:row["sha"] for row in original["rows"]
-        if not (row.get("group")=="safe-to-delete" and row.get("flag_after_7_days") is True)
-    }
-    if len(original_preserved)!=106:
+    for row in approved:
+        ledger.perform(row, release_sha, lambda row=row: retire_candidate(row, current, release_sha, workflow), checkpoint)
+    preserved = {row["branch"]: row["sha"] for row in original["rows"]
+                 if not (row.get("group") == "safe-to-delete" and row.get("flag_after_7_days") is True)}
+    if len(preserved) != 106:
         raise RuntimeError("Unexpected number of preserved branches in approved audit")
-    remote_refs={}
-    for line in git("ls-remote","--heads","origin").stdout.splitlines():
-        tip,ref=line.split(None,1)
+    remote_refs = {}
+    for line in git("ls-remote", "--heads", "origin").stdout.splitlines():
+        tip, ref = line.split(None, 1)
         if ref.startswith("refs/heads/"):
-            remote_refs[ref[len("refs/heads/"):]]=tip
-    if remote_refs.get("main")!=release_sha:
-        raise RuntimeError("Production main moved before final deletion reconciliation")
-    inconsistent=[]
+            remote_refs[ref[len("refs/heads/"):]] = check_sha(tip)
+    require_current_release(release_sha, workflow)
+    if remote_refs.get("main") != release_sha:
+        raise RetirementStopped("Production main moved before final reconciliation")
+    inconsistent = []
     for result in outcomes:
-        branch=result["branch"]
-        exists=branch in remote_refs
-        result["present_after"]=exists
-        result["tip_after"]=remote_refs.get(branch,"")
-        if result["outcome"]=="DELETED" and exists:
-            inconsistent.append(branch+": reported deleted but ref still exists")
-        if result["outcome"] in {"SKIPPED","REJECTED"} and not exists:
-            inconsistent.append(branch+": not deleted by cleanup but ref is missing")
-    for branch in original_preserved:
+        branch = result["branch"]
+        exists = branch in remote_refs
+        result.update(present_after=exists, tip_after=remote_refs.get(branch, ""))
+        if result["outcome"] == "DELETED" and exists:
+            inconsistent.append(branch + ": reported deleted but present")
+        if result["outcome"] != "DELETED" and not exists and result.get("present_before") is not False:
+            inconsistent.append(branch + ": preserved outcome but ref unexpectedly absent")
+        if result["outcome"] == "UNKNOWN":
+            inconsistent.append(branch + ": unresolved deletion outcome")
+    for branch in preserved:
         if branch not in remote_refs:
-            inconsistent.append(branch+": preserved branch is missing")
-    reconciliation={
-        "schema_version":1,"snapshot_main_sha":SNAPSHOT_MAIN,
-        "certified_release_sha":release_sha,
-        "approved_count":len(approved),"deleted":sum(x["outcome"]=="DELETED" for x in outcomes),
-        "skipped":sum(x["outcome"]=="SKIPPED" for x in outcomes),
-        "rejected":sum(x["outcome"]=="REJECTED" for x in outcomes),
-        "preserved_expected":len(original_preserved),
-        "preserved_found":sum(name in remote_refs for name in original_preserved),
-        "consistent":not inconsistent,"discrepancies":inconsistent,
-        "outcomes":outcomes,
-        "preserved":[{"branch":name,"source_tip":tip,"still_present":name in remote_refs,
-                      "current_tip":remote_refs.get(name,"")}
-                     for name,tip in sorted(original_preserved.items())],
+            inconsistent.append(branch + ": excluded preserved branch missing")
+    counts = {key.lower(): sum(row["outcome"] == key for row in outcomes)
+              for key in ("DELETED", "SKIPPED", "REJECTED", "REFUSED", "UNKNOWN")}
+    reconciliation = {
+        "schema_version": 2, "snapshot_main_sha": SNAPSHOT_MAIN, "snapshot_sha256": SNAPSHOT_SHA256,
+        "certified_release_sha": release_sha, "approved_count": len(approved), **counts,
+        "deleted_this_run": sum(row["outcome"] == "DELETED" and not row.get("resumed_from_ledger") for row in outcomes),
+        "preserved_expected": len(preserved), "preserved_found": sum(name in remote_refs for name in preserved),
+        "consistent": not inconsistent, "discrepancies": inconsistent, "outcomes": outcomes,
+        "preserved": [{"branch": name, "source_tip": tip, "still_present": name in remote_refs,
+                       "current_tip": remote_refs.get(name, "")} for name, tip in sorted(preserved.items())],
     }
-    evidence=folder / "reconciliation.json"
-    evidence.write_text(json.dumps(reconciliation,indent=2)+"\n")
-    digest=hashlib.sha256(evidence.read_bytes()).hexdigest()
-    summary=("## Final exact-SHA reconciliation\n\n"
-             +"Deleted: "+str(reconciliation["deleted"])
-             +"; skipped: "+str(reconciliation["skipped"])
-             +"; rejected: "+str(reconciliation["rejected"])
-             +"; preserved: "+str(reconciliation["preserved_found"])
-             +"/"+str(len(original_preserved))
-             +".\n\nEvidence SHA256: "+digest+".\n")
+    evidence = folder / "reconciliation.json"
+    write_json_atomic(evidence, reconciliation)
+    digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
+    summary = "## Final exact-SHA reconciliation\n\n" + json.dumps(counts, sort_keys=True)
+    summary += f"\n\nPreserved: {reconciliation['preserved_found']}/106. Evidence SHA256: {digest}."
     if inconsistent:
-        summary+="\nUNVERIFIED RECONCILIATION: "+"; ".join(inconsistent[:20])
-    issue_comment(ledger_num,summary)
+        summary += "\n\nUNVERIFIED: " + "; ".join(inconsistent[:20])
+    issue_comment(ledger_num, summary)
     if inconsistent:
-        raise RuntimeError("Final branch reconciliation found missing preserved tips or inconsistent deletion claims")
-
-    issues = gh(f"/repos/{REPO}/issues/{ledger_num}")
-    body = issues.get("body") or ""
+        raise RetirementStopped("Final ref preservation or deletion reconciliation failed")
+    issue = gh(f"/repos/{REPO}/issues/{ledger_num}")
+    body = issue.get("body") or ""
     if "RETIREMENT COMPLETED" not in body:
-        body = body.replace("IN PROGRESS — see chronological issue comments for batch outcomes.",
-                            "RETIREMENT COMPLETED — see chronological issue comments for per-branch results.")
-    deleted = sum(x["outcome"] == "DELETED" for x in outcomes)
-    gh(f"/repos/{REPO}/issues/{ledger_num}", "PATCH",
-       {"body": body + f"\n\n**Final run outcome:** {deleted} deleted; {len(outcomes)-deleted} skipped or rejected.\n"})
-    print(json.dumps({"complete": True, "issue": ledger_num, "deleted": deleted,
-                      "not_deleted": len(outcomes) - deleted, "release_sha": release_sha}))
+        body += "\n\nRETIREMENT COMPLETED - all outcomes have durable per-ref events and remote reconciliation.\n"
+        body += json.dumps(counts, sort_keys=True)
+        gh(f"/repos/{REPO}/issues/{ledger_num}", "PATCH", {"body": body})
+        if gh(f"/repos/{REPO}/issues/{ledger_num}").get("body") != body:
+            raise RetirementStopped("Final ledger completion readback failed")
+    print(json.dumps({"complete": True, "issue": ledger_num, "release_sha": release_sha, **counts}))
 
 
 if __name__ == "__main__":
