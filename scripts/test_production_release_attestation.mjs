@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { validateAccordionReleaseEvidence, ACCORDION_EVIDENCE_CASES } from '../netlify/functions/_shared/accordion-release-evidence.mjs';
 import {
@@ -100,6 +101,20 @@ assert(server.includes("netlifyJson(token,'/deploys/'+encodeURIComponent(liveDep
 assert(workflow.includes('Persist certified release attestation history')
     && workflow.includes('record-production-release-attestation'),
   'A green release must persist its certified attestation and fail closed if persistence fails.');
+const persistStep=workflow.indexOf('      - name: Persist certified release attestation history');
+const shellStart=workflow.indexOf('        run: |\n',persistStep);
+const shellEnd=workflow.indexOf('\n  qa-summary:',shellStart);
+assert(persistStep>=0&&shellStart>persistStep&&shellEnd>shellStart,
+  'Release history persistence shell step was not found.');
+const rawShell=workflow.slice(shellStart+'        run: |\n'.length,shellEnd);
+const persistShell=rawShell.split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
+const bashSyntax=spawnSync('bash',['-n'],{input:persistShell,encoding:'utf8'});
+assert(bashSyntax.status===0,
+  'Release history persistence shell must pass bash -n: '+String(bashSyntax.stderr||'').slice(0,350));
+assert(persistShell.includes('trap fail_history ERR')
+    && persistShell.includes('record-production-release-attestation')
+    && persistShell.includes('koa-release-history-failure-status.json'),
+  'Release-history persistence must preserve fail-closed status publication and durable recorder enforcement.');
 assert(server.includes("body?.action==='record-production-release-attestation'"),
   'The OIDC control plane must expose exact-release attestation persistence.');
 assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|null')
