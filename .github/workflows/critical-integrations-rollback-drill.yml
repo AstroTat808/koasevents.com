@@ -105,6 +105,8 @@ jobs:
           assert drill.get('isolationVerified') is True
           assert drill.get('productionMutationAttempted') is False
           assert drill.get('sandboxMutationAttempted') is True
+          assert drill.get('sandboxSiteId') == 'fcc8fc59-68fb-46f3-bbd2-082a67718730'
+          assert drill.get('sandboxSiteName') == 'koasevents-rollback-drill-sandbox'
           assert drill.get('sandboxSiteId') != drill.get('productionSiteId')
           assert drill.get('beforeRestore',{}).get('deployId') == drill.get('candidate',{}).get('deployId')
           assert drill.get('afterRestore',{}).get('deployId') == drill.get('knownGood',{}).get('deployId')
