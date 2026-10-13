@@ -78,8 +78,15 @@ jobs:
           set -euo pipefail
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          curl -fsSL \
+          response_file="$(mktemp)"
+          http_status="$(curl -sS \
+            -o "$response_file" \
+            -w "%{http_code}" \
             -X POST \
             -H "Authorization: Bearer $token" \
             -H "Content-Type: application/json" \
-            https://koasevents.com/api/system-health/github-main-signal
+            https://koasevents.com/api/system-health/github-main-signal)"
+          python -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data.get("ok") is True' "$response_file"
+          rm -f "$response_file"
+          echo "Signed isolation-CI identity accepted without logging response content."
+          test "$http_status" = "200"
