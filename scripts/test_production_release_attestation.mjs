@@ -173,7 +173,7 @@ assert(accordionPrep.includes('accordion-synthetic')
   'Release screenshots must originate from explicitly marked synthetic browser fixtures.');
 assert(server.includes('persistAccordionReleaseEvidence')
     &&server.includes('validateAccordionReleaseEvidence')
-    &&server.includes("createHash('sha256').update(Buffer.from(shot.dataBase64,'base64'))")
+    &&server.includes("crypto.subtle.digest('SHA-256',bytes)")
     &&healthShared.includes('readAccordionReleaseScreenshot')
     &&healthApi.includes("requestUrl.searchParams.get('action')==='accordion-qa-screenshot'")
     &&healthPage.includes('data-accordion-release-results'),
