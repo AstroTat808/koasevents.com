@@ -28,7 +28,7 @@ PRODUCTION_RUN_261 = 38237525321
 APPROVED_COUNT = 195
 LEDGER_TITLE = "[Audit] Koa exact-SHA branch retirement \u2014 2026-10-12 approved 195"
 SHA = re.compile(r"^[0-9a-f]{40}$")
-REQUIRED_PRS = (268, 273, 266, 269, 270, 271, 272)
+REQUIRED_PRS = (268, 273, 266, 275, 271, 269, 270, 272)
 REQUIRED_STATUSES = (
     "System Health production release gate",
     "System Health responsive audit",
