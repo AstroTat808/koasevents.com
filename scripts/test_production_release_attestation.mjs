@@ -192,6 +192,9 @@ assert(workflow.includes('id: persist-history')
 assert(server.includes('const persistedReleases=await readProductionReleases(context,100)'),
   'Production recorder must read the durable certification back before returning success.');
 const healthApi=readFileSync('netlify/functions/admin-health.mts','utf8');
+assert(healthApi.includes("const sha=String(Netlify.env.get('COMMIT_REF')||deployments?.current?.commit||'')")
+    && healthApi.includes("const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||deployments?.current?.deployId||'')"),
+  'Independent certification must use the actual serving runtime SHA/deploy ID before possibly stale cached Netlify metadata.');
 assert(healthApi.includes('releaseHistoryPersistence')
     &&healthApi.includes('independentReleaseHistoryPersistence')
     &&healthPage.includes('data-release-history-persistence-card')
