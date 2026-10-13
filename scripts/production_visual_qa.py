@@ -1025,6 +1025,10 @@ def admin_mode(browser_name):
    usage_button=page.get_by_role("button",name="Usage",exact=True).first
    usage_button.click()
    page.wait_for_selector("[data-item-usage]:not(.hidden)",state="visible",timeout=5000)
+   page.wait_for_function(
+    "() => document.querySelector('[data-item-usage-loading]')?.textContent?.trim() === 'Live usage checked'",
+    timeout=5000,
+   )
    usage_text=page.locator("[data-item-usage]").inner_text()
    if "2" not in usage_text or "3" not in usage_text or "1" not in usage_text or "EST-QA" not in usage_text:
     raise RuntimeError("Catalog usage impact did not render proposal, website and QuickBooks transaction usage.")
@@ -1361,6 +1365,7 @@ def health_mobile_mode(browser_name,health_payload_path):
  with sync_playwright() as p:
   browser=getattr(p,browser_name).launch()
   for viewport_name,width,height,dpr in viewports:
+   print(f"[health-mobile] {browser_name} {viewport_name} {width}x{height}: begin",flush=True)
    ctx=browser.new_context(
     viewport={"width":width,"height":height},
     device_scale_factor=dpr,
@@ -1407,6 +1412,35 @@ def health_mobile_mode(browser_name,health_payload_path):
      timeout=10000,
     )
     page.wait_for_timeout(350)
+
+    collapse_state=None
+    if width in (390,1440):
+     page.wait_for_function(
+      """() => {
+        const sections=[...document.querySelectorAll('main[data-system-health-page] [data-mobile-collapsible]')];
+        return sections.length>0 && sections.every((el)=>el.hasAttribute('data-mobile-collapsed'));
+      }""",timeout=7000,
+     )
+     collapse_state=page.evaluate("""async () => {
+       const tick=()=>new Promise((resolve)=>requestAnimationFrame(resolve));
+       const sections=[...document.querySelectorAll('main[data-system-health-page] [data-mobile-collapsible]')];
+       const healthy=sections.filter((el)=>el.dataset.healthSectionStatus!=='red');
+       const critical=sections.filter((el)=>el.dataset.healthSectionStatus==='red');
+       const target=healthy.find((el)=>el.querySelector('[data-mobile-collapse-toggle]'));
+       const initialClosed=healthy.length>0&&healthy.every((el)=>el.dataset.mobileCollapsed==='true');
+       const criticalInitiallyOpen=critical.every((el)=>el.dataset.mobileCollapsed==='false');
+       if(!target)return {sections:sections.length,initialClosed,criticalInitiallyOpen,manuallyOpened:false,manuallyClosed:false,criticalForcedOpen:false,recoveredCollapsed:false};
+       const toggle=target.querySelector('[data-mobile-collapse-toggle]');
+       toggle.click();await tick();
+       const manuallyOpened=target.dataset.mobileCollapsed==='false'&&toggle.getAttribute('aria-expanded')==='true';
+       toggle.click();await tick();
+       const manuallyClosed=target.dataset.mobileCollapsed==='true'&&toggle.getAttribute('aria-expanded')==='false';
+       target.dataset.healthSectionStatus='red';await tick();
+       const criticalForcedOpen=target.dataset.mobileCollapsed==='false'&&toggle.getAttribute('aria-expanded')==='true';
+       target.dataset.healthSectionStatus='green';await tick();
+       const recoveredCollapsed=target.dataset.mobileCollapsed==='true'&&toggle.getAttribute('aria-expanded')==='false';
+       return {sections:sections.length,initialClosed,criticalInitiallyOpen,manuallyOpened,manuallyClosed,criticalForcedOpen,recoveredCollapsed};
+     }""")
 
     # PR-only synthetic screenshot and geometry check: never capture live
     # authenticated production explanation content in public CI artifacts.
@@ -1539,6 +1573,17 @@ def health_mobile_mode(browser_name,health_payload_path):
       (metrics.get("themeQaDeploy")==str(visual_quality.get("deployId") or ""),"Dark Mode QA deploy id matches the retained release audit"),
      ])
 
+    if collapse_state is not None:
+     metrics["sectionCollapse"]=collapse_state
+     checks.extend([
+      (int(collapse_state.get("sections") or 0)>0,"Health detail sections are present"),
+      (collapse_state.get("initialClosed") is True,"Noncritical Health sections start collapsed"),
+      (collapse_state.get("criticalInitiallyOpen") is True,"Critical Health sections start expanded"),
+      (collapse_state.get("manuallyOpened") is True,"Manual expand works"),
+      (collapse_state.get("manuallyClosed") is True,"Manual collapse works"),
+      (collapse_state.get("criticalForcedOpen") is True,"New critical issue automatically expands section"),
+      (collapse_state.get("recoveredCollapsed") is True,"Recovered section returns to collapsed default"),
+     ])
     if width>=1100:
      checks.append((float(metrics.get("summaryHeightSpread") or 0)<=2,"Desktop summary cards have consistent height"))
     if width<768:
@@ -1747,6 +1792,7 @@ def health_mobile_mode(browser_name,health_payload_path):
    }
    results.append(result)
    if detail:failures.append({"viewport":viewport_name,"detail":detail,"metrics":metrics})
+   print(f"[health-mobile] {browser_name} {viewport_name}: "+("failed" if detail else "passed"),flush=True)
    page.close();ctx.close()
   browser.close()
 

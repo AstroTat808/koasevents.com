@@ -901,6 +901,12 @@ const seoSchema = {
           })
           .catch(() => {});
       })();
+      if (window.location.pathname === '/admin/health/' || window.location.pathname === '/admin/health') {
+        const healthCollapseScript = document.createElement('script');
+        healthCollapseScript.src = '/system-health-collapse.js';
+        healthCollapseScript.defer = true;
+        document.head.appendChild(healthCollapseScript);
+      }
     </script>
   </body>
 </html>

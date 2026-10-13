@@ -67,7 +67,9 @@ jobs:
   source-build-audit:
     name: Source + Astro build audit
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Chromium and WebKit each run the full seven-viewport authenticated fixture.
+    # Retain every assertion; allocate enough time for screenshots on GitHub runners.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -214,7 +216,7 @@ jobs:
             "enrichmentWarnings": []
           }
           JSON
-      - name: Verify System Health responsive layout in Chromium and WebKit
+      - name: Verify System Health responsive layout and accordion behavior in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
@@ -787,6 +789,18 @@ jobs:
                       return False
                   if row.get('failure'):
                       return False
+                  if name in ('phone','desktop'):
+                      collapse=(row.get('metrics') or {}).get('sectionCollapse')
+                      required=(
+                          'initialClosed','criticalInitiallyOpen','manuallyOpened',
+                          'manuallyClosed','criticalForcedOpen','recoveredCollapsed'
+                      )
+                      if (
+                          not isinstance(collapse,dict)
+                          or int(collapse.get('sections') or 0)<1
+                          or any(collapse.get(key) is not True for key in required)
+                      ):
+                          return False
                   found.add(name)
               return found==set(expected_viewports)
 
@@ -835,6 +849,7 @@ jobs:
               'enrichmentWarnings':warnings,
               'chromiumViewports':len(chromium.get('results') or []),
               'webkitViewports':len(webkit.get('results') or []),
+              'accordionGate':'pass' if reports_complete else 'failed-or-incomplete',
               'chromiumFailures':chromium.get('failures') or [],
               'webkitFailures':webkit.get('failures') or [],
           },separators=(',',':')))
@@ -860,7 +875,7 @@ jobs:
           from pathlib import Path
           status=json.loads(Path('/tmp/system-health-commit-status.json').read_text())
           if status.get('state')!='success':
-              raise SystemExit('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+              raise SystemExit('Production release blocked: all 14 responsive checks and Chromium/WebKit iPhone/desktop accordion interactions are mandatory.')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
