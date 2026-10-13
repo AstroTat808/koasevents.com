@@ -15,3 +15,7 @@ The approved list never expands. The automation downloads the original branch-hy
 Before performing any deletion, the automation creates an issue titled `[Audit] Koa exact-SHA branch retirement — 2026-10-12 approved 195` and includes the entire approved branch/SHA whitelist. It appends a comment after every 15 checks with explicit `DELETED`, `SKIPPED`, or `REJECTED` outcomes; final totals remain in the issue. If a ledger write fails, execution stops. This record remains in GitHub issues independently of transient Actions artifacts.
 
 The workflow is non-destructive on PRs. The write-permission job is invoked only by successful default-branch Production Visual QA completion. New or later-eligible branches require a separately authorized snapshot and workflow.
+
+## Exact post-delete reconciliation
+
+After all 195 approved refs have explicit outcomes, the job checks the actual remote Git refs against every claimed deletion, skip, or rejection. It also proves that the frozen 22 grace-period, 64 needs-review and 20 keep branches remain present. A discrepancy leaves the permanent ledger unfinalized and fails the job. The complete JSON reconciliation is retained as a GitHub Actions artifact for 90 days; its SHA256 is recorded in the durable GitHub issue.
