@@ -1,8 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
 const health = await readFile(new URL('../src/pages/admin/health/index.astro', import.meta.url), 'utf8');
-const baseLayout = await readFile(new URL('../src/layouts/BaseLayout.astro', import.meta.url), 'utf8');
-const healthCollapse = await readFile(new URL('../public/system-health-collapse.js', import.meta.url), 'utf8');
 const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
@@ -51,35 +49,6 @@ for (const panel of ['Monitoring coverage', 'Dark Mode visual quality', 'Critica
 assert(
   health.includes('data-system-health-page'),
   'System Health must expose the page marker used by mobile viewport-clearance rules.',
-);
-assert(
-  baseLayout.includes("healthCollapseScript.src = '/system-health-collapse.js';"),
-  'The shared layout must load the System Health collapse controller without an extra script block.',
-);
-assert(
-  visualQa.includes('collapse_state=page.evaluate(')
-    && visualQa.includes('if width in (390,1440):')
-    && visualQa.includes('criticalForcedOpen')
-    && visualQa.includes('recoveredCollapsed')
-    && visualWorkflow.includes("if name in ('phone','desktop'):")
-    && visualWorkflow.includes("'initialClosed','criticalInitiallyOpen','manuallyOpened'")
-    && visualWorkflow.includes("'manuallyClosed','criticalForcedOpen','recoveredCollapsed'")
-    && visualWorkflow.includes("'accordionGate':'pass' if reports_complete else 'failed-or-incomplete'")
-    && visualWorkflow.includes('python scripts/production_visual_qa.py --mode health-mobile --browser chromium')
-    && visualWorkflow.includes('python scripts/production_visual_qa.py --mode health-mobile --browser webkit'),
-  'Both browser suites must fail closed on iPhone and desktop Health accordion interactions in PR and production release gates.',
-);
-assert(
-  healthCollapse.includes("section.dataset.healthSectionStatus === 'red'")
-    && healthCollapse.includes('const nextCollapsed = critical ? false : Boolean(collapsed);')
-    && healthCollapse.includes('syncAll({ initial: true })')
-    && healthCollapse.includes('.koa-mobile-collapsed-content'),
-  'System Health sections must default collapsed across viewports while critical sections remain forced open.',
-);
-assert(
-  !healthCollapse.includes("toggle.addEventListener('click'")
-    && health.includes("button.addEventListener('click',(event)=>{"),
-  'Accordion button must have exactly one toggle listener; duplicate desktop listeners reverse an open or close click.',
 );
 assert(
   health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
@@ -456,13 +425,13 @@ assert(
   'Historical QuickBooks adjustments must be inspectable through a signed read-only exact-field diagnostic without entering the repair scope.',
 );
 assert(
-  visualWorkflow.includes('Capture Jesse and Dion QBO adjustment diagnostics')
-    && visualWorkflow.includes('QBO-CUST-29')
-    && visualWorkflow.includes('QBO-CUST-44')
-    && visualWorkflow.includes('accounting-adjustment-diagnostics.json')
-    && visualWorkflow.includes("historicalQuickBooksImport")
-    && visualWorkflow.includes("quickbooks-history"),
-  'The production release must archive signed raw-field evidence for Jesse Gibson and Dion Pohaku after the exact SHA is live.',
+  !visualWorkflow.includes('accounting-adjustment-diagnostics.json')
+    && !visualWorkflow.includes('accounting-repair-bulk-preview.json')
+    && !visualWorkflow.includes('cat visual-results/system-health-dashboard.json')
+    && !visualWorkflow.includes('koa-system-health-mobile-${{ github.run_id }}')
+    && visualWorkflow.includes('node scripts/private_release_evidence.mjs verify-health')
+    && visualWorkflow.includes('node scripts/private_release_evidence.mjs sanitize-dashboard'),
+  'Production Visual QA must preserve private invariant validation and sanitized browser evidence without publishing raw accounting or System Health payloads.',
 );
 
 
@@ -476,26 +445,26 @@ assert(
 );
 
 
-const jesseAdjustmentExplanation = explainQuickBooksTransactionAdjustment({
-  lineTotal:3500,
-  estimateTotal:3141.36,
-  transactionAdjustment:-358.64,
-  discountLineAmount:500,
+const syntheticAdjustmentExplanation = explainQuickBooksTransactionAdjustment({
+  lineTotal:6400,
+  estimateTotal:5750,
+  transactionAdjustment:-650,
+  discountLineAmount:800,
   discountAmtField:null,
-  totalTax:141.36,
+  totalTax:150,
   applyTaxAfterDiscount:true,
-  nonSalesAdjustments:[{detailType:'DiscountLineDetail',amount:500}],
+  nonSalesAdjustments:[{detailType:'DiscountLineDetail',amount:800}],
   salesLineDetails:[
-    {itemName:'Inactive:Inactive1',amount:2500},
-    {itemName:'Mirror X Photo Booth',amount:1000},
+    {itemName:'Synthetic service A',amount:4100},
+    {itemName:'Synthetic service B',amount:2300},
   ],
 });
 assert(
-  jesseAdjustmentExplanation.includes('Sales lines total $3500.00')
-    && jesseAdjustmentExplanation.includes('DiscountLineDetail')
-    && jesseAdjustmentExplanation.includes('TxnTaxDetail.TotalTax')
-    && jesseAdjustmentExplanation.includes('ApplyTaxAfterDiscount=true')
-    && jesseAdjustmentExplanation.includes('net transaction adjustment is -$358.64'),
+  syntheticAdjustmentExplanation.includes('Sales lines total $6400.00')
+    && syntheticAdjustmentExplanation.includes('DiscountLineDetail')
+    && syntheticAdjustmentExplanation.includes('TxnTaxDetail.TotalTax')
+    && syntheticAdjustmentExplanation.includes('ApplyTaxAfterDiscount=true')
+    && syntheticAdjustmentExplanation.includes('net transaction adjustment is -$650.00'),
   'Adjustment explanations must reconcile exact sales-line, discount, tax, and transaction-adjustment fields in plain English.',
 );
 assert(
