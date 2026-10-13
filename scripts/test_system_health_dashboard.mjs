@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
 const health = await readFile(new URL('../src/pages/admin/health/index.astro', import.meta.url), 'utf8');
+const baseLayout = await readFile(new URL('../src/layouts/BaseLayout.astro', import.meta.url), 'utf8');
+const healthCollapse = await readFile(new URL('../public/system-health-collapse.js', import.meta.url), 'utf8');
 const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
@@ -49,6 +51,35 @@ for (const panel of ['Monitoring coverage', 'Dark Mode visual quality', 'Critica
 assert(
   health.includes('data-system-health-page'),
   'System Health must expose the page marker used by mobile viewport-clearance rules.',
+);
+assert(
+  baseLayout.includes("healthCollapseScript.src = '/system-health-collapse.js';"),
+  'The shared layout must load the System Health collapse controller without an extra script block.',
+);
+assert(
+  visualQa.includes('collapse_state=page.evaluate(')
+    && visualQa.includes('if width in (390,1440):')
+    && visualQa.includes('criticalForcedOpen')
+    && visualQa.includes('recoveredCollapsed')
+    && visualWorkflow.includes("if name in ('phone','desktop'):")
+    && visualWorkflow.includes("'initialClosed','criticalInitiallyOpen','manuallyOpened'")
+    && visualWorkflow.includes("'manuallyClosed','criticalForcedOpen','recoveredCollapsed'")
+    && visualWorkflow.includes("'accordionGate':'pass' if reports_complete else 'failed-or-incomplete'")
+    && visualWorkflow.includes('python scripts/production_visual_qa.py --mode health-mobile --browser chromium')
+    && visualWorkflow.includes('python scripts/production_visual_qa.py --mode health-mobile --browser webkit'),
+  'Both browser suites must fail closed on iPhone and desktop Health accordion interactions in PR and production release gates.',
+);
+assert(
+  healthCollapse.includes("section.dataset.healthSectionStatus === 'red'")
+    && healthCollapse.includes('const nextCollapsed = critical ? false : Boolean(collapsed);')
+    && healthCollapse.includes('syncAll({ initial: true })')
+    && healthCollapse.includes('.koa-mobile-collapsed-content'),
+  'System Health sections must default collapsed across viewports while critical sections remain forced open.',
+);
+assert(
+  !healthCollapse.includes("toggle.addEventListener('click'")
+    && health.includes("button.addEventListener('click',(event)=>{"),
+  'Accordion button must have exactly one toggle listener; duplicate desktop listeners reverse an open or close click.',
 );
 assert(
   health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
@@ -540,7 +571,7 @@ assert(
     && visualWorkflow.includes("reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')")
     && visualWorkflow.includes('len(refresh_checks)==14')
     && visualWorkflow.includes('all(refresh_checks)')
-    && visualWorkflow.includes('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+    && visualWorkflow.includes('Production release blocked: all 14 responsive checks and Chromium/WebKit iPhone/desktop accordion interactions are mandatory.')
     && visualWorkflow.includes('Dark Mode QA release gate blocked:'),
   'The release gate must require seven distinct named responsive viewports per browser and 14 matching live refresh results.',
 );
