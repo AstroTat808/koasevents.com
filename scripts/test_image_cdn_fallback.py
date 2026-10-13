@@ -64,7 +64,7 @@ def main() -> None:
     assert "image.removeAttribute('srcset')" in source, "Fallback must clear failed srcset"
     assert "image.dataset.koaImageFallback = 'original'" in source, "Fallback must guard retry loops"
     assert "document.addEventListener('error'" in source, "Fallback must capture image load errors"
-    assert "loading=\"eager\"" in source, "Regression fixture unexpectedly missing eager-image recovery"
+    assert "loading={priority ? 'eager' : 'lazy'}" in source, "Responsive image loading modes were unexpectedly changed"
     with sync_playwright() as playwright:
         for name in ("chromium", "webkit"):
             run_browser(playwright, name, args.base_url)
