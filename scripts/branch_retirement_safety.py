@@ -13,6 +13,8 @@ from typing import Callable
 MARKER = '<!-- koa-retirement-event-v1 -->\n'
 SHA = re.compile(r'^[0-9a-f]{40}$')
 OUTCOMES = {'DELETED', 'SKIPPED', 'REJECTED', 'REFUSED', 'UNKNOWN'}
+# GitHub API author metadata, not editable text inside a public issue comment.
+EVENT_AUTHOR = {'id': 41898282, 'login': 'github-actions[bot]', 'type': 'Bot'}
 
 
 class RetirementStopped(RuntimeError):
@@ -53,6 +55,19 @@ def has_active_dependency(rows: list, branch: str) -> bool:
     return False
 
 
+def require_trusted_event_comment(comment: dict) -> None:
+    """Public issue text is not evidence of a workflow-authored operation."""
+    author = comment.get('user')
+    if (not isinstance(author, dict)
+            or any(author.get(key) != value for key, value in EVENT_AUTHOR.items())):
+        raise RetirementStopped('Retirement event author is not the trusted workflow bot')
+    created = comment.get('created_at')
+    updated = comment.get('updated_at')
+    if (not isinstance(created, str) or not created
+            or not isinstance(updated, str) or updated != created):
+        raise RetirementStopped('Retirement event was edited or lacks immutable timestamp evidence')
+
+
 class RetirementLedger:
     def __init__(self, approved: list, digest: str, comments: list, persist: Callable):
         self.approved = {row['branch']: row['sha'] for row in approved}
@@ -66,6 +81,7 @@ class RetirementLedger:
                 if 'Pre-deletion intent' in body or '**DELETED**' in body:
                     raise RetirementStopped('Legacy deletion evidence requires explicit reconciliation')
                 continue
+            require_trusted_event_comment(comment)
             try:
                 entry = json.loads(body[len(MARKER):])
             except (ValueError, TypeError):
@@ -175,7 +191,10 @@ def self_test() -> None:
             self.remote = {row['branch']: row['sha'] for row in self.rows}
 
         def persist(self, body):
-            self.comments.append({'id': len(self.comments) + 1, 'body': body})
+            self.comments.append({
+                'id': len(self.comments) + 1, 'body': body, 'user': dict(EVENT_AUTHOR),
+                'created_at': '2026-10-13T00:00:00Z', 'updated_at': '2026-10-13T00:00:00Z',
+            })
             return True
 
         def ledger(self, persist=None):
@@ -283,6 +302,48 @@ def self_test() -> None:
             restarted = self.ledger()
             restarted.preflight(self.remote.get)
             self.assertEqual(restarted.outcomes['feature/one']['outcome'], 'DELETED')
+
+        def test_public_comment_cannot_forge_a_recorded_deletion(self):
+            self.ledger().perform(self.rows[0], 'c' * 40,
+                                  lambda: self.delete(self.rows[0]), self.checkpoints.append)
+            original = dict(self.comments[-1])
+            for author in (
+                None,
+                {},
+                {'id': 12345, 'login': 'outside-contributor', 'type': 'User'},
+                {**EVENT_AUTHOR, 'id': 12345},
+                {**EVENT_AUTHOR, 'login': 'different-bot'},
+                {**EVENT_AUTHOR, 'type': 'User'},
+            ):
+                with self.subTest(author=author):
+                    self.comments[-1] = {**original, 'user': author}
+                    with self.assertRaises(RetirementStopped):
+                        self.ledger()
+            self.comments[-1] = original
+            self.ledger().preflight(self.remote.get)
+
+        def test_bot_event_edits_and_missing_timestamps_fail_closed(self):
+            self.ledger().perform(self.rows[0], 'c' * 40,
+                                  lambda: self.delete(self.rows[0]), self.checkpoints.append)
+            original = dict(self.comments[0])
+            for timestamps in (
+                {'updated_at': '2026-10-13T00:00:01Z'},
+                {'created_at': None},
+                {'updated_at': None},
+                {'created_at': '', 'updated_at': ''},
+            ):
+                with self.subTest(timestamps=timestamps):
+                    self.comments[0] = {**original, **timestamps}
+                    with self.assertRaises(RetirementStopped):
+                        self.ledger()
+            self.comments[0] = original
+            self.ledger().preflight(self.remote.get)
+
+        def test_ordinary_public_discussion_is_not_machine_evidence(self):
+            self.comments.append({'id': 1, 'body': 'Review question, not a retirement event.'})
+            ledger = self.ledger()
+            self.assertEqual(ledger.intents, {})
+            self.assertEqual(ledger.outcomes, {})
 
     result = unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromTestCase(SafetyTests))
     if not result.wasSuccessful():
