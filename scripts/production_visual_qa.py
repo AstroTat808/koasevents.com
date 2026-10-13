@@ -1365,6 +1365,7 @@ def health_mobile_mode(browser_name,health_payload_path):
  with sync_playwright() as p:
   browser=getattr(p,browser_name).launch()
   for viewport_name,width,height,dpr in viewports:
+   print(f"[health-mobile] {browser_name} {viewport_name} {width}x{height}: begin",flush=True)
    ctx=browser.new_context(
     viewport={"width":width,"height":height},
     device_scale_factor=dpr,
@@ -1791,6 +1792,7 @@ def health_mobile_mode(browser_name,health_payload_path):
    }
    results.append(result)
    if detail:failures.append({"viewport":viewport_name,"detail":detail,"metrics":metrics})
+   print(f"[health-mobile] {browser_name} {viewport_name}: "+("failed" if detail else "passed"),flush=True)
    page.close();ctx.close()
   browser.close()
 
