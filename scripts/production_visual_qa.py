@@ -1598,6 +1598,22 @@ def health_mobile_mode(browser_name,health_payload_path):
     if failed_checks:
      detail="; ".join(failed_checks)
 
+    # Capture only the synthetic signed-health fixture, never a real user session.
+    # These four small images are durably attached to the exact release certificate.
+    if collapse_state is not None and not failed_checks:
+     page.evaluate("""() => {
+       const label=document.createElement('div');
+       label.dataset.koaSyntheticAccordionQa='true';
+       label.textContent='SYNTHETIC SYSTEM HEALTH QA — NO PRODUCTION CUSTOMER DATA';
+       label.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483640;padding:6px 12px;background:#173d30;color:#fff;font:700 11px system-ui;text-align:center';
+       document.body.appendChild(label);
+     }""")
+     page.screenshot(
+      path=str(root/f"accordion-{viewport_name}.jpg"),
+      type="jpeg",quality=56,full_page=False,animations="disabled",caret="hide",
+     )
+     page.evaluate("() => document.querySelector('[data-koa-synthetic-accordion-qa]')?.remove()")
+
     top_shot=root/f"system-health-{viewport_name}-top.png"
     page.screenshot(path=str(top_shot),full_page=False,animations="disabled",caret="hide")
 
