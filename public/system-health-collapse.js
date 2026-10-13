@@ -98,7 +98,13 @@
 
   function syncSection(section, { initial = false } = {}) {
     if (!(section instanceof HTMLElement) || section.dataset.mobileCollapsible !== 'true') return;
+    // Astro can initialize native section controls after this external script.
+    // Initialize each section once when its controls actually exist, not only
+    // during the document-wide startup pass. Later renders preserve user state.
+    const firstSync = section.dataset.koaCollapseInitialized !== 'true';
+    if (firstSync && !section.querySelector('[data-mobile-collapse-toggle]')) return;
     const critical = section.dataset.healthSectionStatus === 'red';
+    section.dataset.koaCollapseInitialized = 'true';
 
     if (critical) {
       section.dataset.koaCriticalAutoOpen = 'true';
@@ -106,7 +112,7 @@
       return;
     }
 
-    if (initial || section.dataset.koaCriticalAutoOpen === 'true') {
+    if (initial || firstSync || section.dataset.koaCriticalAutoOpen === 'true') {
       delete section.dataset.koaCriticalAutoOpen;
       setCollapsed(section, true);
     }
@@ -157,7 +163,7 @@
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ['data-health-section-status', 'data-mobile-collapsible'],
+    attributeFilter: ['data-health-section-status', 'data-mobile-collapsible', 'data-mobile-collapse-ready'],
   });
 
   desktopQuery.addEventListener?.('change', () => syncAll({ initial: desktopQuery.matches }));

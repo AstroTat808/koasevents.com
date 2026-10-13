@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../public/system-health-collapse.js', import.meta.url), 'utf8');
 
-function fixture({ desktop = false, initialStatus = 'green' } = {}) {
+function fixture({ desktop = false, initialStatus = 'green', delayedInitialization = false } = {}) {
   const observers = [];
   const datasetName = (key) => 'data-' + String(key).replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase());
   function record(mutation) {
@@ -99,7 +99,7 @@ function fixture({ desktop = false, initialStatus = 'green' } = {}) {
   }
   const page = new Element('main');
   const section = page.appendChild(new Element('section'));
-  section.dataset.mobileCollapsible = 'true';
+  if (!delayedInitialization) section.dataset.mobileCollapsible = 'true';
   section.dataset.healthSectionStatus = initialStatus;
   const header = section.appendChild(new Element('header'));
   const button = header.appendChild(new Button());
@@ -139,7 +139,16 @@ function fixture({ desktop = false, initialStatus = 'green' } = {}) {
     }
     return deliveries;
   }
-  return { page, section, header, button, label, detail, flush };
+  function initializeLate() {
+    // Reproduce the real page's desktop default before the external controller
+    // sees an asynchronously initialized section. Do not fake controller state.
+    section.dataset.mobileCollapsible = 'true';
+    section.dataset.mobileCollapsed = desktop ? 'false' : 'true';
+    button.setAttribute('aria-expanded', desktop ? 'true' : 'false');
+    section.dataset.mobileCollapseReady = 'true';
+    flush();
+  }
+  return { page, section, header, button, label, detail, flush, initializeLate };
 }
 
 let scenarios = 0;
@@ -179,6 +188,20 @@ for (const desktop of [false, true]) {
   initiallyCritical.flush();
   assert.equal(initiallyCritical.section.dataset.mobileCollapsed, 'false');
   assert.equal(initiallyCritical.button.disabled, true);
-  scenarios += 9;
+  const late = fixture({ desktop, delayedInitialization: true });
+  late.flush();
+  assert.equal(late.section.dataset.koaCollapseInitialized, undefined);
+  late.initializeLate();
+  assert.equal(late.section.dataset.koaCollapseInitialized, 'true');
+  assert.equal(late.section.dataset.mobileCollapsed, 'true', 'Late native initialization must not leave desktop sections expanded.');
+  late.button.click(); late.flush();
+  assert.equal(late.section.dataset.mobileCollapsed, 'false', 'Late-initialized sections must expand with one click.');
+  late.button.click(); late.flush();
+  assert.equal(late.section.dataset.mobileCollapsed, 'true');
+  late.section.dataset.healthSectionStatus = 'red'; late.flush();
+  assert.equal(late.section.dataset.mobileCollapsed, 'false');
+  late.section.dataset.healthSectionStatus = 'green'; late.flush();
+  assert.equal(late.section.dataset.mobileCollapsed, 'true');
+  scenarios += 14;
 }
-console.log('PASS | ' + scenarios + ' controller runtime scenarios: bounded observer delivery, critical open/recovery, single listener, manual state.');
+console.log('PASS | ' + scenarios + ' controller runtime scenarios: bounded observer delivery, critical open/recovery, single listener, manual state, delayed native initialization.');
