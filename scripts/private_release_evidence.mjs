@@ -60,12 +60,19 @@ function safeBrowser(report, browser) {
 }
 
 export function sanitizeDashboard(data, expectedSha) {
-  const current = data?.current || {};
+  const dashboard = data?.dashboard && typeof data.dashboard === 'object' && !Array.isArray(data.dashboard)
+    ? data.dashboard : data;
+  const current = dashboard?.current || {};
   requireValue(sha(expectedSha) && data?.ok === true && data.sha === expectedSha && deploy(data.deployId),
     'Signed dashboard evidence must match the exact release SHA and deploy.');
   requireValue(['healthy', 'unhealthy'].includes(current.overall) && count(current.passed)
     && count(current.failed) && date(current.checkedAt), 'Dashboard health totals or timestamp are invalid.');
-  const q = data.visualQuality || {};
+  if (data?.dashboard) {
+    const outer = data.current || {};
+    requireValue(['overall', 'passed', 'failed', 'checkedAt'].every(key => outer[key] === current[key]),
+      'Signed envelope and dashboard health summaries disagree.');
+  }
+  const q = dashboard.visualQuality || {};
   requireValue(q.commit === expectedSha && q.deployId === data.deployId
     && ['passed', 'failed'].includes(q.status) && date(q.checkedAt)
     && Array.isArray(q.screenshots) && q.screenshots.length === 4,
@@ -85,7 +92,7 @@ export function sanitizeDashboard(data, expectedSha) {
       url: '/api/admin/health?action=dark-mode-qa-screenshot&deployId=' + encodeURIComponent(data.deployId)
         + '&key=' + encodeURIComponent(shot.key) };
   });
-  requireValue(Array.isArray(data.enrichmentWarnings), 'Enrichment warning evidence is missing.');
+  requireValue(Array.isArray(dashboard.enrichmentWarnings), 'Enrichment warning evidence is missing.');
   return {
     ok: true, sha: expectedSha, deployId: data.deployId,
     current: { overall: current.overall, passed: current.passed, failed: current.failed,
@@ -97,7 +104,7 @@ export function sanitizeDashboard(data, expectedSha) {
       commit: expectedSha, deployId: data.deployId, productionCommit: expectedSha,
       productionDeployId: data.deployId, commitMatchesProduction: true, deployMatchesProduction: true,
       mismatch: false, chromium, webkit, screenshots, detail: 'Sanitized exact-release browser evidence.' },
-    enrichmentWarnings: data.enrichmentWarnings.map(() => ({ message: 'Enrichment warning details redacted from CI.' })),
+    enrichmentWarnings: dashboard.enrichmentWarnings.map(() => ({ message: 'Enrichment warning details redacted from CI.' })),
   };
 }
 
@@ -125,6 +132,13 @@ function selfTest() {
   assert.equal(safe.visualQuality.chromium.cases, 4);
   assert.equal(safe.visualQuality.screenshots.length, 4);
   assert.equal(safe.enrichmentWarnings.length, 1);
+  // Match the actual OIDC run-dashboard-refresh response, whose detailed
+  // browser evidence is nested under dashboard rather than at the top level.
+  const envelope = { ok: true, sha: commit, deployId, source: 'github-actions-oidc',
+    current: input.current, enrichmentWarnings: input.enrichmentWarnings, dashboard: input };
+  assert.deepEqual(sanitizeDashboard(envelope, commit), safe);
+  assert.throws(() => sanitizeDashboard({ ...envelope, current: { ...input.current, failed: 1 } }, commit));
+  assert.throws(() => sanitizeDashboard({ ...envelope, dashboard: { ...input, visualQuality: {} } }, commit));
   for (const bad of [ { ...input, sha: 'c'.repeat(40) }, { ...input, deployId: '' },
     { ...input, current: { ...input.current, passed: true } },
     { ...input, visualQuality: {} },
@@ -145,7 +159,7 @@ function selfTest() {
     assert.throws(() => verifyPrivateHealth({ ...health, accountingInvariant: { ...health.accountingInvariant, ...delta } }));
   }
   assert.throws(() => verifyPrivateHealth({ ...health, probes: [] }));
-  console.log('PASS | private release evidence validation, PII stripping, exact-SHA browser coverage, and 15 fail-closed fixtures.');
+  console.log('PASS | private release evidence validation, PII stripping, exact-SHA browser coverage, signed nested envelope, and 17 fail-closed fixtures.');
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
