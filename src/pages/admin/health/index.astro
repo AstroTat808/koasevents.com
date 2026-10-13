@@ -3115,6 +3115,48 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       releaseDetail.appendChild(attestationSection);
 
+      const accordionQA=attestation?.accordionEvidence||null;
+      const accordionPanel=document.createElement('section');
+      const accordionVerified=accordionQA?.status==='passed'
+        &&accordionQA?.commit===release.commit&&accordionQA?.deployId===release.deployId
+        &&Array.isArray(accordionQA?.results)&&accordionQA.results.length===4;
+      accordionPanel.className='rounded-xl border p-4 '+(
+        accordionVerified?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]'
+      );
+      accordionPanel.innerHTML='<div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Permanent accordion interaction evidence</p><p data-accordion-release-summary class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><div data-accordion-release-results class="mt-4 grid gap-3 sm:grid-cols-2"></div>';
+      accordionPanel.querySelector('[data-accordion-release-summary]').textContent=accordionVerified
+        ? 'Chromium and WebKit · iPhone 390×844 and desktop 1440×900 · six interactions per viewport passed · synthetic browser screenshots retained'
+        : 'No verified accordion screenshot evidence is stored for this release.';
+      const screenshotGrid=accordionPanel.querySelector('[data-accordion-release-results]');
+      if(accordionVerified){
+        accordionQA.results.forEach((result)=>{
+          if(!result?.synthetic||!result?.key||!/^(chromium|webkit)-(phone|desktop)$/.test(String(result.key)))return;
+          const box=document.createElement('a');
+          box.className='block rounded-xl border border-[var(--koa-line)] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]';
+          box.target='_blank';
+          box.rel='noopener noreferrer';
+          box.href='/api/admin/health?action=accordion-qa-screenshot&deployId='
+            +encodeURIComponent(String(release.deployId||''))+'&key='+encodeURIComponent(result.key);
+          const label=document.createElement('p');
+          label.className='mb-2 text-xs font-black text-[var(--koa-forest)]';
+          label.textContent=String(result.browser||'')+' · '+String(result.viewport||'')
+            +' · '+String(result.width||'')+'×'+String(result.height||'')
+            +' · '+(result.status==='passed'?'Passed':'Not verified');
+          const image=document.createElement('img');
+          image.loading='lazy';
+          image.decoding='async';
+          image.className='w-full rounded-lg border border-black/5 object-contain';
+          image.src=box.href;
+          image.alt='Synthetic System Health accordion QA screenshot for '+label.textContent;
+          const proof=document.createElement('p');
+          proof.className='mt-2 text-[.62rem] text-[var(--koa-ink)]/65';
+          proof.textContent='Default collapsed · Manual expand/collapse · Critical auto-open · Recovery re-collapse';
+          box.append(label,image,proof);
+          screenshotGrid.appendChild(box);
+        });
+      }
+      releaseDetail.appendChild(accordionPanel);
+
       const probeAudit=release.syntheticProbeVerification||null;
       const probes=document.createElement('section');
       probes.className='rounded-xl border '+(probeAudit?.status==='passed'?'border-emerald-200 bg-emerald-50':probeAudit?'border-red-200 bg-red-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]')+' p-4';
