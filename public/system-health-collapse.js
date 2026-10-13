@@ -88,7 +88,11 @@
       toggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
       toggle.disabled = critical;
       const label = toggle.querySelector('[data-health-toggle-label]');
-      if (label) label.textContent = critical ? 'Critical · Open' : nextCollapsed ? 'Expand' : 'Collapse';
+      const nextLabel = critical ? 'Critical · Open' : nextCollapsed ? 'Expand' : 'Collapse';
+      // textContent replacement queues childList even when the string is unchanged.
+      // This controller observes those mutations, so repeated writes would keep
+      // critical sections in an endless microtask loop and starve input/paint.
+      if (label && label.textContent !== nextLabel) label.textContent = nextLabel;
     }
   }
 
