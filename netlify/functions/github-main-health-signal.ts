@@ -765,7 +765,9 @@ export default async (req:Request,context:Context) => {
           commit:expectedSha,deployId,runId,
         });
         for(const shot of accordionEvidence.results){
-          const actualDigest=createHash('sha256').update(Buffer.from(shot.dataBase64,'base64')).digest('hex');
+          const bytes=Uint8Array.from(atob(shot.dataBase64),(char)=>char.charCodeAt(0));
+          const digestBytes=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+          const actualDigest=Array.from(digestBytes,byte=>byte.toString(16).padStart(2,'0')).join('');
           if(actualDigest!==shot.sha256)throw new Error('Accordion screenshot integrity mismatch.');
         }
         // Record each mocked-session image durably before the release is certified.
