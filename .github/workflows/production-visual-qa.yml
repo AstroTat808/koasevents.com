@@ -215,6 +215,10 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+          for browser in chromium webkit; do
+            test -s "visual-results/health-mobile-$browser/accordion-phone.jpg"
+            test -s "visual-results/health-mobile-$browser/accordion-desktop.jpg"
+          done
       - name: Verify iPhone admin bottom navigation in built PR
         if: github.event_name == 'pull_request'
         shell: bash
@@ -1085,6 +1089,17 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
 
+      - name: Download exact-run synthetic System Health browser evidence
+        if: success()
+        uses: actions/download-artifact@v4
+        with:
+          name: koa-system-health-mobile-${{ github.run_id }}
+          path: visual-results
+
+      - name: Verify private synthetic accordion screenshots for certified release
+        if: success()
+        run: python scripts/prepare_accordion_release_evidence.py
+
       - name: Persist certified release attestation history
         if: success()
         shell: bash
@@ -1134,6 +1149,7 @@ jobs:
             },
           }
           assert att.get("deployId")==health_response.get("deployId")
+          payload["accordionEvidence"]=json.load(open("/tmp/koa-accordion-evidence.json"))
           open("/tmp/koa-release-history-request.json","w").write(json.dumps(payload,separators=(",",":")))
           PY
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
@@ -1160,6 +1176,10 @@ jobs:
           assert att.get("status")=="verified"
           assert att.get("productionGateState")=="success"
           assert att.get("matchingDeployId") is True
+          accordion=att.get("accordionEvidence") or {}
+          assert accordion.get("status")=="passed"
+          assert len(accordion.get("results") or [])==4
+          assert accordion.get("commit")==os.environ["GITHUB_SHA"]
           print("Certified release history persisted:",json.dumps({
             "commit":data.get("expectedSha"),
             "deployId":data.get("deployId"),
