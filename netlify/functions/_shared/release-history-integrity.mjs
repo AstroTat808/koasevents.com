@@ -38,7 +38,7 @@ export function evaluateReleaseHistoryPersistence({
     return { ...result, state: 'failed', severity: 'critical',
       detail: 'Release-history persistence failed on the exact production commit. A successful deployment does not override this failure.' };
   }
-  if (recorded) {
+  if (recorded && githubStatus === 'success') {
     return { ...result, state: 'healthy', severity: 'healthy', verified: true,
       detail: 'Durable certification and exact deployed SHA/ID match.' };
   }
