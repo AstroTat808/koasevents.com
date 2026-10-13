@@ -27,7 +27,11 @@ PRODUCTION_RUN_261 = 38237525321
 APPROVED_COUNT = 195
 LEDGER_TITLE = "[Audit] Koa exact-SHA branch retirement — 2026-10-12 approved 195"
 SHA = re.compile(r"^[0-9a-f]{40}$")
-REQUIRED_STATUSES = ("System Health production release gate", "System Health responsive audit")
+REQUIRED_STATUSES = (
+    "System Health production release gate",
+    "System Health responsive audit",
+    "System Health release history persistence",
+)
 
 
 def run(args, *, input_text=None, check=True, timeout=180):
@@ -123,7 +127,7 @@ def verify_release_trigger():
     # The original #261 run failed in an indented Bash heredoc despite green
     # functional QA. Its immutable SHA cannot be retroactively patched. A later
     # fully certified production release must contain both the #268 repair and #266.
-    for pr_number in (268, 266):
+    for pr_number in (268, 266, 269, 270):
         pr = gh(f"/repos/{REPO}/pulls/{pr_number}")
         if pr.get("merged") is not True:
             raise RuntimeError(f"PR #{pr_number} must merge before retirement")
@@ -189,7 +193,7 @@ def ensure_ledger(approved, release_sha):
         "<!-- koa-branch-retirement-20261012 -->",
         "# SHA-pinned Koa branch retirement",
         "",
-        "Execution is authorized only after PR #261 and #266 production certifications are green.",
+        "Execution requires current certified production: PR #268 repair, #266 accordion behavior, #269 independent history and #270 durable screenshots.",
         f"Approved main baseline: `{SNAPSHOT_MAIN}`",
         f"Exact certified execution main: `{release_sha}`",
         f"Source audit run: https://github.com/{REPO}/actions/runs/{SNAPSHOT_RUN}",
