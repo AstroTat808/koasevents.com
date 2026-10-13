@@ -70,3 +70,30 @@ export function evaluateReleaseHistoryPersistence({
   }
   return result;
 }
+
+// Consume only server-side Netlify connection metadata, never a request parameter.
+// No tenant-specific repository default: missing or conflicting evidence fails closed.
+export function releaseHistoryStatusEndpoint(deployments, commit) {
+  if (!/^[a-f0-9]{40}$/.test(String(commit || ''))) {
+    throw new Error('Independent release-history commit is invalid.');
+  }
+  const normalize = (value) => {
+    if (value == null || value === '') return '';
+    if (typeof value !== 'string') throw new Error('Independent release-history repository metadata is invalid.');
+    const input = value.trim();
+    if (!input) return '';
+    const match = /^(?:https:\/\/github\.com\/|git@github\.com:)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9_.-]{1,100}?)\/?$/.exec(input);
+    if (!match) throw new Error('Independent release-history repository metadata is invalid.');
+    const name = /^(?:https:\/\/|git@)/.test(input) ? match[2].replace(/\.git$/, '') : match[2];
+    if (!name || name === '.' || name === '..') throw new Error('Independent release-history repository metadata is invalid.');
+    return match[1] + '/' + name;
+  };
+  const current = normalize(deployments?.current?.repository);
+  const configured = normalize(deployments?.connectionHealth?.repository);
+  if (!current && !configured) throw new Error('Independent release-history repository metadata is unavailable.');
+  if (current && configured && current.toLowerCase() !== configured.toLowerCase()) {
+    throw new Error('Independent release-history repository metadata conflicts.');
+  }
+  const path = (configured || current).split('/').map(encodeURIComponent).join('/');
+  return 'https://api.github.com/repos/' + path + '/commits/' + commit + '/statuses?per_page=100';
+}
