@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 
 SESSION = {
     "email": "calendar-qa@example.test", "displayName": "Calendar QA",
@@ -52,7 +52,8 @@ MEASURE = r"""() => {
     const threshold=heading&&(size>=24||(size>=18.66&&weight>=700))?3:4.5;
     const day=el.closest('.calendar-day');
     return {heading,threshold,ratio:ratio(fg,bg),today:!!day?.classList.contains('is-today'),
-      other:!!day?.classList.contains('is-other'),weekend:!!day?.classList.contains('is-weekend')};
+      other:!!day?.classList.contains('is-other'),weekend:!!day?.classList.contains('is-weekend'),
+      negativeControlTarget:el.hasAttribute('data-calendar-contrast-probe')};
   });
   return {resolved:document.documentElement.dataset.theme,
     titleCount:results.filter(r=>r.heading).length, dateCount:results.filter(r=>!r.heading).length,
@@ -77,6 +78,51 @@ def require_contrast(metrics: dict, theme: str, *, initial: bool) -> dict:
         "dateMinimum": 4.5,
         "contrastEnforced": theme == "dark",
     }
+
+
+def verify_negative_control(page, case: dict) -> bool:
+    """Measure the injected node only after both actual CSS states have settled."""
+    victim = page.locator(".calendar-day:not(.is-today):not(.is-other) .calendar-date-number").first
+    original = victim.evaluate("""el => ({
+      value:el.style.getPropertyValue('color'), priority:el.style.getPropertyPriority('color'),
+      computed:getComputedStyle(el).color, marker:el.getAttribute('data-calendar-contrast-probe')
+    })""")
+    restore_color = """(el,original) => {
+      if(original.value)el.style.setProperty('color',original.value,original.priority);
+      else el.style.removeProperty('color');
+    }"""
+    try:
+        case["stage"] = "negative-injection-settling"
+        victim.evaluate("""el => {
+          el.setAttribute('data-calendar-contrast-probe','');
+          el.style.setProperty('color','rgb(10, 33, 26)','important');
+        }""")
+        # A transition can temporarily outrank even an inline !important color.
+        # Wait for the injected value, never for a convenient passing ratio.
+        expect(victim).to_have_css("color", "rgb(10, 33, 26)", timeout=5000)
+        case["stage"] = "negative-detection"
+        injected = [row for row in page.evaluate(MEASURE)["results"] if row["negativeControlTarget"]]
+        assert len(injected) == 1, "The injected Calendar node must be measured exactly once"
+        case["negativeControl"] = {
+            "injectedRatio": round(injected[0]["ratio"], 3),
+            "threshold": injected[0]["threshold"],
+            "detected": injected[0]["ratio"] < injected[0]["threshold"],
+        }
+        assert case["negativeControl"]["detected"], "Contrast detector accepted the injected low-contrast node"
+        case["stage"] = "negative-restoration-settling"
+        victim.evaluate(restore_color, original)
+        expect(victim).to_have_css("color", original["computed"], timeout=5000)
+        case["stage"] = "restored-contrast"
+        case["restored"] = require_contrast(page.evaluate(MEASURE), "dark", initial=False)
+        case["negativeControl"]["restored"] = True
+        return True
+    finally:
+        # Restore exactly the prior inline declaration and marker, even on failure.
+        victim.evaluate(restore_color, original)
+        victim.evaluate("""(el,original) => {
+          if(original.marker===null)el.removeAttribute('data-calendar-contrast-probe');
+          else el.setAttribute('data-calendar-contrast-probe',original.marker);
+        }""", original)
 
 
 def audit(playwright, browser_name: str, base: str) -> list:
@@ -125,16 +171,7 @@ def audit(playwright, browser_name: str, base: str) -> list:
                     case["stage"] = "rerender-contrast"
                     case["rerenderMetrics"] = page.evaluate(MEASURE)
                     rerender = require_contrast(case["rerenderMetrics"], theme, initial=False)
-                    negative_control = True
-                    if theme == "dark":
-                        case["stage"] = "negative-control"
-                        # Prove the exact legacy ink regression cannot be masked by this test.
-                        victim = page.locator(".calendar-day:not(.is-today):not(.is-other) .calendar-date-number").first
-                        victim.evaluate("el=>el.style.setProperty('color','rgb(10, 33, 26)','important')")
-                        negative_control = any(row["ratio"] < row["threshold"] for row in page.evaluate(MEASURE)["results"])
-                        assert negative_control, "Contrast regression detector accepted the original low-contrast color"
-                        victim.evaluate("el=>el.style.removeProperty('color')")
-                        require_contrast(page.evaluate(MEASURE), theme, initial=False)
+                    negative_control = verify_negative_control(page, case) if theme == "dark" else True
                     case.update(passed=True, stage="complete", initial=initial, rerender=rerender,
                         negativeControlPassed=negative_control)
                     print(f"PASS | Calendar contrast | {browser_name} {width}x{height} {theme}", flush=True)
