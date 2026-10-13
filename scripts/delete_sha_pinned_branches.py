@@ -367,17 +367,17 @@ def main():
                      for name,tip in sorted(original_preserved.items())],
     }
     evidence=folder / "reconciliation.json"
-    evidence.write_text(json.dumps(reconciliation,indent=2)+"\\n")
+    evidence.write_text(json.dumps(reconciliation,indent=2)+"\n")
     digest=hashlib.sha256(evidence.read_bytes()).hexdigest()
-    summary=("## Final exact-SHA reconciliation\\n\\n"
+    summary=("## Final exact-SHA reconciliation\n\n"
              +"Deleted: "+str(reconciliation["deleted"])
              +"; skipped: "+str(reconciliation["skipped"])
              +"; rejected: "+str(reconciliation["rejected"])
              +"; preserved: "+str(reconciliation["preserved_found"])
              +"/"+str(len(original_preserved))
-             +".\\n\\nEvidence SHA256: "+digest+".\\n")
+             +".\n\nEvidence SHA256: "+digest+".\n")
     if inconsistent:
-        summary+="\\nUNVERIFIED RECONCILIATION: "+"; ".join(inconsistent[:20])
+        summary+="\nUNVERIFIED RECONCILIATION: "+"; ".join(inconsistent[:20])
     issue_comment(ledger_num,summary)
     if inconsistent:
         raise RuntimeError("Final branch reconciliation found missing preserved tips or inconsistent deletion claims")
