@@ -323,6 +323,65 @@ def main():
     out = folder / "outcomes.json"
     out.write_text(json.dumps({"release_sha": release_sha, "approved_count": len(approved),
                                "outcomes": outcomes}, indent=2) + "\n")
+    # Independent final reconciliation: actual remote tips vs every pinned
+    # deletion outcome, and preservation of all 22+64+20 excluded branches.
+    original=json.loads((folder / "approved" / "report.json").read_text())
+    original_preserved={
+        row["branch"]:row["sha"] for row in original["rows"]
+        if not (row.get("group")=="safe-to-delete" and row.get("flag_after_7_days") is True)
+    }
+    if len(original_preserved)!=106:
+        raise RuntimeError("Unexpected number of preserved branches in approved audit")
+    remote_refs={}
+    for line in git("ls-remote","--heads","origin").stdout.splitlines():
+        tip,ref=line.split(None,1)
+        if ref.startswith("refs/heads/"):
+            remote_refs[ref[len("refs/heads/"):]]=tip
+    if remote_refs.get("main")!=release_sha:
+        raise RuntimeError("Production main moved before final deletion reconciliation")
+    inconsistent=[]
+    for result in outcomes:
+        branch=result["branch"]
+        exists=branch in remote_refs
+        result["present_after"]=exists
+        result["tip_after"]=remote_refs.get(branch,"")
+        if result["outcome"]=="DELETED" and exists:
+            inconsistent.append(branch+": reported deleted but ref still exists")
+        if result["outcome"] in {"SKIPPED","REJECTED"} and not exists:
+            inconsistent.append(branch+": not deleted by cleanup but ref is missing")
+    for branch in original_preserved:
+        if branch not in remote_refs:
+            inconsistent.append(branch+": preserved branch is missing")
+    reconciliation={
+        "schema_version":1,"snapshot_main_sha":SNAPSHOT_MAIN,
+        "certified_release_sha":release_sha,
+        "approved_count":len(approved),"deleted":sum(x["outcome"]=="DELETED" for x in outcomes),
+        "skipped":sum(x["outcome"]=="SKIPPED" for x in outcomes),
+        "rejected":sum(x["outcome"]=="REJECTED" for x in outcomes),
+        "preserved_expected":len(original_preserved),
+        "preserved_found":sum(name in remote_refs for name in original_preserved),
+        "consistent":not inconsistent,"discrepancies":inconsistent,
+        "outcomes":outcomes,
+        "preserved":[{"branch":name,"source_tip":tip,"still_present":name in remote_refs,
+                      "current_tip":remote_refs.get(name,"")}
+                     for name,tip in sorted(original_preserved.items())],
+    }
+    evidence=folder / "reconciliation.json"
+    evidence.write_text(json.dumps(reconciliation,indent=2)+"\\n")
+    digest=hashlib.sha256(evidence.read_bytes()).hexdigest()
+    summary=("## Final exact-SHA reconciliation\\n\\n"
+             +"Deleted: "+str(reconciliation["deleted"])
+             +"; skipped: "+str(reconciliation["skipped"])
+             +"; rejected: "+str(reconciliation["rejected"])
+             +"; preserved: "+str(reconciliation["preserved_found"])
+             +"/"+str(len(original_preserved))
+             +".\\n\\nEvidence SHA256: "+digest+".\\n")
+    if inconsistent:
+        summary+="\\nUNVERIFIED RECONCILIATION: "+"; ".join(inconsistent[:20])
+    issue_comment(ledger_num,summary)
+    if inconsistent:
+        raise RuntimeError("Final branch reconciliation found missing preserved tips or inconsistent deletion claims")
+
     issues = gh(f"/repos/{REPO}/issues/{ledger_num}")
     body = issues.get("body") or ""
     if "RETIREMENT COMPLETED" not in body:
