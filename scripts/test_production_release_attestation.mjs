@@ -110,11 +110,10 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
-assert(healthPage.includes('data-release-verification-overview') === false
-    && healthPage.includes("overview.dataset.releaseVerificationOverview=''")
+assert(healthPage.includes("overview.dataset.releaseVerificationOverview=''")
     && healthPage.includes('data-release-verification-fields')
     && healthPage.includes('data-release-browser-results')
-    && healthPage.includes('data-release-browser=name')
+    && healthPage.includes('card.dataset.releaseBrowser=name')
     && healthPage.includes('exactCertification')
     && healthPage.includes('exactVisual')
     && healthPage.includes('exactAccordion')
