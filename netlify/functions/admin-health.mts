@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { evaluateReleaseHistoryPersistence } from './_shared/release-history-integrity.mjs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { resolveTenant } from './_shared/tenant';
 import {
@@ -560,6 +561,31 @@ function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId
   };
 }
 
+async function independentReleaseHistoryPersistence(context:Context,deployments:any,releases:any[]) {
+  // An exact ready deploy is not proof that its certification was stored.
+  const sha=String(deployments?.current?.commit||Netlify.env.get('COMMIT_REF')||'').trim().toLowerCase();
+  const deployId=String(deployments?.current?.deployId||context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'').trim();
+  const publishedAt=String(deployments?.current?.deployTime||deployments?.current?.builtAt||'');
+  const release=(releases||[]).find((row:any)=>row?.commit===sha&&row?.deployId===deployId)||null;
+  let statuses:any[]=[];
+  if(/^[a-f0-9]{40}$/.test(sha)){
+    const githubToken=String(Netlify.env.get('KOA_GITHUB_READ_TOKEN')||'').trim();
+    const res=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+sha+'/statuses?per_page=100',{
+      headers:{
+        Accept:'application/vnd.github+json',
+        'User-Agent':'KoaEvents-ReleaseHistory/1.0',
+        ...(githubToken?{Authorization:'Bearer '+githubToken}:{}),
+      },
+      signal:AbortSignal.timeout(10000),
+    });
+    if(!res.ok)throw new Error('Independent release-history GitHub status unavailable (HTTP '+res.status+').');
+    const body=await res.json();
+    if(!Array.isArray(body))throw new Error('Release-history commit-status evidence malformed.');
+    statuses=body.map((item:any)=>({context:String(item?.context||''),state:String(item?.state||'')}));
+  }
+  return evaluateReleaseHistoryPersistence({commit:sha,deployId,release,statuses,publishedAt});
+}
+
 export async function runHealthDashboardRefresh(context:Context){
   const runWarnings:Array<{section:string;error:string}>=[];
   const [previous,previousHourly]=await Promise.all([
@@ -602,6 +628,11 @@ export async function runHealthDashboardRefresh(context:Context){
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const releaseHistoryPersistence=await safeHealthSection(
+    enrichmentWarnings,'Release history persistence',
+    ()=>independentReleaseHistoryPersistence(context,deployments,hydratedReleases),
+    {state:'unavailable',severity:'warning',verified:false,detail:'Independent release-history status is unavailable.'},
+  );
   const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
   const weeklyExecutiveSummary=await safeHealthSection(
     enrichmentWarnings,
@@ -611,7 +642,7 @@ export async function runHealthDashboardRefresh(context:Context){
   );
   return {
     ok:true,
-    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,visualQuality,
+    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,visualQuality,releaseHistoryPersistence,
     accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
     accountingReleaseAudits:accountingReleaseAudits(hydratedReleases),
     enrichmentWarnings,
@@ -1032,6 +1063,11 @@ export default async (req:Request,context:Context) => {
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const releaseHistoryPersistence=await safeHealthSection(
+    enrichmentWarnings,'Release history persistence',
+    ()=>independentReleaseHistoryPersistence(context,deployments,hydratedReleases),
+    {state:'unavailable',severity:'warning',verified:false,detail:'Independent release-history status is unavailable.'},
+  );
   const visualQuality=darkModeVisualQualitySummary(hydratedReleases,latest,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
   return Response.json({
     current:latest,
@@ -1050,6 +1086,7 @@ export default async (req:Request,context:Context) => {
     credentialHealth,
     weeklyExecutiveSummary,
     visualQuality,
+    releaseHistoryPersistence,
     accountingHealth:accountingHealthSummary(latest,history,accountingInvariantIncidents),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});
