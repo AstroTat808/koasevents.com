@@ -1891,6 +1891,16 @@ html[data-theme="dark"] .calendar-day.is-other {
   background: color-mix(in srgb, var(--koa-surface-muted) 52%, var(--koa-surface)) !important;
   color: var(--koa-text-muted) !important;
 }
+/* Keep calendar date numbers readable in Safari/WebKit dark mode: normal dates
+   use high-contrast foreground, outside-month dates use the accessible muted
+   token, and today's filled badge retains its existing white foreground. */
+html[data-theme="dark"] body.koa-admin-page .calendar-day:not(.is-today) .calendar-date-number {
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .calendar-day.is-other:not(.is-today) .calendar-date-number {
+  color: var(--koa-text-muted) !important;
+}
+
 html[data-theme="dark"] .calendar-day.is-today {
   background: color-mix(in srgb, var(--koa-amber) 13%, var(--koa-surface)) !important;
 }
