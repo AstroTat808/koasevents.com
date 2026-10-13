@@ -50,7 +50,7 @@ const srcset = candidates
 const fallbackSrc = transform(Math.min(width, 1800), Math.round(Math.min(width, 1800) * ratio));
 ---
 <img
-  src={fallbackSrc}
+  src={src}
   srcset={srcset}
   sizes={sizes}
   width={width}
@@ -62,3 +62,40 @@ const fallbackSrc = transform(Math.min(width, 1800), Math.round(Math.min(width, 
   decoding="async"
   data-koa-focal-src={src}
 />
+
+<script>
+  // Keep responsive Netlify Image CDN srcsets, but restore the existing local
+  // asset on CDN/network failure. Capture image errors because they do not
+  // bubble, and never retry the fallback source in a loop.
+  function restoreKoaOriginalImage(image: HTMLImageElement) {
+    if (image.dataset.koaImageFallback === 'original') return;
+    const original = image.dataset.koaFocalSrc || '';
+    if (!original.startsWith('/') || original.startsWith('//')) return;
+    const selected = image.currentSrc || image.getAttribute('src') || '';
+    if (!selected.includes('/.netlify/images?')) return;
+    image.dataset.koaImageFallback = 'original';
+    image.removeAttribute('srcset');
+    image.src = original;
+  }
+
+  document.addEventListener('error', (event) => {
+    if (event.target instanceof HTMLImageElement
+        && event.target.hasAttribute('data-koa-focal-src')) {
+      restoreKoaOriginalImage(event.target);
+    }
+  }, true);
+
+  // Eager images can fail before the deferred Astro module initializes.
+  // Lazy images remain untouched until an actual load failure occurs.
+  const restoreAlreadyFailedEagerImages = () => {
+    document.querySelectorAll<HTMLImageElement>('img[data-koa-focal-src][loading="eager"]')
+      .forEach((image) => {
+        if (image.complete && image.naturalWidth === 0) restoreKoaOriginalImage(image);
+      });
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', restoreAlreadyFailedEagerImages, { once: true });
+  } else {
+    restoreAlreadyFailedEagerImages();
+  }
+</script>
