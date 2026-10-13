@@ -712,6 +712,8 @@ jobs:
         run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.json
       - name: Verify authenticated mobile System Health in WebKit
         run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.json
+      - name: Stage only synthetic accordion screenshots and QA booleans
+        run: python scripts/prepare_accordion_release_evidence.py --collect
       - name: Publish System Health production release status
         if: always()
         shell: bash
@@ -859,14 +861,11 @@ jobs:
               raise SystemExit('Production release blocked: all 14 responsive checks and Chromium/WebKit iPhone/desktop accordion interactions are mandatory.')
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: success()
         with:
-          name: koa-system-health-mobile-${{ github.run_id }}
-          path: |
-            visual-results/system-health-dashboard.json
-            visual-results/health-mobile-chromium
-            visual-results/health-mobile-webkit
-          retention-days: 30
+          name: koa-accordion-synthetic-${{ github.run_id }}
+          path: visual-results/accordion-synthetic
+          retention-days: 90
           if-no-files-found: error
   visual-audit:
     name: Responsive visual audit
@@ -1093,8 +1092,8 @@ jobs:
         if: success()
         uses: actions/download-artifact@v4
         with:
-          name: koa-system-health-mobile-${{ github.run_id }}
-          path: visual-results
+          name: koa-accordion-synthetic-${{ github.run_id }}
+          path: visual-results/accordion-synthetic
 
       - name: Verify private synthetic accordion screenshots for certified release
         if: success()
