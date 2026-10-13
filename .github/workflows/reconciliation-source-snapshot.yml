@@ -1,0 +1,119 @@
+name: One-time encrypted source reconciliation snapshot
+
+# Diagnostic draft only: no app execution, production access, or repository writes.
+# Only authenticated ciphertext is retained; the recipient private key is never in CI.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths: ['.github/workflows/reconciliation-source-snapshot.yml']
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  source-snapshot:
+    if: >-
+      github.repository == 'AstroTat808/koasevents.com' &&
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'diagnostics/encrypted-source-reconciliation-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Create encrypted exact-SHA source snapshots without executing application code
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          private_dir="$(mktemp -d)"
+          trap 'rm -rf "$private_dir"' EXIT
+          export SNAPSHOT_DIR="$private_dir"
+          mkdir -p /tmp/koa-reconciliation-encrypted
+          python3 - <<'PY'
+          import hashlib, json, os, re, subprocess, tarfile, urllib.request
+          from pathlib import Path
+          REPO='AstroTat808/koasevents.com'
+          root=Path(os.environ['SNAPSHOT_DIR'])
+          def git(*args):
+              return subprocess.run(['git',*args],check=True,capture_output=True,timeout=120).stdout
+          def api(path):
+              request=urllib.request.Request('https://api.github.com/repos/'+REPO+path,headers={
+                  'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+              })
+              with urllib.request.urlopen(request,timeout=30) as response:
+                  return json.load(response)
+          def checked_sha(value):
+              if not isinstance(value,str) or not re.fullmatch('[0-9a-f]{40}',value):
+                  raise RuntimeError('Invalid source revision')
+              return value
+          try:
+              main=checked_sha(api('/git/ref/heads/main')['object']['sha'])
+              revisions={main}
+              pulls=[]
+              for page in range(1,101):
+                  batch=api('/pulls?state=open&per_page=100&page='+str(page))
+                  if not isinstance(batch,list):raise RuntimeError('Incomplete pull-request enumeration')
+                  for row in batch:
+                      if row['head']['repo']['full_name']!=REPO:continue
+                      head=checked_sha(row['head']['sha'])
+                      base=checked_sha(row['base']['sha'])
+                      merge_base=checked_sha(git('merge-base',main,head).decode().strip())
+                      revisions.update((head,base,merge_base))
+                      pulls.append({'number':row['number'],'head':head,'base':base,
+                          'head_ref':row['head']['ref'],'base_ref':row['base']['ref'],
+                          'merge_base_with_main':merge_base,'draft':row['draft']})
+                  if len(batch)<100:break
+              else:raise RuntimeError('Pull-request enumeration exceeded safety bound')
+              manifest={'schema':1,'repository':REPO,'main':main,'pull_requests':pulls,'revisions':{}}
+              for revision in sorted(revisions):
+                  files=[]
+                  for raw in git('ls-tree','-rz',revision).split(b'\0'):
+                      if not raw:continue
+                      meta,name=raw.split(b'\t',1)
+                      mode,kind,blob=meta.decode().split()
+                      name=name.decode('utf-8')
+                      wanted=name.startswith(('.github/','scripts/','src/','netlify/','docs/'))
+                      wanted=wanted or ('/' not in name and Path(name).suffix in {'.json','.toml','.mjs','.ts','.md'})
+                      wanted=wanted or (name.startswith('public/') and Path(name).suffix in {'.js','.css','.json'})
+                      if wanted and mode in {'100644','100755'} and kind=='blob':
+                          files.append({'path':name,'mode':mode,'blob':checked_sha(blob)})
+                  if not files:raise RuntimeError('Empty source snapshot')
+                  archive=root/(revision+'.tar.gz')
+                  git('archive','--format=tar.gz','-o',str(archive),revision,'--',*[item['path'] for item in files])
+                  if archive.stat().st_size>50_000_000:raise RuntimeError('Source snapshot exceeds safety bound')
+                  manifest['revisions'][revision]={'tree':git('rev-parse',revision+'^{tree}').decode().strip(),
+                      'archive':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'files':files}
+              if checked_sha(api('/git/ref/heads/main')['object']['sha'])!=main:
+                  raise RuntimeError('Main changed during read-only source capture')
+              (root/'manifest.json').write_text(json.dumps(manifest,separators=(',',':')))
+              with tarfile.open(root/'sources.tar','w') as output:
+                  output.add(root/'manifest.json',arcname='manifest.json')
+                  for revision in sorted(revisions):
+                      output.add(root/(revision+'.tar.gz'),arcname=revision+'.tar.gz')
+              if (root/'sources.tar').stat().st_size>250_000_000:
+                  raise RuntimeError('Combined source snapshot exceeds safety bound')
+              print(json.dumps({'ok':True,'main':main,'pullRequests':len(pulls),'sourceRevisions':len(revisions)}))
+          except Exception:
+              raise SystemExit('Read-only source snapshot failed; no source content or private API response is logged.')
+          PY
+          openssl cms -encrypt -aes-256-gcm -binary \
+            -in "$private_dir/sources.tar" \
+            -out /tmp/koa-reconciliation-encrypted/source.cms \
+            -outform DER scripts/reconciliation-recipient-20261013.pem
+          sha256sum /tmp/koa-reconciliation-encrypted/source.cms
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-source-reconciliation-${{ github.run_id }}
+          path: /tmp/koa-reconciliation-encrypted/source.cms
+          retention-days: 1
+          if-no-files-found: error
