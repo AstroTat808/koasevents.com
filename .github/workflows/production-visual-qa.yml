@@ -67,7 +67,9 @@ jobs:
   source-build-audit:
     name: Source + Astro build audit
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Chromium and WebKit each run the full seven-viewport authenticated fixture.
+    # Retain every assertion; allocate enough time for screenshots on GitHub runners.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
