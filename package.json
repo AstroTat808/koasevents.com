@@ -33,6 +33,7 @@
     "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs",
     "test:deploy-recovery": "node scripts/test_production_deploy_recovery.mjs",
     "test:build-diagnostics": "node scripts/test_build_failure_diagnostics.mjs",
+    "test:calendar-contrast": "python scripts/test_calendar_contrast.py --base-url http://127.0.0.1:4173",
     "test:ci-privacy": "node scripts/ci_privacy_gate.mjs && node scripts/test_ci_privacy_gate_rules.mjs && node scripts/private_release_evidence.mjs --self-test"
   },
   "dependencies": {

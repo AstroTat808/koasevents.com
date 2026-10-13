@@ -1,0 +1,15 @@
+/* Calendar labels are inserted asynchronously; never inherit legacy ink in Dark.
+   Limit these overrides to Calendar text, leaving accent backgrounds and Light
+   mode untouched. Specificity preserves the existing admin compatibility rules. */
+html[data-theme="dark"] body.koa-admin-page .calendar-shell [data-month-title],
+html[data-theme="dark"] body.koa-admin-page .calendar-shell .calendar-date-number {
+  color: var(--koa-text) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .calendar-shell .calendar-day.is-other:not(.is-today) .calendar-date-number {
+  color: var(--koa-text-muted) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .calendar-shell .calendar-day.is-today .calendar-date-number {
+  color: var(--koa-text-strong) !important;
+}
