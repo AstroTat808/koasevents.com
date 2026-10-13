@@ -47,7 +47,6 @@ const srcset = candidates
   .map((candidate) => transform(candidate, Math.round(candidate * ratio)) + ' ' + candidate + 'w')
   .join(', ');
 
-const fallbackSrc = transform(Math.min(width, 1800), Math.round(Math.min(width, 1800) * ratio));
 ---
 <img
   src={src}
