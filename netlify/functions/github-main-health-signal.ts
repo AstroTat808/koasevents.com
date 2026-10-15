@@ -1043,6 +1043,25 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='verify-certified-export-rejections'){
+      const workflow=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
+      const servingDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      const runtimeCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      // Only exact main Production QA can run the bundled, immutable synthetic probes.
+      if(!workflow.includes('.github/workflows/production-visual-qa.yml')
+         ||claims?.ref!==MAIN_REF || !servingDeployId
+         ||(runtimeCommit&&runtimeCommit!==claims.sha)){
+        return Response.json({ok:false,code:'EXPORT_PROBE_IDENTITY_MISMATCH'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      const {verifyCertifiedExportNegativeProbes}=await import('./_shared/certified-export-security-probe.mjs');
+      const result=verifyCertifiedExportNegativeProbes();
+      return Response.json({
+        ok:result.ok,sha:claims.sha,deployId:servingDeployId,
+        denied:result.denied,expected:result.expected,formats:result.formats,
+      },{status:result.ok?200:503,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+    }
+
     if(body?.action==='run-dashboard-refresh'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
