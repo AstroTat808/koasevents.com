@@ -620,3 +620,18 @@ assert(
     && health.includes("sessionStorage.setItem(healthCollapsedSessionKey"),
   'System Health must keep the summary visible and expose accessible, session-persistent collapsible diagnostic panels at all viewport widths.',
 );
+
+
+assert(
+  health.includes('function certifiedReleaseEvidence(release)')
+    && health.includes('function pdfReleaseEvidence(data)')
+    && health.includes('function exportLatestCertifiedRelease(format)')
+    && health.includes("button.dataset.releaseExport=format")
+    && health.includes("exportLatestCertifiedRelease(format)")
+    && health.includes("attestation?.status==='verified'")
+    && health.includes("attestation?.productionGateState==='success'")
+    && health.includes('protectedReference:')
+    && health.includes('verificationStatus:')
+    && !health.includes('JSON.stringify(latestHealthSnapshot)'),
+  'Certified release PDF and JSON export must only include allowlisted evidence and fail closed when no certified release exists.',
+);
