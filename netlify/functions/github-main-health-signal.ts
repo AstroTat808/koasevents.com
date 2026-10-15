@@ -949,11 +949,22 @@ export default async (req:Request,context:Context) => {
           &&Number(responsive?.chromium?.criticalCount||0)===0
           &&Number(responsive?.webkit?.criticalCount||0)===0
         );
-        if(!healthOk||!visualOk||!responsiveOk||body?.productionGateState!=='success'){
+        const protectedAdmin:any=release?.protectedAdminQa||null;
+        const adminQaOk=Boolean(protectedAdmin
+          &&protectedAdmin.status==='passed'&&protectedAdmin.failureCount===0
+          &&protectedAdmin.browser==='chromium'
+          &&protectedAdmin.commit===expectedSha&&protectedAdmin.deployId===deployId
+          &&protectedAdmin.runId===runId&&protectedAdmin.source==='github-actions-oidc');
+        const controls:any=body?.systemHealthControlsQa||null;
+        const healthControlsOk=Boolean(controls&&controls.status==='passed'
+          &&controls.runId===runId&&controls.webkit==='390x844'
+          &&controls.chromium==='1440x900'
+          &&Object.keys(controls).sort().join(',')==='chromium,runId,status,webkit');
+        if(!healthOk||!visualOk||!responsiveOk||!adminQaOk||!healthControlsOk||body?.productionGateState!=='success'){
           return Response.json({
             ok:false,
             error:'Release-history evidence is incomplete or does not match the exact production release.',
-            expectedSha,deployId,healthOk,visualOk,responsiveOk,
+            expectedSha,deployId,healthOk,visualOk,responsiveOk,adminQaOk,healthControlsOk,
           },{status:409,headers:{'Cache-Control':'no-store'}});
         }
 
@@ -966,6 +977,9 @@ export default async (req:Request,context:Context) => {
           visualQaRunId:runId,
           visualQaConclusion:'success',
           responsiveQaConclusion:'success',
+          healthControlsQA:{status:'passed' as const,source:'github-actions-oidc' as const,
+            runId,webkit:'390x844' as const,chromium:'1440x900' as const,
+            cases:["severity-filter","troubleshooting-accordion","keyboard-access","copy-code","clipboard-fallback","private-field-exclusion"]},
           systemHealth:{overall:'healthy',passed:Number(health.passed),failed:0,checkedAt},
           productionGateState:'success',
           source:'github-actions-oidc' as const,
@@ -976,7 +990,11 @@ export default async (req:Request,context:Context) => {
         const recordedOk=recorded?.releaseAttestation?.status==='verified'
           &&recorded?.releaseAttestation?.expectedSha===expectedSha
           &&recorded?.releaseAttestation?.deployId===deployId
-          &&recorded?.releaseAttestation?.matchingDeployId===true;
+          &&recorded?.releaseAttestation?.matchingDeployId===true
+          &&recorded?.releaseAttestation?.healthControlsQA?.status==='passed'
+          &&recorded?.releaseAttestation?.healthControlsQA?.runId===runId
+          &&recorded?.protectedAdminQa?.status==='passed'
+          &&recorded?.protectedAdminQa?.runId===runId;
         return Response.json({
           ok:recordedOk,recorded:recordedOk,expectedSha,deployId,liveDeployId,
           releaseAttestation:recorded?.releaseAttestation||releaseAttestation,

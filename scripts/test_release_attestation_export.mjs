@@ -80,6 +80,45 @@ const mismatchedPdf=new TextDecoder().decode(certifiedReleasePdf(mismatch));
 assert(mismatchedPdf.includes('NO / NOT VERIFIED'),'PDF must disclose live deployment mismatch.');
 assert(!mismatchedPdf.includes('PRIVATE_CLIENT_MARKER_EMAIL'),'PDF cannot leak customer-bearing commit titles.');
 
+const healthControls={
+ status:'passed',source:'github-actions-oidc',runId,chromium:'1440x900',webkit:'390x844',
+ cases:["severity-filter","troubleshooting-accordion","keyboard-access","copy-code","clipboard-fallback","private-field-exclusion"]
+};
+const adminQa={
+ status:'passed',source:'github-actions-oidc',browser:'chromium',
+ checkedAt:'2026-10-15T16:36:00Z',commit:sha,deployId:deploy,runId,checkedCount:42,
+ failureCount:0,failures:[],code:null
+};
+const signedRelease={...release,protectedAdminQa:adminQa,
+ releaseAttestation:{...release.releaseAttestation,healthControlsQA:healthControls}};
+const signed=buildCertifiedReleaseExport([signedRelease],{productionCommit:sha,productionDeployId:deploy});
+assert.equal(signed.protectedAdminQA.status,'passed');
+assert.equal(signed.protectedAdminQA.failureCount,0);
+assert.equal(signed.protectedAdminQA.runId,runId);
+assert.equal(signed.systemHealthControlsQA.status,'passed');
+assert.equal(signed.systemHealthControlsQA.webkit,'390x844');
+assert.equal(signed.systemHealthControlsQA.chromium,'1440x900');
+assert.deepEqual(signed.systemHealthControlsQA.checks,healthControls.cases);
+const signedPdf=new TextDecoder().decode(certifiedReleasePdf(signed));
+assert(signedPdf.includes('PROTECTED ADMIN BROWSER QA'));
+assert(signedPdf.includes('SYSTEM HEALTH DIAGNOSTIC CONTROLS'));
+assert(signedPdf.includes('WEBKIT IPHONE 390X844')||signedPdf.includes('WebKit iPhone 390x844'));
+assert(!JSON.stringify(signed).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+for(const bad of [
+ {...signedRelease,protectedAdminQa:{...adminQa,commit:'c'.repeat(40)}},
+ {...signedRelease,protectedAdminQa:{...adminQa,status:'failed',failureCount:1,
+  failures:[{route:'admin-health',code:'ADMIN_QA_CLIENT_EXCEPTION'}]}},
+ {...signedRelease,protectedAdminQa:{...adminQa,failures:[{route:'CUSTOMER_EMAIL',code:'ADMIN_QA_TIMEOUT'}]}},
+ {...signedRelease,releaseAttestation:{...signedRelease.releaseAttestation,
+  healthControlsQA:{...healthControls,runId:'123'}}},
+ {...signedRelease,releaseAttestation:{...signedRelease.releaseAttestation,
+  healthControlsQA:{...healthControls,webkit:'unverified'}}},
+ {...signedRelease,protectedAdminQa:undefined},
+])assert.throws(()=>buildCertifiedReleaseExport([bad]),/certified/,
+ 'Unsafe, mismatched or missing protected-admin/control QA must never be exported as certified.');
+assert.equal(exported.protectedAdminQA.status,'not-recorded');
+assert.equal(exported.systemHealthControlsQA.status,'not-recorded');
+
 const pdf=certifiedReleasePdf(exported);
 const text=new TextDecoder().decode(pdf);
 assert(text.startsWith('%PDF-1.4\n'),'Must emit PDF bytes.');

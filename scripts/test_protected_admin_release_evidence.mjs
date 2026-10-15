@@ -51,4 +51,8 @@ assert(endpoint.includes('productionDeployMatchesAttestation('));
 assert(endpoint.includes('const persisted=Boolean('));
 assert(workflow.includes('publish_protected_admin_release_evidence.mjs'));
 assert(page.includes('release.protectedAdminQa||null'));
+assert(page.includes('release.releaseAttestation?.healthControlsQA||null'));
+assert(endpoint.includes('const healthControlsOk=Boolean('));
+assert(workflow.includes('Verify deployed diagnostic controls in WebKit iPhone and desktop Chromium'));
+assert(workflow.includes('"systemHealthControlsQa"'));
 console.log('PASS | Signed protected-admin QA: strict PII allowlist, exact deploy, durable readback, and Release History contract.');

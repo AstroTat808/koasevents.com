@@ -3127,6 +3127,7 @@ export type ProductionReleaseAttestation = {
   visualQaRunId:string;
   visualQaConclusion:string;
   responsiveQaConclusion?:string;
+  healthControlsQA?:{status:'passed';source:'github-actions-oidc';runId:string;webkit:'390x844';chromium:'1440x900';cases:string[]};
   systemHealth:{overall:string;passed:number;failed:number;checkedAt:string};
   productionGateState:string;
   source:'github-actions-oidc'|'certified-backfill';

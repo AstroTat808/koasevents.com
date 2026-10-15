@@ -3313,6 +3313,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
       }
       releaseDetail.appendChild(attestationSection);
+      const controlsQa=release.releaseAttestation?.healthControlsQA||null;
+      const controlsMatch=Boolean(controlsQa&&controlsQa.status==='passed'
+        &&controlsQa.runId===release.releaseAttestation?.visualQaRunId
+        &&controlsQa.webkit==='390x844'&&controlsQa.chromium==='1440x900');
+      const controlsSection=document.createElement('section');
+      controlsSection.className='rounded-xl border border-[var(--koa-line)] p-4';
+      const controlsTitle=document.createElement('p');
+      controlsTitle.className='text-sm font-semibold text-[var(--koa-forest)]';
+      controlsTitle.textContent='System Health diagnostic controls · production browser QA';
+      const controlsStatus=document.createElement('p');
+      controlsStatus.className='mt-2 text-xs text-[var(--koa-ink)]/70';
+      controlsStatus.textContent=controlsMatch
+        ?'Passed · WebKit iPhone 390×844 · Chromium desktop 1440×900 · GitHub run '+controlsQa.runId
+        :'Not independently recorded for this release';
+      controlsSection.append(controlsTitle,controlsStatus);
+      releaseDetail.appendChild(controlsSection);
       // Immutable per-deploy storage holds only signed, allowlisted browser
       // route identifiers and stable categories, never private browser logs.
       const adminQa=release.protectedAdminQa||null;

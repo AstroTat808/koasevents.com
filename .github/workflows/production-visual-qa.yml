@@ -1181,6 +1181,12 @@ jobs:
             "productionGateState":"success",
             "visualQaRunId":os.environ["GITHUB_RUN_ID"],
             "visualQaConclusion":"success",
+            "systemHealthControlsQa":{
+              "status":"passed",
+              "runId":os.environ["GITHUB_RUN_ID"],
+              "webkit":"390x844",
+              "chromium":"1440x900",
+            },
             "health":{
               "sha":health_response.get("sha"),
               "deployId":health_response.get("deployId"),
