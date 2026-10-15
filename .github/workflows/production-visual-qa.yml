@@ -319,6 +319,9 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
+          # Real browser interactions with synthetic Health data, never customer payloads.
+          python scripts/test_health_safe_controls_browser.py --browser webkit --base-url http://127.0.0.1:4173 --width 390 --height 844
+          python scripts/test_health_safe_controls_browser.py --browser chromium --base-url http://127.0.0.1:4173 --width 1440 --height 900
       - name: Verify iPhone admin bottom navigation in built PR
         if: github.event_name == 'pull_request'
         shell: bash
