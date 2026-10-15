@@ -15,6 +15,13 @@ import {
 import { ipFingerprint } from './_shared/security';
 
 function clean(v:unknown,max=300){return String(v||'').trim().slice(0,max);}
+function rawCookieValue(req:Request,name:string){
+  const entry=String(req.headers.get('cookie')||'').split(';').map(p=>p.trim())
+    .find(p=>p.startsWith(name+'='));
+  const raw=entry?entry.slice(name.length+1):'';
+  // Strictly constrain Set-Cookie value syntax; do not decode or expose it.
+  return /^[A-Za-z0-9_~.%+\/-]{1,8192}$/.test(raw)?raw:'';
+}
 function sameOrigin(req:Request){
   const origin=clean(req.headers.get('origin'),300);
   return !origin||origin==='https://koasevents.com'||origin==='https://www.koasevents.com';
@@ -119,6 +126,16 @@ export default async(req:Request,context:Context)=>{
     });
     if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
     response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'='+(body.remember===true?'1':'')+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+(body.remember===true?REMEMBER_SESSION_MAX_AGE_SECONDS:0));
+    // The Identity SDK's nf_jwt/nf_refresh cookies are session-only by
+    // default. Promote the already-authenticated cookies for an opted-in
+    // browser so they survive a restart (including iPhone Safari).
+    // They intentionally stay browser-readable because SDK hydration requires it.
+    if(body.remember===true){
+      for(const name of ['nf_jwt','nf_refresh']){
+        const value=rawCookieValue(req,name);
+        if(value)response.headers.append('Set-Cookie',name+'='+value+'; Path=/; Secure; SameSite=Lax; Max-Age='+REMEMBER_SESSION_MAX_AGE_SECONDS);
+      }
+    }
     return response;
   }
 

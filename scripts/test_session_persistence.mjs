@@ -11,6 +11,8 @@ const refresh=read('netlify/functions/session-refresh.mts');
 const adminHealth=read('netlify/functions/admin-session-health.mts');
 const systemHealth=read('src/pages/admin/health/index.astro');
 const record=read('netlify/functions/auth-record.mts');
+const remembered=read('src/lib/remembered-session.ts');
+const staff=read('src/components/StaffUtilityNav.astro');
 
 function must(pattern,source,description){
   assert.match(source,pattern,description);
@@ -19,6 +21,10 @@ must(/name="remember"[^>]*checked/,login,'30-day opt-in login checkbox must be c
 must(/body:JSON\.stringify\(\{action:'success',email,remember:/,login,'login must send remember preference to server');
 must(/REMEMBER_SESSION_MAX_AGE_SECONDS=30\*24\*60\*60/,sessions,'remembered-session TTL must be 30 days');
 must(/koa_remember/,sessions,'remember marker must be distinct from koa_sid');
+must(/COOKIE_NAMES=\['nf_jwt','nf_refresh'\]/,remembered,'both Identity cookies must survive restarts');
+must(/Max-Age='\+MAX_AGE/,remembered,'client refresh rotation must preserve browser cookie persistence');
+must(/keepIdentitySessionAlive\(\)/,staff,'refresh listener must run in protected workspace');
+must(/rawCookieValue\(req,name\)/,record,'authenticated server records must preserve Identity cookie lifetime');
 must(/HttpOnly; Secure; SameSite=Lax; Max-Age=/,record,'preference must use safe cookie attributes');
 must(/hasRememberCookie\(req\)/,refresh,'refresh requires remembered login preference');
 must(/await refreshSession\(\)/,refresh,'Netlify Identity remains the refresh credential authority');

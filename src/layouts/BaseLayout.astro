@@ -397,6 +397,21 @@ const seoSchema = {
         };
 
         const originalFetch = window.fetch.bind(window);
+        const keepRememberedIdentityCookies = () => {
+          // The Netlify SDK rotates both cookies without Max-Age. Reapply only
+          // the user's 30-day preference, never log or store either credential.
+          try {
+            if (window.localStorage.getItem('koa:remember-session:30d') !== '1') return;
+            const names = ['nf_jwt','nf_refresh'];
+            const pairs = names.map(name => document.cookie.split(';').map(part => part.trim())
+              .find(part => part.startsWith(name+'=')) || '');
+            if (pairs.some(pair => !pair)) return;
+            for (const pair of pairs) {
+              document.cookie = pair+'; Path=/; Secure; SameSite=Lax; Max-Age=2592000';
+            }
+          } catch {}
+        };
+        const originalFetch = window.fetch.bind(window);
         let verificationInFlight = null;
         const readAuthCode = async (response) => {
           try { return String((await response.clone().json())?.code || ''); }
@@ -420,6 +435,7 @@ const seoSchema = {
                 headers:{'Content-Type':'application/json'},body:'{}',
               });
               if (refresh.ok) {
+                keepRememberedIdentityCookies();
                 session = await probe();
                 if (session.ok) return {active:true,refreshed:true};
               }

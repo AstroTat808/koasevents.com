@@ -180,9 +180,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { acceptInvite, getUser, handleAuthCallback, login, logout, recoverPassword, refreshSession, requestPasswordRecovery, updateUser } from '@netlify/identity';
+    import { acceptInvite, getUser, handleAuthCallback, login, logout, onAuthChange, recoverPassword, refreshSession, requestPasswordRecovery, updateUser } from '@netlify/identity';
     import { getAdminSession } from '../../lib/admin-session';
+    import { rememberIdentitySession, keepIdentitySessionAlive, forgetIdentityRememberPreference } from '../../lib/remembered-session';
 
+    onAuthChange((event,user)=>{
+      if(event==='logout')forgetIdentityRememberPreference();
+      else if(user&&(event==='token_refresh'||event==='login'))keepIdentitySessionAlive();
+    });
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
     const links = document.querySelector('[data-admin-links]');
@@ -813,8 +818,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               credentials:'same-origin',cache:'no-store',
             });
             if (recovery.ok) {
+              keepIdentitySessionAlive();
               await refreshSession().catch(()=>null);
               user = await getUser();
+              keepIdentitySessionAlive();
             }
           } catch {}
         }
@@ -987,6 +994,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const email = String(data.get('email') || '').trim().toLowerCase();
       try {
         const user = await login(email, String(data.get('password')));
+        rememberIdentitySession(data.get('remember')==='on');
         await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'success',email,remember:data.get('remember')==='on'})}).catch(()=>null);
         if (authError) authError.classList.add('hidden');
         if (returnAfterLogin(user)) return;

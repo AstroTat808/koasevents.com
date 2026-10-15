@@ -1474,7 +1474,13 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 </style>
 
 <script>
-  import { logout } from '@netlify/identity';
+  import { logout, onAuthChange } from '@netlify/identity';
+  import { keepIdentitySessionAlive, forgetIdentityRememberPreference } from '../lib/remembered-session';
+  onAuthChange((event,user)=>{
+    if(event==='logout')forgetIdentityRememberPreference();
+    else if(user&&(event==='token_refresh'||event==='login'))keepIdentitySessionAlive();
+  });
+  keepIdentitySessionAlive();
   import { getAdminSession } from '../lib/admin-session';
 
   const nav = document.querySelector('[data-workspace-nav]');
