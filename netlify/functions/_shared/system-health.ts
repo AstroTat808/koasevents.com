@@ -15,7 +15,7 @@ import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
-import { signedPublishedCredentialMatches } from './netlify-published-identity.mjs';
+import { signedPublishedCredentialMatches, recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -27,6 +27,7 @@ export type HealthIssueType =
 
 export type HealthCheck = {
   id: string;
+  diagnosticCode?: string;
   name: string;
   kind: 'page' | 'api';
   path: string;
@@ -3323,7 +3324,8 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
       kind:'api',
       path:'GitHub Actions → Netlify recovery · read-only verification',
       ok:false,status:503,ms:Date.now()-started,severity:'red',
-      detail:'GitHub-owned Netlify recovery credential evidence could not be read: '+clean(error instanceof Error?error.message:'storage unavailable',500),
+      detail:'GitHub-owned Netlify recovery credential evidence could not be read · code KOA_RECOVERY_EVIDENCE_READ_FAILED.',
+      diagnosticCode:'KOA_RECOVERY_EVIDENCE_READ_FAILED',
     };
   }
   if(!verification){
@@ -3333,25 +3335,15 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
       kind:'api',
       path:'GitHub Actions → Netlify recovery · read-only verification',
       ok:false,status:503,ms:Date.now()-started,severity:'red',
-      detail:'No GitHub Actions read-only verification has been recorded for NETLIFY_AUTH_TOKEN. The production release gate will record one without exposing the secret.',
+      detail:'No signed recovery credential verification is recorded · code KOA_RECOVERY_EVIDENCE_MISSING.',
+      diagnosticCode:'KOA_RECOVERY_EVIDENCE_MISSING',
     };
   }
-  const checkedMs=Date.parse(verification.checkedAt);
-  const ageMs=Date.now()-checkedMs;
-  const fresh=Number.isFinite(checkedMs)&&ageMs>=-2*60*1000&&ageMs<=36*60*60*1000;
-  const signedPublishedMatches=signedPublishedCredentialMatches({verification,servingDeployId});
-  // Runtime SHA, when present, remains authoritative and can never be bypassed.
-  // If absent, require the exact signed GitHub OIDC+Netlify published deploy proof.
-  const commitMatches=productionCommit
-    ? Boolean(verification.commit===productionCommit)
-    : signedPublishedMatches;
-  const identitySource=productionCommit?'netlify-runtime':signedPublishedMatches?'oidc-published-deploy':'unverified';
+  const diagnosis=recoveryCredentialDiagnostic({
+    verification,productionCommit,servingDeployId,expectedSiteId,
+  });
+  const {ok,commitMatches,fresh,identitySource}=diagnosis;
   const siteMatches=Boolean(verification.siteIdMatches&&verification.siteId===expectedSiteId);
-  const authenticated=Boolean(
-    verification.configured&&verification.usable&&siteMatches
-    && verification.siteHttpStatus===200&&verification.deployListHttpStatus===200
-  );
-  const ok=authenticated&&commitMatches&&fresh;
   const detail=ok
     ? 'GitHub-owned NETLIFY_AUTH_TOKEN authenticated read-only access to '+(verification.siteName||'the production Netlify site')
       +' for current production · site lookup HTTP 200 · deploy-list HTTP 200 · verified '+verification.checkedAt
@@ -3369,7 +3361,8 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
     kind:'api',
     path:'GitHub Actions → Netlify recovery · read-only verification',
     ok,status:ok?200:503,ms:Date.now()-started,severity:ok?'green':'red',
-    detail:clean(detail+' · identity source '+identitySource,1400),
+    diagnosticCode:diagnosis.code,
+    detail:clean(detail+' · identity source '+identitySource+' · code '+diagnosis.code,1400),
   };
 }
 
