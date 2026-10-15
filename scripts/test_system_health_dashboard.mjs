@@ -695,7 +695,7 @@ const diagBase={
   productionCommit:'',servingDeployId:goodDeployId,expectedSiteId:'synthetic-site',
   now:Date.parse('2026-10-15T18:02:00.000Z'),
 };
-assert.equal(recoveryCredentialDiagnostic(diagBase).code,'KOA_RECOVERY_OK');
+assert(recoveryCredentialDiagnostic(diagBase).code==='KOA_RECOVERY_OK','Valid signed deploy proof must pass.');
 const codeFixtures=[
   [{verification:null},'KOA_RECOVERY_EVIDENCE_MISSING'],
   [{verification:{...diagBase.verification,configured:false}},'KOA_RECOVERY_TOKEN_UNCONFIGURED'],
@@ -708,10 +708,10 @@ const codeFixtures=[
 ];
 for(const [overrides,expectedCode] of codeFixtures){
   const response=recoveryCredentialDiagnostic({...diagBase,...overrides});
-  assert.equal(response.code,expectedCode,'Privacy-safe recovery diagnostic must identify its exact failure class.');
-  assert.equal(response.ok,false,'A failed recovery credential must never be classified as healthy.');
+  assert(response.code===expectedCode,'Privacy-safe recovery diagnostic must identify its exact failure class.');
+  assert(response.ok===false,'A failed recovery credential must never be classified as healthy.');
 }
-assert.equal(recoveryCredentialDiagnostic({...diagBase,productionCommit:goodCommit}).code,'KOA_RECOVERY_OK');
+assert(recoveryCredentialDiagnostic({...diagBase,productionCommit:goodCommit}).code==='KOA_RECOVERY_OK','The matching runtime SHA must remain authoritative.');
 
 console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
 
