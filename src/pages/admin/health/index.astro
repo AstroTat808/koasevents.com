@@ -2455,8 +2455,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const prior=String(section.dataset.healthObservedStatus||'');
         if(prior===now)return;
         section.dataset.healthObservedStatus=now;
-        if(now==='red'||now==='yellow')setMobileCollapsed(section,false);
-        else if(now==='green'&&!isHealthSectionRememberedOpen(section)){
+        // Unverified export-security evidence is a visible noncritical
+        // warning, not a failed live security gate. Keep it collapsed by
+        // default even when this observer runs after the render callback.
+        const unsignedExportWarning=now==='yellow'&&section.hasAttribute('data-export-security-card');
+        if(now==='red'||(now==='yellow'&&!unsignedExportWarning)){
+          setMobileCollapsed(section,false);
+        }else if((now==='green'||unsignedExportWarning)&&!isHealthSectionRememberedOpen(section)){
           setMobileCollapsed(section,true);
         }
       });
