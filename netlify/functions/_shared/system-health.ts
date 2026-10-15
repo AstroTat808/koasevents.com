@@ -440,6 +440,7 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'netlify-recovery-credential',name:'GitHub Netlify recovery credential',path:'GitHub Actions → Netlify recovery · read-only verification',kind:'api' as const},
     {id:'dark-mode-qa',name:'Dark Mode QA',path:'Light / Dark / System · Chromium + WebKit',kind:'api' as const},
     {id:'quickbooks-tax-invariant',name:'QuickBooks tax-on-tax invariant',path:'$15,000.00 + $706.80 tax = $15,706.80',kind:'api' as const},
     {id:'login-alert-policy',name:'Sign-in alert policy',path:'3 failures / 30 min · trusted devices · 24h cooldown',kind:'api' as const},
@@ -494,7 +495,7 @@ export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=nul
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'action-center','business-crm','business-crm-startup','netlify-github-sync','dark-mode-qa','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
+    'action-center','business-crm','business-crm-startup','netlify-github-sync','netlify-recovery-credential','dark-mode-qa','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
     'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-infrastructure-events','turnstile-hostname-action',
@@ -1872,7 +1873,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const accountingInvariantPromise=quickBooksTaxInvariantHealthCheck(context);
   const authSecurityHealthPromise=authenticationSecurityHealthSummary(context);
   const darkModeQaHealthPromise=darkModeQaHealthCheck(context);
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth,darkModeQaCheck]=await Promise.all([
+  const netlifyRecoveryCredentialHealthPromise=netlifyRecoveryCredentialHealthCheck(context);
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth,darkModeQaCheck,netlifyRecoveryCredentialCheck]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
@@ -1882,6 +1884,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     accountingInvariantPromise,
     authSecurityHealthPromise,
     darkModeQaHealthPromise,
+    netlifyRecoveryCredentialHealthPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -2414,7 +2417,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileInfrastructureEventCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,netlifyRecoveryCredentialCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileInfrastructureEventCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
@@ -3067,6 +3070,41 @@ export type ProductionVisualQuality = {
   screenshots?:ProductionVisualQualityScreenshot[];
 };
 
+export type ProductionResponsiveQualityBrowser = {
+  browser:'chromium'|'webkit';
+  cases:number;
+  viewports:number;
+  viewportNames:string[];
+  criticalCount:number;
+  designCount:number;
+  reportMissing:boolean;
+};
+
+export type ProductionResponsiveQuality = {
+  checkedAt:string;
+  status:'partial'|'passed'|'failed';
+  source:'production-responsive-qa';
+  runId:string;
+  commit:string;
+  deployId:string;
+  chromium?:ProductionResponsiveQualityBrowser|null;
+  webkit?:ProductionResponsiveQualityBrowser|null;
+};
+
+export type NetlifyRecoveryCredentialVerification = {
+  checkedAt:string;
+  configured:boolean;
+  usable:boolean;
+  siteId:string;
+  siteName:string;
+  siteIdMatches:boolean;
+  siteHttpStatus:number;
+  deployListHttpStatus:number;
+  commit:string;
+  runId:string;
+  source:'github-actions-read-only';
+};
+
 export type ProductionReleaseAttestation = {
   status:'verified'|'failed';
   verifiedAt:string;
@@ -3080,6 +3118,7 @@ export type ProductionReleaseAttestation = {
   publishedAt:string;
   visualQaRunId:string;
   visualQaConclusion:string;
+  responsiveQaConclusion?:string;
   systemHealth:{overall:string;passed:number;failed:number;checkedAt:string};
   productionGateState:string;
   source:'github-actions-oidc'|'certified-backfill';
@@ -3098,6 +3137,7 @@ export type ProductionRelease = {
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
   visualQuality?:ProductionVisualQuality|null;
+  responsiveQuality?:ProductionResponsiveQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   releaseAttestation?:ProductionReleaseAttestation|null;
   authorName:string;
@@ -3139,6 +3179,73 @@ function certifiedReleaseAttestationBackfill(release:ProductionRelease){
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
   const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
   return rows.slice(0,Math.max(1,Math.min(100,limit)));
+}
+
+const NETLIFY_RECOVERY_CREDENTIAL_VERIFICATION_KEY='deployments/netlify-recovery-credential-verification';
+
+export async function recordNetlifyRecoveryCredentialVerification(context:Context,input:any):Promise<NetlifyRecoveryCredentialVerification>{
+  const record:NetlifyRecoveryCredentialVerification={
+    checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
+    configured:Boolean(input?.configured),
+    usable:Boolean(input?.usable),
+    siteId:clean(input?.siteId,120),
+    siteName:clean(input?.siteName,120),
+    siteIdMatches:Boolean(input?.siteIdMatches),
+    siteHttpStatus:Math.max(0,Math.floor(Number(input?.siteHttpStatus||0))),
+    deployListHttpStatus:Math.max(0,Math.floor(Number(input?.deployListHttpStatus||0))),
+    commit:clean(input?.commit,80),
+    runId:clean(input?.runId,80),
+    source:'github-actions-read-only',
+  };
+  await healthStore(context).setJSON(NETLIFY_RECOVERY_CREDENTIAL_VERIFICATION_KEY,record);
+  return record;
+}
+
+export async function readNetlifyRecoveryCredentialVerification(context:Context):Promise<NetlifyRecoveryCredentialVerification|null>{
+  return ((await healthStore(context).get(NETLIFY_RECOVERY_CREDENTIAL_VERIFICATION_KEY,{type:'json'}))||null) as NetlifyRecoveryCredentialVerification|null;
+}
+
+export async function recordProductionResponsiveQuality(context:Context,input:any){
+  const deployId=clean(input?.deployId,120);
+  const commit=clean(input?.commit,80);
+  const runId=clean(input?.runId,80);
+  const browser=input?.browser==='webkit'?'webkit':'chromium';
+  if(!deployId||!commit||!runId)throw new Error('Responsive QA release identity is incomplete.');
+
+  const existing=(await readProductionReleases(context,100)).find((row)=>row.deployId===deployId)||null;
+  const previous=existing?.responsiveQuality||null;
+  const viewportNames=(Array.isArray(input?.viewportNames)?input.viewportNames:[])
+    .map((value:any)=>clean(value,80))
+    .filter(Boolean)
+    .slice(0,20);
+  const summary:ProductionResponsiveQualityBrowser={
+    browser,
+    cases:Math.max(0,Math.floor(Number(input?.cases||0))),
+    viewports:viewportNames.length,
+    viewportNames,
+    criticalCount:Math.max(0,Math.floor(Number(input?.criticalCount||0))),
+    designCount:Math.max(0,Math.floor(Number(input?.designCount||0))),
+    reportMissing:Boolean(input?.reportMissing)||viewportNames.length===0||Number(input?.cases||0)<=0,
+  };
+  const chromium=browser==='chromium'?summary:(previous?.chromium||null);
+  const webkit=browser==='webkit'?summary:(previous?.webkit||null);
+  const complete=Boolean(chromium&&webkit);
+  const failed=Boolean(
+    chromium?.reportMissing||webkit?.reportMissing
+    || Number(chromium?.criticalCount||0)>0
+    || Number(webkit?.criticalCount||0)>0
+  );
+  const responsiveQuality:ProductionResponsiveQuality={
+    checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
+    status:failed?'failed':complete?'passed':'partial',
+    source:'production-responsive-qa',
+    runId,
+    commit,
+    deployId,
+    chromium,
+    webkit,
+  };
+  return recordProductionRelease(context,{deployId,commit,checkedAt:responsiveQuality.checkedAt,responsiveQuality});
 }
 
 function productionVisualThumbnailStorageKey(deployId:string,key:string){
@@ -3186,6 +3293,63 @@ export async function readProductionVisualThumbnail(context:Context,deployId:str
   }catch{
     return null;
   }
+}
+
+export async function netlifyRecoveryCredentialHealthCheck(context:Context):Promise<HealthCheck>{
+  const started=Date.now();
+  const productionCommit=clean(Netlify.env.get('COMMIT_REF'),80);
+  const expectedSiteId=clean(Netlify.env.get('SITE_ID')||'d1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
+  let verification:NetlifyRecoveryCredentialVerification|null=null;
+  try{
+    verification=await readNetlifyRecoveryCredentialVerification(context);
+  }catch(error){
+    return {
+      id:'netlify-recovery-credential',
+      name:'GitHub Netlify recovery credential',
+      kind:'api',
+      path:'GitHub Actions → Netlify recovery · read-only verification',
+      ok:false,status:503,ms:Date.now()-started,severity:'red',
+      detail:'GitHub-owned Netlify recovery credential evidence could not be read: '+clean(error instanceof Error?error.message:'storage unavailable',500),
+    };
+  }
+  if(!verification){
+    return {
+      id:'netlify-recovery-credential',
+      name:'GitHub Netlify recovery credential',
+      kind:'api',
+      path:'GitHub Actions → Netlify recovery · read-only verification',
+      ok:false,status:503,ms:Date.now()-started,severity:'red',
+      detail:'No GitHub Actions read-only verification has been recorded for NETLIFY_AUTH_TOKEN. The production release gate will record one without exposing the secret.',
+    };
+  }
+  const checkedMs=Date.parse(verification.checkedAt);
+  const fresh=Number.isFinite(checkedMs)&&Date.now()-checkedMs<=36*60*60*1000;
+  const commitMatches=Boolean(productionCommit&&verification.commit===productionCommit);
+  const siteMatches=Boolean(verification.siteIdMatches&&verification.siteId===expectedSiteId);
+  const authenticated=Boolean(
+    verification.configured&&verification.usable&&siteMatches
+    && verification.siteHttpStatus===200&&verification.deployListHttpStatus===200
+  );
+  const ok=authenticated&&commitMatches&&fresh;
+  const detail=ok
+    ? 'GitHub-owned NETLIFY_AUTH_TOKEN authenticated read-only access to '+(verification.siteName||'the production Netlify site')
+      +' for current production · site lookup HTTP 200 · deploy-list HTTP 200 · verified '+verification.checkedAt
+      +' · token value and fingerprint are never stored.'
+    : 'GitHub-owned Netlify recovery credential is not currently verified for this production release'
+      +' · configured '+(verification.configured?'yes':'no')
+      +' · usable '+(verification.usable?'yes':'no')
+      +' · site match '+(siteMatches?'yes':'no')
+      +' · commit match '+(commitMatches?'yes':'no')
+      +' · fresh '+(fresh?'yes':'no')
+      +' · last verified '+(verification.checkedAt||'unknown')+'.';
+  return {
+    id:'netlify-recovery-credential',
+    name:'GitHub Netlify recovery credential',
+    kind:'api',
+    path:'GitHub Actions → Netlify recovery · read-only verification',
+    ok,status:ok?200:503,ms:Date.now()-started,severity:ok?'green':'red',
+    detail:clean(detail,1400),
+  };
 }
 
 export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck>{
@@ -3679,6 +3843,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
     visualQuality:input?.visualQuality||previous?.visualQuality||null,
+    responsiveQuality:input?.responsiveQuality||previous?.responsiveQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     releaseAttestation:input?.releaseAttestation||previous?.releaseAttestation||null,
     authorName,

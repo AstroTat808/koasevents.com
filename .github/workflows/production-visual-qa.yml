@@ -86,6 +86,12 @@ jobs:
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
         run: node scripts/test_production_deploy_recovery.mjs
+      - name: Verify GitHub-owned Netlify recovery credential (read-only)
+        if: github.event_name != 'pull_request'
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
+        run: node scripts/netlify_recovery_credential_check.mjs
       - name: Diagnose exact-main Netlify production gate with authenticated GitHub evidence
         if: github.event_name == 'pull_request'
         shell: bash
@@ -178,7 +184,47 @@ jobs:
             "criticalIntegrations": {},
             "rollbackReady": {},
             "runtime": {},
-            "deployments": {},
+            "deployments": {
+              "releaseTimeline": [{
+                "deployId":"preview-deploy-123",
+                "commit":"preview-commit-abcdef1234567890",
+                "commitTitle":"Certified release evidence fixture",
+                "commitMessage":"Certified release evidence fixture",
+                "publishedAt":"2026-10-01T19:10:00-10:00",
+                "deployDurationSeconds":42,
+                "features":["System Health"],
+                "changedFiles":["src/pages/admin/health/index.astro"],
+                "qa":{"conclusion":"success"},
+                "visualQuality":{
+                  "status":"passed","checkedAt":"2026-10-01T19:11:00-10:00","source":"production-visual-qa",
+                  "runId":"pr-preview","commit":"preview-commit-abcdef1234567890","deployId":"preview-deploy-123",
+                  "chromium":{"browser":"chromium","routes":70,"cases":287,"failureCount":0,"failedRouteCount":0,"reportMissing":false,"routeResults":[]},
+                  "webkit":{"browser":"webkit","routes":70,"cases":287,"failureCount":0,"failedRouteCount":0,"reportMissing":false,"routeResults":[]},
+                  "screenshots":[
+                    {"key":"light-phone","theme":"light","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg"},
+                    {"key":"dark-phone","theme":"dark","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg"},
+                    {"key":"light-desktop","theme":"light","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg"},
+                    {"key":"dark-desktop","theme":"dark","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg"}
+                  ]
+                },
+                "responsiveQuality":{
+                  "status":"passed","checkedAt":"2026-10-01T19:12:00-10:00","source":"production-responsive-qa",
+                  "runId":"pr-preview","commit":"preview-commit-abcdef1234567890","deployId":"preview-deploy-123",
+                  "chromium":{"browser":"chromium","cases":490,"viewports":7,"viewportNames":["phone-small","phone","tablet","tablet-wide","desktop-small","desktop","desktop-wide"],"criticalCount":0,"designCount":3,"reportMissing":false},
+                  "webkit":{"browser":"webkit","cases":490,"viewports":7,"viewportNames":["phone-small","phone","tablet","tablet-wide","desktop-small","desktop","desktop-wide"],"criticalCount":0,"designCount":3,"reportMissing":false}
+                },
+                "releaseAttestation":{
+                  "status":"verified","verifiedAt":"2026-10-01T19:13:00-10:00",
+                  "expectedSha":"preview-commit-abcdef1234567890","deployId":"preview-deploy-123","liveDeployId":"preview-deploy-123",
+                  "matchingDeployId":true,"deployState":"ready","deployContext":"production","publishedAt":"2026-10-01T19:10:00-10:00",
+                  "visualQaRunId":"pr-preview","visualQaConclusion":"success","responsiveQaConclusion":"success",
+                  "systemHealth":{"overall":"healthy","passed":82,"failed":0,"checkedAt":"2026-10-01T19:12:30-10:00"},
+                  "productionGateState":"success","source":"github-actions-oidc"
+                },
+                "authorName":"Release QA","authorLogin":"qa","pullRequestNumber":277,"pullRequestUrl":"https://example.invalid/pr/277",
+                "summary":"Synthetic certified release used only for browser regression coverage.","recordedAt":"2026-10-01T19:13:01-10:00","incidents":[]
+              }]
+            },
             "office365": {},
             "emailHealth": {},
             "credentialHealth": {},
@@ -279,6 +325,7 @@ jobs:
           path: |
             visual-results/source-audit.json
             visual-results/theme-source-audit.json
+            visual-results/netlify-recovery-credential.json
           retention-days: 14
           if-no-files-found: error
 
@@ -314,6 +361,13 @@ jobs:
       - name: Wait for exact Netlify production SHA after fallback
         if: github.event_name == 'push' && steps.initial-netlify-wait.outcome == 'failure'
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
+      - name: Verify GitHub-owned Netlify recovery credential after exact deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
+        run: node scripts/netlify_recovery_credential_check.mjs
+      - name: Publish GitHub-owned Netlify recovery credential to System Health
+        run: node scripts/publish_netlify_recovery_credential_health.mjs
       - name: Verify production health and guard the release
         shell: bash
         run: |
@@ -357,6 +411,7 @@ jobs:
           name: koa-production-smoke-${{ github.run_id }}
           path: |
             visual-results/production-smoke.json
+            visual-results/netlify-recovery-credential.json
           retention-days: 14
           if-no-files-found: error
 
@@ -844,6 +899,10 @@ jobs:
             echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
             exit "$result"
           fi
+      - name: Persist responsive QA result in certified Release History
+        env:
+          RESPONSIVE_BROWSER: ${{ matrix.browser }}
+        run: node scripts/publish_responsive_release_evidence.mjs
   production-release-attestation:
     name: Final production release attestation
     if: github.event_name == 'push' && always()

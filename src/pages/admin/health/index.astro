@@ -2941,6 +2941,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const index=latestReleases.indexOf(release);
         const button=document.createElement('button');
         button.type='button';
+        button.dataset.releaseEntry=String(release.deployId||release.commit||index);
         button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
         const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
         const probeAudit=release.syntheticProbeVerification||null;
@@ -3087,7 +3088,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       attestationSection.className='rounded-xl border p-4 '+(attestationVerified?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
       attestationSection.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release certification</p><p data-attestation-title class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><span data-attestation-badge class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em]"></span></div><div data-attestation-grid class="mt-4 grid gap-3 sm:grid-cols-2"></div>';
       attestationSection.querySelector('[data-attestation-title]').textContent=attestationVerified
-        ? 'Exact production SHA, live Netlify deploy, Visual QA, System Health, and final gate are permanently attested.'
+        ? 'Exact production SHA, live Netlify deploy, Theme QA, responsive QA, System Health, and final gate are permanently attested.'
         : 'No final certified release attestation is stored for this release.';
       const attestationBadge=attestationSection.querySelector('[data-attestation-badge]');
       attestationBadge.textContent=attestationVerified?'Certified':'Uncertified';
@@ -3096,10 +3097,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(attestation){
         const health=attestation.systemHealth||{};
         [
-          ['Verified',attestation.verifiedAt?new Date(attestation.verifiedAt).toLocaleString():'Unavailable'],
+          ['Certification timestamp',attestation.verifiedAt?new Date(attestation.verifiedAt).toLocaleString():'Unavailable'],
           ['Deploy ID match',attestation.matchingDeployId===true?'Exact match':'Mismatch'],
           ['Live deploy ID',attestation.liveDeployId||'Unavailable'],
-          ['Visual QA',String(attestation.visualQaConclusion||'unknown')+' · run '+String(attestation.visualQaRunId||'—')],
+          ['Theme QA',String(attestation.visualQaConclusion||'unknown')+' · run '+String(attestation.visualQaRunId||'—')],
+          ['Responsive QA',String(attestation.responsiveQaConclusion||release.responsiveQuality?.status||'unrecorded')],
           ['System Health',String(health.overall||'unknown')+' · '+String(health.passed??'—')+' passed / '+String(health.failed??'—')+' failed'],
           ['Health checked',health.checkedAt?new Date(health.checkedAt).toLocaleString():'Unavailable'],
           ['Final release gate',String(attestation.productionGateState||'unknown')],
@@ -3114,6 +3116,116 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
       }
       releaseDetail.appendChild(attestationSection);
+
+      const visual=release.visualQuality||null;
+      const themeEvidence=document.createElement('section');
+      const themePassed=visual?.status==='passed'
+        &&visual?.chromium?.reportMissing===false&&visual?.webkit?.reportMissing===false
+        &&Number(visual?.chromium?.failureCount||0)===0&&Number(visual?.webkit?.failureCount||0)===0;
+      themeEvidence.className='rounded-xl border p-4 '+(themePassed?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+      themeEvidence.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Theme QA evidence</p><p data-release-theme-summary class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><span data-release-theme-badge class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em]"></span></div><div data-release-theme-grid class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div><div data-release-theme-screenshots class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>';
+      themeEvidence.querySelector('[data-release-theme-summary]').textContent=visual
+        ? 'Commit '+String(visual.commit||release.commit||'—')+' · deploy '+String(visual.deployId||release.deployId||'—')+' · checked '+(visual.checkedAt?new Date(visual.checkedAt).toLocaleString():'unknown')
+        : 'No Theme QA evidence was persisted for this release.';
+      const themeBadge=themeEvidence.querySelector('[data-release-theme-badge]');
+      themeBadge.textContent=themePassed?'Passed':'Unavailable';
+      themeBadge.className='rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(themePassed?'bg-emerald-700 text-white':'bg-slate-200 text-slate-700');
+      const themeGrid=themeEvidence.querySelector('[data-release-theme-grid]');
+      [['Chromium',visual?.chromium],['WebKit',visual?.webkit]].forEach(([label,browser])=>{
+        const card=document.createElement('div');
+        card.className='rounded-lg border border-black/10 bg-white/80 p-3';
+        card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-1 text-xs font-semibold text-[var(--koa-forest)]"></p>';
+        card.children[0].textContent=label;
+        card.children[1].textContent=browser
+          ? String(browser.routes||0)+' routes · '+String(browser.cases||0)+' cases · '+String(browser.failureCount||0)+' failures'
+          : 'Not recorded';
+        themeGrid.appendChild(card);
+      });
+      [
+        ['Theme commit',String(visual?.commit||release.commit||'Unavailable')],
+        ['Theme deploy',String(visual?.deployId||release.deployId||'Unavailable')],
+      ].forEach(([label,value])=>{
+        const card=document.createElement('div');
+        card.className='rounded-lg border border-black/10 bg-white/80 p-3';
+        card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-1 break-all text-xs font-semibold text-[var(--koa-forest)]"></p>';
+        card.children[0].textContent=label;card.children[1].textContent=value;themeGrid.appendChild(card);
+      });
+      const releaseShots=Array.isArray(visual?.screenshots)?visual.screenshots:[];
+      const shotGrid=themeEvidence.querySelector('[data-release-theme-screenshots]');
+      const expectedReleaseShots=[
+        ['light-phone','Light · iPhone'],
+        ['dark-phone','Dark · iPhone'],
+        ['light-desktop','Light · desktop'],
+        ['dark-desktop','Dark · desktop'],
+      ];
+      const releaseShotMap=new Map(releaseShots.map((shot)=>[String(shot?.key||''),shot]));
+      expectedReleaseShots.forEach(([key,label])=>{
+        const raw=releaseShotMap.get(key);
+        const card=document.createElement('article');
+        card.className='overflow-hidden rounded-xl border border-[var(--koa-line)] bg-white';
+        if(raw){
+          const shot={...raw,url:'/api/admin/health?action=dark-mode-qa-screenshot&deployId='+encodeURIComponent(String(visual?.deployId||release.deployId||''))+'&key='+encodeURIComponent(String(key))};
+          const opener=document.createElement('button');
+          opener.type='button';
+          opener.className='group block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--koa-clay)]';
+          opener.setAttribute('aria-label','Open certified release screenshot · '+label);
+          const image=document.createElement('img');
+          image.src=shot.url;
+          image.alt='Certified release Theme QA screenshot · '+label;
+          image.loading='lazy';
+          image.className='aspect-[16/10] w-full object-cover object-top transition group-hover:scale-[1.01]';
+          opener.appendChild(image);
+          opener.addEventListener('click',()=>openThemeQaScreenshot(shot,label));
+          card.appendChild(opener);
+        }else{
+          const empty=document.createElement('div');
+          empty.className='flex aspect-[16/10] items-center justify-center px-3 text-center text-xs font-semibold text-[var(--koa-ink)]/45';
+          empty.textContent='Screenshot not recorded';
+          card.appendChild(empty);
+        }
+        const caption=document.createElement('p');
+        caption.className='p-3 text-xs font-semibold text-[var(--koa-forest)]';
+        caption.textContent=label;
+        card.appendChild(caption);
+        shotGrid.appendChild(card);
+      });
+      releaseDetail.appendChild(themeEvidence);
+
+      const responsive=release.responsiveQuality||null;
+      const responsiveEvidence=document.createElement('section');
+      const responsivePassed=responsive?.status==='passed'
+        &&responsive?.chromium?.reportMissing===false&&responsive?.webkit?.reportMissing===false
+        &&Number(responsive?.chromium?.criticalCount||0)===0&&Number(responsive?.webkit?.criticalCount||0)===0;
+      responsiveEvidence.className='rounded-xl border p-4 '+(responsivePassed?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+      responsiveEvidence.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Responsive QA evidence</p><p data-release-responsive-summary class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><span data-release-responsive-badge class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em]"></span></div><div data-release-responsive-grid class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>';
+      responsiveEvidence.querySelector('[data-release-responsive-summary]').textContent=responsive
+        ? 'Commit '+String(responsive.commit||release.commit||'—')+' · deploy '+String(responsive.deployId||release.deployId||'—')+' · checked '+(responsive.checkedAt?new Date(responsive.checkedAt).toLocaleString():'unknown')
+        : 'Responsive results were not persisted for this older release.';
+      const responsiveBadge=responsiveEvidence.querySelector('[data-release-responsive-badge]');
+      responsiveBadge.textContent=responsivePassed?'Passed':responsive?.status||'Unrecorded';
+      responsiveBadge.className='rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(responsivePassed?'bg-emerald-700 text-white':'bg-slate-200 text-slate-700');
+      const responsiveGrid=responsiveEvidence.querySelector('[data-release-responsive-grid]');
+      [['Chromium',responsive?.chromium],['WebKit',responsive?.webkit]].forEach(([label,browser])=>{
+        const card=document.createElement('div');
+        card.className='rounded-lg border border-black/10 bg-white/80 p-3';
+        card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-1 text-xs font-semibold text-[var(--koa-forest)]"></p><p class="mt-1 text-[.62rem] leading-5 text-[var(--koa-ink)]/52"></p>';
+        card.children[0].textContent=label;
+        card.children[1].textContent=browser
+          ? String(browser.viewports||0)+' viewports · '+String(browser.cases||0)+' cases · '+String(browser.criticalCount||0)+' critical'
+          : 'Not recorded';
+        card.children[2].textContent=browser?.viewportNames?.length?'Viewports: '+browser.viewportNames.join(', '):'';
+        responsiveGrid.appendChild(card);
+      });
+      [
+        ['Responsive commit',String(responsive?.commit||release.commit||'Unavailable')],
+        ['Responsive deploy',String(responsive?.deployId||release.deployId||'Unavailable')],
+      ].forEach(([label,value])=>{
+        const card=document.createElement('div');
+        card.className='rounded-lg border border-black/10 bg-white/80 p-3';
+        card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-1 break-all text-xs font-semibold text-[var(--koa-forest)]"></p>';
+        card.children[0].textContent=label;card.children[1].textContent=value;responsiveGrid.appendChild(card);
+      });
+      releaseDetail.appendChild(responsiveEvidence);
 
       const probeAudit=release.syntheticProbeVerification||null;
       const probes=document.createElement('section');
