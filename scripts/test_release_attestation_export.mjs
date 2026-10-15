@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildCertifiedReleaseExport, certifiedReleasePdf } from '../netlify/functions/_shared/release-attestation-export.mjs';
 
 const sha='a'.repeat(40),deploy='b'.repeat(24),runId='38761414583';
@@ -48,6 +49,37 @@ for(const modified of [
 ]){
  assert.throws(()=>buildCertifiedReleaseExport([modified]),/certified/,'Incomplete evidence must never export as certified.');
 }
+// Permanent security contract: both output formats share the same certified-only gate.
+const handler=readFileSync(new URL('../netlify/functions/admin-health.mts',import.meta.url),'utf8');
+const start=handler.indexOf("if(url.searchParams.get('export')==='certified-release')");
+const end=handler.indexOf("if(url.searchParams.get('export')==='critical-integrations')",start);
+assert(start>=0&&end>start,'Certified export handler must exist.');
+const route=handler.slice(start,end);
+assert(route.indexOf('if(!admin)')>=0&&route.indexOf('if(!admin)')<route.indexOf('readProductionReleases'),'Unauthorized access must be denied before reading release data.');
+assert(route.includes('status:403'),'Unauthorized export must return 403.');
+assert(route.includes("format!=='pdf'&&format!=='json'"),'Only PDF and JSON are supported.');
+assert(route.includes('buildCertifiedReleaseExport(releases'),'Both formats must share certified-only evidence validation.');
+assert(route.includes('status:409'),'Uncertified or missing evidence must return conflict, not certified output.');
+assert(route.includes("private, no-store")&&route.includes('nosniff'),'Download cache and MIME sniffing must be disabled.');
+assert(route.indexOf("if(format==='json')")>route.indexOf('buildCertifiedReleaseExport'),'JSON must not bypass validation.');
+assert(route.indexOf('certifiedReleasePdf(attestation)')>route.indexOf('buildCertifiedReleaseExport'),'PDF must not bypass validation.');
+for(const rows of [[],null,[newerPending]])assert.throws(()=>buildCertifiedReleaseExport(rows),/certified/,'Missing or pending evidence fails closed.');
+for(const broken of [
+ {...release,releaseAttestation:{...release.releaseAttestation,expectedSha:'f'.repeat(40)}},
+ {...release,releaseAttestation:{...release.releaseAttestation,productionGateState:'pending'}},
+ {...release,releaseAttestation:{...release.releaseAttestation,visualQaConclusion:'failure'}},
+ {...release,releaseAttestation:{...release.releaseAttestation,deployContext:'deploy-preview'}},
+ {...release,visualQuality:{...release.visualQuality,commit:'f'.repeat(40)}},
+ {...release,responsiveQuality:{...release.responsiveQuality,deployId:'f'.repeat(24)}},
+ {...release,releaseAttestation:{...release.releaseAttestation,systemHealth:{overall:'healthy',passed:82,failed:1}}},
+])assert.throws(()=>buildCertifiedReleaseExport([broken]),/certified/,'Incomplete or mismatched release evidence must be rejected.');
+const mismatch=buildCertifiedReleaseExport([release],{productionCommit:'f'.repeat(40),productionDeployId:'f'.repeat(24)});
+assert.equal(mismatch.currentProduction.matchesCertifiedRelease,false,'Historical certified releases must never be described as live.');
+assert.equal(JSON.parse(JSON.stringify(mismatch)).currentProduction.matchesCertifiedRelease,false);
+const mismatchedPdf=new TextDecoder().decode(certifiedReleasePdf(mismatch));
+assert(mismatchedPdf.includes('NO / NOT VERIFIED'),'PDF must disclose live deployment mismatch.');
+assert(!mismatchedPdf.includes('PRIVATE_CLIENT_MARKER_EMAIL'),'PDF cannot leak customer-bearing commit titles.');
+
 const pdf=certifiedReleasePdf(exported);
 const text=new TextDecoder().decode(pdf);
 assert(text.startsWith('%PDF-1.4\n'),'Must emit PDF bytes.');
