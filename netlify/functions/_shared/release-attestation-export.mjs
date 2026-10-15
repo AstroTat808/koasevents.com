@@ -22,7 +22,7 @@ const browserResponsive=(value)=>({
   criticalFailures:nat(value?.criticalCount),designAdvisories:nat(value?.designCount),
   reportMissing:value?.reportMissing===true,
 });
-function verifiedCertifiedExportSecurity(row){
+function verifiedCertifiedExportSecurity(row,{allowPendingByteProof=false}={}){
   const e=row?.certifiedExportSecurity||{},a=row?.releaseAttestation||{},cases=Array.isArray(e.cases)?e.cases:[];
   const ids=new Set(cases.map(item=>item?.id)),checkedAt=timestamp(e.checkedAt);
   if(e.status!=='passed'||e.source!=='github-actions-oidc'||e.commit!==row?.commit
@@ -33,13 +33,19 @@ function verifiedCertifiedExportSecurity(row){
     ||!Array.isArray(e.formats)||e.formats.length!==2
     ||!e.formats.includes('pdf')||!e.formats.includes('json')
     ||cases.length!==36||ids.size!==36)return false;
+  // A completed release certificate is insufficient until the actual signed
+  // PDF and JSON serializer byte proof has been durably recorded.
+  if(!allowPendingByteProof&&!(e.byteVerified===true
+      &&e.byteVerifiedRunId===a.visualQaRunId
+      &&Number.isFinite(Date.parse(String(e.byteVerifiedAt||'')))
+      &&Date.parse(e.byteVerifiedAt)>=Date.parse(String(a.verifiedAt||''))))return false;
   if(!cases.every(item=>/^(PDF|JSON)_[A-Z0-9_]{4,64}$/.test(String(item?.id||''))
     &&item.id.startsWith(String(item.format||'').toUpperCase()+'_')
     &&item.outcome==='denied'&&['pdf','json'].includes(item.format)))return false;
   return cases.filter(item=>item.format==='pdf').length===18
     &&cases.filter(item=>item.format==='json').length===18;
 }
-function isCertified(row){
+function isCertified(row,options={}){
   const a=row?.releaseAttestation||{},v=row?.visualQuality||{},r=row?.responsiveQuality||{};
   if(!sha40.test(String(row?.commit||''))||!deploy24.test(String(row?.deployId||'')))return false;
   if(a.status!=='verified'||a.productionGateState!=='success'||a.deployContext!=='production'
@@ -51,7 +57,7 @@ function isCertified(row){
   if(v.status!=='passed'||v.commit!==row.commit||v.deployId!==row.deployId||r.status!=='passed'
     ||r.commit!==row.commit||r.deployId!==row.deployId||!v.runId||!r.runId
     ||v.runId!==a.visualQaRunId||r.runId!==a.visualQaRunId)return false;
-  if(row?.certifiedExportSecurity&&!verifiedCertifiedExportSecurity(row))return false;
+  if(row?.certifiedExportSecurity&&!verifiedCertifiedExportSecurity(row,{allowPendingByteProof:options.allowPendingByteProof===true}))return false;
   for(const browser of ['chromium','webkit']){
     const theme=browserTheme(v[browser]),responsive=browserResponsive(r[browser]);
     if(theme.reportMissing||!theme.routes||!theme.cases||theme.failures||theme.failedRoutes
@@ -61,13 +67,13 @@ function isCertified(row){
 }
 export function buildCertifiedReleaseExport(releases,options={}){
   const rows=Array.isArray(releases)?releases:[];
-  const latest=rows.filter(isCertified).sort((a,b)=>
+  const latest=rows.filter(row=>isCertified(row,options)).sort((a,b)=>
     Date.parse(b.releaseAttestation.verifiedAt)-Date.parse(a.releaseAttestation.verifiedAt)
   )[0];
   if(!latest)throw new Error('No complete, independently certified production release is available for export.');
   const a=latest.releaseAttestation,v=latest.visualQuality,r=latest.responsiveQuality;
   const deployId=latest.deployId,commit=latest.commit;
-  const proof=latest.certifiedExportSecurity&&verifiedCertifiedExportSecurity(latest)
+  const proof=latest.certifiedExportSecurity&&verifiedCertifiedExportSecurity(latest,{allowPendingByteProof:options.allowPendingByteProof===true})
     ?latest.certifiedExportSecurity:null;
   // Preserve historical releases but never falsely claim they passed this newer gate.
   const certifiedExportSecurity={
