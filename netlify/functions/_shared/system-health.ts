@@ -15,6 +15,7 @@ import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
+import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -26,6 +27,7 @@ export type HealthIssueType =
 
 export type HealthCheck = {
   id: string;
+  diagnosticCode?: string;
   name: string;
   kind: 'page' | 'api';
   path: string;
@@ -3102,6 +3104,12 @@ export type NetlifyRecoveryCredentialVerification = {
   deployListHttpStatus:number;
   commit:string;
   runId:string;
+  publishedDeployId:string;
+  publishedDeployCommit:string;
+  publishedDeployState:string;
+  publishedDeployContext:string;
+  publishedDeployVerified:boolean;
+  deployDetailHttpStatus:number;
   source:'github-actions-read-only';
 };
 
@@ -3124,6 +3132,20 @@ export type ProductionReleaseAttestation = {
   source:'github-actions-oidc'|'certified-backfill';
 };
 
+export type ProductionProtectedAdminQa = {
+  status:'passed'|'failed';
+  browser:'chromium';
+  checkedAt:string;
+  commit:string;
+  deployId:string;
+  runId:string;
+  source:'github-actions-oidc';
+  checkedCount:number;
+  failureCount:number;
+  failures:{route:string;code:string}[];
+  code:string|null;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -3140,6 +3162,7 @@ export type ProductionRelease = {
   responsiveQuality?:ProductionResponsiveQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   releaseAttestation?:ProductionReleaseAttestation|null;
+  protectedAdminQa?:ProductionProtectedAdminQa|null;
   authorName:string;
   authorLogin:string;
   pullRequestNumber:number|null;
@@ -3195,6 +3218,12 @@ export async function recordNetlifyRecoveryCredentialVerification(context:Contex
     deployListHttpStatus:Math.max(0,Math.floor(Number(input?.deployListHttpStatus||0))),
     commit:clean(input?.commit,80),
     runId:clean(input?.runId,80),
+    publishedDeployId:clean(input?.publishedDeployId,120),
+    publishedDeployCommit:clean(input?.publishedDeployCommit,80),
+    publishedDeployState:clean(input?.publishedDeployState,40),
+    publishedDeployContext:clean(input?.publishedDeployContext,40),
+    publishedDeployVerified:input?.publishedDeployVerified===true,
+    deployDetailHttpStatus:Number(input?.deployDetailHttpStatus)===200?200:0,
     source:'github-actions-read-only',
   };
   await healthStore(context).setJSON(NETLIFY_RECOVERY_CREDENTIAL_VERIFICATION_KEY,record);
@@ -3298,6 +3327,7 @@ export async function readProductionVisualThumbnail(context:Context,deployId:str
 export async function netlifyRecoveryCredentialHealthCheck(context:Context):Promise<HealthCheck>{
   const started=Date.now();
   const productionCommit=clean(Netlify.env.get('COMMIT_REF'),80);
+  const servingDeployId=clean((context as any)?.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
   const expectedSiteId=clean(Netlify.env.get('SITE_ID')||'d1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
   let verification:NetlifyRecoveryCredentialVerification|null=null;
   try{
@@ -3309,7 +3339,8 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
       kind:'api',
       path:'GitHub Actions → Netlify recovery · read-only verification',
       ok:false,status:503,ms:Date.now()-started,severity:'red',
-      detail:'GitHub-owned Netlify recovery credential evidence could not be read: '+clean(error instanceof Error?error.message:'storage unavailable',500),
+      detail:'GitHub-owned Netlify recovery credential evidence could not be read · code KOA_RECOVERY_EVIDENCE_READ_FAILED.',
+      diagnosticCode:'KOA_RECOVERY_EVIDENCE_READ_FAILED',
     };
   }
   if(!verification){
@@ -3319,18 +3350,15 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
       kind:'api',
       path:'GitHub Actions → Netlify recovery · read-only verification',
       ok:false,status:503,ms:Date.now()-started,severity:'red',
-      detail:'No GitHub Actions read-only verification has been recorded for NETLIFY_AUTH_TOKEN. The production release gate will record one without exposing the secret.',
+      detail:'No signed recovery credential verification is recorded · code KOA_RECOVERY_EVIDENCE_MISSING.',
+      diagnosticCode:'KOA_RECOVERY_EVIDENCE_MISSING',
     };
   }
-  const checkedMs=Date.parse(verification.checkedAt);
-  const fresh=Number.isFinite(checkedMs)&&Date.now()-checkedMs<=36*60*60*1000;
-  const commitMatches=Boolean(productionCommit&&verification.commit===productionCommit);
+  const diagnosis=recoveryCredentialDiagnostic({
+    verification,productionCommit,servingDeployId,expectedSiteId,
+  });
+  const {ok,commitMatches,fresh,identitySource}=diagnosis;
   const siteMatches=Boolean(verification.siteIdMatches&&verification.siteId===expectedSiteId);
-  const authenticated=Boolean(
-    verification.configured&&verification.usable&&siteMatches
-    && verification.siteHttpStatus===200&&verification.deployListHttpStatus===200
-  );
-  const ok=authenticated&&commitMatches&&fresh;
   const detail=ok
     ? 'GitHub-owned NETLIFY_AUTH_TOKEN authenticated read-only access to '+(verification.siteName||'the production Netlify site')
       +' for current production · site lookup HTTP 200 · deploy-list HTTP 200 · verified '+verification.checkedAt
@@ -3348,7 +3376,8 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
     kind:'api',
     path:'GitHub Actions → Netlify recovery · read-only verification',
     ok,status:ok?200:503,ms:Date.now()-started,severity:ok?'green':'red',
-    detail:clean(detail,1400),
+    diagnosticCode:diagnosis.code,
+    detail:clean(detail+' · identity source '+identitySource+' · code '+diagnosis.code,1400),
   };
 }
 
@@ -3846,6 +3875,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     responsiveQuality:input?.responsiveQuality||previous?.responsiveQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     releaseAttestation:input?.releaseAttestation||previous?.releaseAttestation||null,
+    protectedAdminQa:input?.protectedAdminQa||previous?.protectedAdminQa||null,
     authorName,
     authorLogin,
     pullRequestNumber,

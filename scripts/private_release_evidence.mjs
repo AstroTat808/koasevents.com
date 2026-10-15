@@ -98,12 +98,26 @@ export function sanitizeDashboard(data, expectedSha) {
   // details, upstream payloads, client records or credential metadata in CI.
   const failedDiagnostics=sanitizeFailedHealthChecks(current.checks,current.failed);
   const failedCheckIds=failedDiagnostics.map(row=>row.id);
+  // Only these internally generated stable recovery codes may escape the
+  // private signed production snapshot; provider messages remain withheld.
+  const recoveryCodes=new Set([
+    'KOA_RECOVERY_EVIDENCE_READ_FAILED','KOA_RECOVERY_EVIDENCE_MISSING',
+    'KOA_RECOVERY_TOKEN_UNCONFIGURED','KOA_RECOVERY_SITE_MISMATCH',
+    'KOA_RECOVERY_CREDENTIAL_UNUSABLE','KOA_RECOVERY_EVIDENCE_STALE',
+    'KOA_RECOVERY_RUNTIME_SHA_MISMATCH','KOA_RECOVERY_PUBLISHED_PROOF_MISSING',
+    'KOA_RECOVERY_PUBLISHED_IDENTITY_MISMATCH',
+  ]);
+  const recoveryRow=Array.isArray(current.checks)
+    ?current.checks.find(row=>row?.id==='netlify-recovery-credential'
+      &&(row?.ok===false||row?.severity==='red')):null;
+  const recoveryFailureCode=recoveryCodes.has(recoveryRow?.diagnosticCode)
+    ?recoveryRow.diagnosticCode:null;
   requireValue(current.failed===0||failedCheckIds.length<=current.failed,
     'A sanitized health failure count exceeds the authoritative snapshot.');
   return {
     ok: true, sha: expectedSha, deployId: data.deployId,
     current: { overall: current.overall, passed: current.passed, failed: current.failed,
-      checkedAt: current.checkedAt, failedCheckIds, failedDiagnostics, checks: [] },
+      checkedAt: current.checkedAt, failedCheckIds, failedDiagnostics, recoveryFailureCode, checks: [] },
     coverage: {}, criticalIntegrations: {}, rollbackReady: {}, runtime: {}, deployments: {},
     office365: {}, emailHealth: {}, credentialHealth: {}, weeklyExecutiveSummary: {}, accountingHealth: {},
     visualQuality: { status: q.status, checkedAt: q.checkedAt, source: 'production-visual-qa',
@@ -145,6 +159,19 @@ function selfTest() {
   const failedSafe=sanitizeDashboard(failedFixture,commit);
   assert.deepEqual(failedSafe.current.failedCheckIds,['netlify-recovery-credential']);
   assert.deepEqual(failedSafe.current.failedDiagnostics,[{id:'netlify-recovery-credential',category:'deployment',errorCode:'HEALTH_DEPLOYMENT_FAILED'}]);
+  assert.equal(failedSafe.current.recoveryFailureCode,null);
+  const classified=sanitizeDashboard({
+    ...failedFixture,current:{...failedFixture.current,checks:[
+      {id:'netlify-recovery-credential',ok:false,diagnosticCode:'KOA_RECOVERY_PUBLISHED_PROOF_MISSING'},
+    ]},
+  },commit);
+  assert.equal(classified.current.recoveryFailureCode,'KOA_RECOVERY_PUBLISHED_PROOF_MISSING');
+  assert(!JSON.stringify(sanitizeDashboard({
+    ...failedFixture,current:{...failedFixture.current,checks:[
+      {id:'netlify-recovery-credential',ok:false,diagnosticCode:'PRIVATE_CLIENT_MARKER_EMAIL'},
+    ]},
+  },commit)).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+
   assert(!JSON.stringify(failedSafe).includes('PRIVATE_CUSTOMER'));
   assert(!JSON.stringify(failedSafe).includes('customer@example.invalid'));
   // Match the actual OIDC run-dashboard-refresh response, whose detailed
@@ -190,7 +217,9 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
         const safe = sanitizeDashboard(data, expectedSha);
         writeFileSync(outputFile, JSON.stringify(safe));
         console.log(JSON.stringify({ ok: true, overall: safe.current.overall, passed: safe.current.passed,
-          failed: safe.current.failed, failedCheckIds: safe.current.failedCheckIds, failedDiagnostics: safe.current.failedDiagnostics,
+          failed: safe.current.failed, failedCheckIds: safe.current.failedCheckIds,
+          failedDiagnostics: safe.current.failedDiagnostics,
+          recoveryFailureCode: safe.current.recoveryFailureCode,
           checkedAt: safe.current.checkedAt, enrichmentWarningCount: safe.enrichmentWarnings.length }));
       } else throw new Error('Unknown private evidence mode.');
     }

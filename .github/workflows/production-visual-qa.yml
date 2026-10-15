@@ -82,6 +82,8 @@ jobs:
           python-version: '3.12'
       - name: Install site dependencies
         run: npm install --no-audit --no-fund
+      - name: Check privacy-safe protected admin QA diagnostics
+        run: python scripts/test_sanitized_protected_admin_qa.py
       - name: Structural build-safety gate
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
@@ -91,7 +93,7 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
-        run: node scripts/netlify_recovery_credential_check.mjs
+        run: node scripts/netlify_recovery_credential_check.mjs --access-only
       - name: Diagnose exact-main Netlify production gate with authenticated GitHub evidence
         if: github.event_name == 'pull_request'
         shell: bash
@@ -180,19 +182,6 @@ jobs:
           fi
           python scripts/test_health_safe_controls_browser.py --browser webkit --base-url http://127.0.0.1:4176 --width 390 --height 844
           python scripts/test_health_safe_controls_browser.py --browser chromium --base-url http://127.0.0.1:4176 --width 1440 --height 900
-      - name: Diagnose protected admin startup on live production without exposing payloads
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          set -euo pipefail
-          if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-pr-private.log 2>&1; then
-            echo 'PASS | protected-admin production startup and authorization contracts.'
-          else
-            result=$?
-            node scripts/safe_protected_admin_qa_report.mjs visual-results/admin-chromium/report.json || true
-            echo '::error::Protected-admin startup evidence failed; sensitive details withheld.'
-            exit "$result"
-          fi
       - name: Verify site-wide Light / Dark / System themes in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
@@ -722,16 +711,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1; then
-            echo 'Authenticated browser audit passed; private output withheld.'
-          else
-            result=$?
-            # The parser prints only fixed, allowlisted QA case IDs and error codes.
-            # Never echo the private browser log, customer responses, or screenshots.
-            node scripts/safe_protected_admin_qa_report.mjs visual-results/admin-chromium/report.json || true
-            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
-            exit "$result"
+          trap 'rm -rf /tmp/admin-chromium.private.log /tmp/koa-admin-qa.safe.json visual-results/admin-chromium' EXIT
+          qa_code=0
+          python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1 || qa_code=$?
+          sanitized_code=0
+          python scripts/sanitize_protected_admin_qa.py --report visual-results/admin-chromium/report.json --qa-exit "$qa_code" --safe-output /tmp/koa-admin-qa.safe.json || sanitized_code=$?
+          # Persist only allowlisted route IDs, codes and counts using the
+          # workflow's short-lived GitHub OIDC identity; never upload reports.
+          node scripts/publish_protected_admin_release_evidence.mjs /tmp/koa-admin-qa.safe.json
+          if [ "$qa_code" -ne 0 ] || [ "$sanitized_code" -ne 0 ]; then
+            echo '::error::Protected admin QA failed; see sanitized category codes above.'
+            exit 1
           fi
+          echo 'Protected admin browser QA and durable signed evidence passed.'
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
@@ -749,6 +741,11 @@ jobs:
         run: |
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
+      - name: Verify deployed diagnostic controls in WebKit iPhone and desktop Chromium
+        run: |
+          set -euo pipefail
+          python scripts/test_health_safe_controls_browser.py --browser webkit --base-url https://koasevents.com --width 390 --height 844
+          python scripts/test_health_safe_controls_browser.py --browser chromium --base-url https://koasevents.com --width 1440 --height 900
       - name: Run signed live System Health dashboard refresh
         shell: bash
         run: |
