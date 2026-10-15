@@ -2254,6 +2254,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     const mobileHealthQuery=window.matchMedia('(max-width: 767px)');
     const healthExpandedSessionKey='koa-system-health-expanded-v1';
+    const healthCollapsedSessionKey='koa-system-health-collapsed-v1';
     let healthSectionStatusesReady=false;
     let latestHealthyCheckAt='';
     let latestHealthSnapshot=null;
@@ -2266,6 +2267,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     const expandedHealthSections=readExpandedHealthSections();
+    function readCollapsedHealthSections(){
+      try{
+        const stored=JSON.parse(sessionStorage.getItem(healthCollapsedSessionKey)||'[]');
+        return new Set(Array.isArray(stored)?stored.map(String).filter(Boolean):[]);
+      }catch{return new Set();}
+    }
+    const collapsedHealthSections=readCollapsedHealthSections();
 
     function healthSectionSessionId(section){
       if(!(section instanceof HTMLElement))return '';
@@ -2275,9 +2283,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function rememberHealthSection(section,expanded){
       const id=healthSectionSessionId(section);
       if(!id)return;
-      if(expanded)expandedHealthSections.add(id);
-      else expandedHealthSections.delete(id);
-      try{sessionStorage.setItem(healthExpandedSessionKey,JSON.stringify([...expandedHealthSections]));}catch{}
+      if(expanded){
+        expandedHealthSections.add(id);
+        collapsedHealthSections.delete(id);
+      }else{
+        expandedHealthSections.delete(id);
+        collapsedHealthSections.add(id);
+      }
+      try{
+        sessionStorage.setItem(healthExpandedSessionKey,JSON.stringify([...expandedHealthSections]));
+        sessionStorage.setItem(healthCollapsedSessionKey,JSON.stringify([...collapsedHealthSections]));
+      }catch{}
     }
 
     function isHealthSectionRememberedOpen(section){
@@ -2285,21 +2301,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return Boolean(id&&expandedHealthSections.has(id));
     }
 
+    function isHealthSectionRememberedClosed(section){
+      const id=healthSectionSessionId(section);
+      return Boolean(id&&collapsedHealthSections.has(id));
+    }
+
     function setMobileCollapsed(section,collapsed,persist=false){
       if(!(section instanceof HTMLElement))return;
-      if(mobileHealthQuery.matches&&collapsed&&section.dataset.healthSectionStatus==='red')collapsed=false;
       const content=[...section.children].filter((child,index)=>index>0&&!(child instanceof HTMLButtonElement&&child.hasAttribute('data-mobile-collapse-toggle')));
       content.forEach((child)=>child.classList.toggle('koa-mobile-collapsed-content',collapsed));
       section.dataset.mobileCollapsed=collapsed?'true':'false';
       const toggleButton=section.querySelector('[data-mobile-collapse-toggle]');
       if(toggleButton instanceof HTMLButtonElement){
         toggleButton.setAttribute('aria-expanded',collapsed?'false':'true');
+        const title=String(section.dataset.healthPanelTitle||'System Health section');
+        toggleButton.setAttribute('aria-label',(collapsed?'Expand ':'Collapse ')+title);
         const label=toggleButton.querySelector('[data-health-toggle-label]');
         if(label)label.textContent=collapsed?'Expand':'Collapse';
       }
-      if(persist&&section.dataset.healthSectionStatus!=='red'){
-        rememberHealthSection(section,!collapsed);
-      }
+      if(persist)rememberHealthSection(section,!collapsed);
     }
 
     function setHealthSectionStatus(section,status,count=0,summary=''){
@@ -2307,6 +2327,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const normalized=['red','yellow','green'].includes(status)?status:'green';
       const previous=String(section.dataset.healthSectionStatus||'');
       section.dataset.healthSectionStatus=normalized;
+      section.dataset.healthSectionTracked='true';
       const badge=section.querySelector('[data-health-section-status-badge]');
       if(!(badge instanceof HTMLElement))return;
       const map={
@@ -2324,13 +2345,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const title=String(section.querySelector('h2,h3')?.textContent||'System Health section').trim();
         summaryNode.setAttribute('aria-label','Expand '+title+(summary?': '+summary:''));
       }
-      if(mobileHealthQuery.matches&&section.dataset.mobileCollapsible==='true'){
-        if(normalized==='red'){
+      if(section.dataset.mobileCollapsible==='true'){
+        // A newly critical/warning panel opens automatically. Manual collapse
+        // remains available and is not overwritten on repeated refreshes.
+        if((normalized==='red'||normalized==='yellow')&&previous!==normalized){
           setMobileCollapsed(section,false);
         }else if(isHealthSectionRememberedOpen(section)){
           setMobileCollapsed(section,false);
-        }else if(!previous||previous!==normalized){
+        }else if(isHealthSectionRememberedClosed(section)){
           setMobileCollapsed(section,true);
+        }else if((!previous||previous!==normalized)&&mobileHealthQuery.matches){
+          setMobileCollapsed(section,normalized==='green');
         }
       }
     }
@@ -2341,6 +2366,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(section.dataset.mobileCollapseReady==='true')return;
       const header=section.firstElementChild;
       if(!(header instanceof HTMLElement))return;
+      const title=String(section.querySelector('h2,h3')?.textContent||header.querySelector('.eyebrow')?.textContent||'System Health details').trim();
+      section.dataset.healthPanelTitle=title;
+      const body=[...section.children].slice(1).filter((child)=>child instanceof HTMLElement);
+      const sectionId=String(section.id||'health-panel').replace(/[^a-zA-Z0-9_-]/g,'-');
+      const bodyIds=body.map((child,index)=>{
+        if(!child.id)child.id=sectionId+'-content-'+(index+1);
+        return child.id;
+      });
       const controls=document.createElement('div');
       controls.className='health-section-mobile-controls';
       const badge=document.createElement('span');
@@ -2350,6 +2383,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       button.dataset.mobileCollapseToggle='';
       button.className='health-mobile-detail-toggle';
       button.setAttribute('aria-expanded','false');
+      button.setAttribute('aria-label','Expand '+title);
+      if(bodyIds.length)button.setAttribute('aria-controls',bodyIds.join(' '));
       button.innerHTML='<span data-health-toggle-label>Expand</span><span aria-hidden="true">⌄</span>';
       button.addEventListener('click',(event)=>{
         event.stopPropagation();
@@ -2366,15 +2401,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       controls.append(badge,button,summary);
       header.appendChild(controls);
       header.classList.add('health-section-mobile-header');
+      badge.className='inline-flex rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-2.5 py-1 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';
+      badge.textContent='Details';
+      section.dataset.healthSectionStatus='neutral';
       header.addEventListener('click',(event)=>{
-        if(!mobileHealthQuery.matches)return;
         const target=event.target;
-        if(target instanceof Element&&target.closest('a,button,input,select,textarea,label'))return;
+        if(target instanceof Element&&target.closest('a,button,input,select,textarea,label,[role="button"]'))return;
+        event.stopPropagation();
         setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true',true);
       });
       section.dataset.mobileCollapseReady='true';
-      setHealthSectionStatus(section,'green',0);
-      setMobileCollapsed(section,mobileHealthQuery.matches);
+      const startCollapsed=isHealthSectionRememberedClosed(section)
+        ||(!isHealthSectionRememberedOpen(section)&&mobileHealthQuery.matches);
+      setMobileCollapsed(section,startCollapsed);
     }
 
 
