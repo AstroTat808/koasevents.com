@@ -31,6 +31,7 @@ const checks=[
   ['invoice-repair-regression','Invoice repair safety regression','npm',['run','test:invoice-repair']],
   ['platform-admin-regression','Platform admin regression','npm',['run','test:platform-admin']],
   ['auth-security-regression','Authentication security regression','npm',['run','test:auth-security']],
+  ['session-persistence-regression','Remembered session and 401 guard regression','npm',['run','test:session-persistence']],
 ];
 
 function display(command,args){return [command,...args].join(' ');}

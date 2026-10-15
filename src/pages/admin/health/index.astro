@@ -73,6 +73,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
 
+        <section data-session-health-section class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <details data-session-health-details>
+            <summary class="cursor-pointer list-none rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--koa-clay)]">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Authentication reliability</p>
+                  <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Session Health <span aria-hidden="true" class="ml-2 text-base">▾</span></h2>
+                  <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/55">Review session renewal, expiry reasons, and trusted browsers for your own account. Access and refresh tokens are never displayed.</p>
+                </div>
+                <span data-session-health-summary class="rounded-full bg-slate-100 px-3 py-2 text-xs font-black text-slate-700" aria-live="polite">Open to inspect</span>
+              </div>
+            </summary>
+            <div class="mt-5 border-t border-[var(--koa-line)] pt-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <p data-session-health-checked class="text-xs text-[var(--koa-ink)]/55">Not checked yet</p>
+                <button data-session-health-reload type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-bold text-[var(--koa-forest)] focus-visible:ring-2 focus-visible:ring-[var(--koa-clay)]">Refresh session status</button>
+              </div>
+              <div data-session-health-devices class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" role="list">
+                <p class="text-sm text-[var(--koa-ink)]/55">Open Session Health to load your device status.</p>
+              </div>
+              <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/55">An expired access token is not always a signed-out session: a valid Netlify Identity refresh credential can renew it. Device trust alone never authenticates a request.</p>
+            </div>
+          </details>
+        </section>
+
         <section data-dark-mode-visual-quality data-theme-qa-card class="cursor-pointer rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -6686,6 +6711,74 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         savePolicy.disabled=false;
       }
     });
+
+
+    const sessionHealthDetails=document.querySelector('[data-session-health-details]');
+    const sessionHealthDevices=document.querySelector('[data-session-health-devices]');
+    const sessionHealthChecked=document.querySelector('[data-session-health-checked]');
+    const sessionHealthSummary=document.querySelector('[data-session-health-summary]');
+    const sessionHealthReload=document.querySelector('[data-session-health-reload]');
+    function readableSessionDate(value){
+      if(!value||!Number.isFinite(Date.parse(value)))return 'Not recorded';
+      return new Date(value).toLocaleString();
+    }
+    async function loadSessionHealth(){
+      if(!sessionHealthDevices)return;
+      sessionHealthReload && (sessionHealthReload.disabled=true);
+      if(sessionHealthSummary)sessionHealthSummary.textContent='Checking…';
+      try {
+        const response=await fetch('/api/admin/session-health',{cache:'no-store'});
+        if(!response.ok)throw new Error('Session Health is temporarily unavailable.');
+        const payload=await response.json();
+        const sessions=Array.isArray(payload.sessions)?payload.sessions:[];
+        sessionHealthDevices.replaceChildren();
+        const current=payload.current;
+        if(sessionHealthSummary)sessionHealthSummary.textContent=current?.status==='access_token_active'
+          ?'Current session active':current?.status==='refresh_required'
+            ?'Token refresh needed':current?.status==='revoked'?'Session revoked':'No current session tracked';
+        if(sessionHealthChecked)sessionHealthChecked.textContent='Checked '+readableSessionDate(payload.checkedAt)
+          +' · '+Number(payload.trustedCount||0)+' trusted · '+Number(payload.activeTokenCount||0)+' valid access tokens';
+        if(!sessions.length){
+          const empty=document.createElement('p');
+          empty.className='text-sm text-[var(--koa-ink)]/60';
+          empty.textContent='No tracked trusted or current browser sessions. Sign in and trust your browser to establish a record.';
+          sessionHealthDevices.append(empty);
+          return;
+        }
+        for(const device of sessions){
+          const card=document.createElement('article');
+          card.className='min-w-0 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm';
+          card.setAttribute('role','listitem');
+          const name=document.createElement('h3');
+          name.className='break-words font-bold text-[var(--koa-forest)]';
+          name.textContent=String(device.name||device.device||'Browser')+(device.current?' · This browser':'');
+          const status=document.createElement('p');
+          status.className='mt-2 text-xs font-bold text-[var(--koa-clay)]';
+          status.textContent=String(device.status==='access_token_active'?'Access token active':
+            device.status==='refresh_required'?'Refresh required':'Revoked')+(device.trusted?' · Trusted':' · Not trusted');
+          const reason=document.createElement('p');
+          reason.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/65';
+          reason.textContent=String(device.reason||'');
+          const dates=document.createElement('p');
+          dates.className='mt-2 break-words text-xs leading-5 text-[var(--koa-ink)]/55';
+          dates.textContent='Access expires: '+readableSessionDate(device.accessExpiresAt)
+            +' · Last renewal: '+readableSessionDate(device.lastRefreshedAt)
+            +' · Remembered until: '+readableSessionDate(device.rememberedUntil)
+            +' · Last seen: '+readableSessionDate(device.lastSeenAt);
+          card.append(name,status,reason,dates);
+          sessionHealthDevices.append(card);
+        }
+      } catch(error) {
+        if(sessionHealthSummary)sessionHealthSummary.textContent='Unavailable';
+        if(sessionHealthChecked)sessionHealthChecked.textContent=error instanceof Error?error.message:'Unable to check sessions.';
+      } finally {
+        if(sessionHealthReload)sessionHealthReload.disabled=false;
+      }
+    }
+    sessionHealthDetails?.addEventListener('toggle',()=>{
+      if(sessionHealthDetails.open)void loadSessionHealth();
+    });
+    sessionHealthReload?.addEventListener('click',()=>void loadSessionHealth());
 
     const session=await getAdminSession();
     const sessionCapabilities=new Set(session?.capabilities||session?.permissions||[]);
