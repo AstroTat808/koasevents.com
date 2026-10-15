@@ -396,7 +396,6 @@ const seoSchema = {
           }
         };
 
-        const originalFetch = window.fetch.bind(window);
         const keepRememberedIdentityCookies = () => {
           // The Netlify SDK rotates both cookies without Max-Age. Reapply only
           // the user's 30-day preference, never log or store either credential.
