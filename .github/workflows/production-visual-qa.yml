@@ -158,6 +158,28 @@ jobs:
             exit 1
           fi
           python scripts/test_accommodations_responsive.py --base-url http://127.0.0.1:4178
+      - name: Verify System Health severity filtering, troubleshooting and copy in WebKit and Chromium
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4176 --directory dist > /tmp/koa-health-controls-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4176/admin/health/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'Synthetic System Health controls preview failed to start'
+            exit 1
+          fi
+          python scripts/test_health_safe_controls_browser.py --browser webkit --base-url http://127.0.0.1:4176 --width 390 --height 844
+          python scripts/test_health_safe_controls_browser.py --browser chromium --base-url http://127.0.0.1:4176 --width 1440 --height 900
       - name: Diagnose protected admin startup on live production without exposing payloads
         if: github.event_name == 'pull_request'
         shell: bash
@@ -321,9 +343,6 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
-          # Real browser interactions with synthetic Health data, never customer payloads.
-          python scripts/test_health_safe_controls_browser.py --browser webkit --base-url http://127.0.0.1:4173 --width 390 --height 844
-          python scripts/test_health_safe_controls_browser.py --browser chromium --base-url http://127.0.0.1:4173 --width 1440 --height 900
       - name: Verify iPhone admin bottom navigation in built PR
         if: github.event_name == 'pull_request'
         shell: bash
