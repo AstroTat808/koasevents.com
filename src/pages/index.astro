@@ -37,7 +37,14 @@ const celebrations = [
         </div>
       </div>
     </div>
-    <div class="hero-detail-card absolute bottom-6 right-6 z-10 hidden max-w-md rounded-[1.2rem] px-7 py-6 md:block">
+    <div class="container-shell relative z-10 -mt-6 pb-8 md:hidden">
+      <div class="hero-detail-card rounded-[1.2rem] p-6" data-home-property-details="mobile">
+        <p class="eyebrow text-[var(--koa-clay)]">Mountain View, Hawaiʻi</p>
+        <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/68">Four tropical acres · 1,500 sq. ft. pavilion · Events for up to {businessRules.venue.maximumOccupancy.value} guests.</p>
+        <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/68">Two homes on the property: 3 bedrooms / 2 bathrooms and 2 bedrooms / 1 bathroom. Sleeps up to 10 guests combined.</p>
+      </div>
+    </div>
+    <div class="hero-detail-card absolute bottom-6 right-6 z-10 hidden max-w-md rounded-[1.2rem] px-7 py-6 md:block" data-home-property-details="desktop">
       <p class="eyebrow text-[var(--koa-clay)]">Mountain View, Hawaiʻi</p>
       <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/68">Four tropical acres · 1,500 sq. ft. pavilion · Events for up to {businessRules.venue.maximumOccupancy.value} guests.</p>
       <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/68">Two homes on the property: 3 bedrooms / 2 bathrooms and 2 bedrooms / 1 bathroom. Sleeps up to 10 guests combined.</p>
