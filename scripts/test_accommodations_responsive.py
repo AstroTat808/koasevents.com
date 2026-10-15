@@ -25,7 +25,7 @@ def require(condition, message):
         raise AssertionError(message)
 
 
-def check_comparison(page, route, viewport):
+def check_comparison(page, route, viewport, browser_name):
     section = page.locator("section#accommodations")
     require(section.count() == 1 and section.is_visible(), f"{route}: accommodations section missing")
     require(section.get_by_role("heading", name="Two homes. Room to stay together.").count() == 1,
@@ -38,9 +38,9 @@ def check_comparison(page, route, viewport):
         require(card.get_by_role("heading", name=title).count() == 1,
                 f"{route}: incorrect home card {index + 1}")
         content = card.inner_text()
-        require(re.search(rf"\\b{bedrooms}\\s+Bedrooms\\b", content, re.I),
+        require(re.search(rf"\b{bedrooms}\s+Bedrooms\b", content, re.I),
                 f"{route}: {title} bedroom count missing")
-        require(re.search(rf"\\b{bathrooms}\\s+Bathrooms\\b", content, re.I),
+        require(re.search(rf"\b{bathrooms}\s+Bathrooms\b", content, re.I),
                 f"{route}: {title} bathroom count missing")
 
     text = section.inner_text()
@@ -64,11 +64,11 @@ def check_comparison(page, route, viewport):
                 f"{route}: home cards are not side-by-side on desktop")
 
     section.scroll_into_view_if_needed()
-    section.screenshot(path=str(OUTPUT / f"{page._koa_browser}-{viewport}-{route.strip('/')}-comparison.png"),
+    section.screenshot(path=str(OUTPUT / f"{browser_name}-{viewport}-{route.strip('/')}-comparison.png"),
                        animations="disabled", caret="hide")
 
 
-def check_home(page, viewport):
+def check_home(page, viewport, browser_name):
     summary = page.locator(f'[data-home-property-details="{("mobile" if viewport == "iphone" else "desktop")}"]')
     require(summary.count() == 1 and summary.is_visible(),
             f"home: visible {viewport} property details card missing")
@@ -88,7 +88,7 @@ def check_home(page, viewport):
         require(not page.locator('[data-home-property-details="mobile"]').is_visible(),
                 "home: mobile card must be hidden on desktop")
     summary.scroll_into_view_if_needed()
-    summary.screenshot(path=str(OUTPUT / f"{page._koa_browser}-{viewport}-home-details.png"),
+    summary.screenshot(path=str(OUTPUT / f"{browser_name}-{viewport}-home-details.png"),
                        animations="disabled", caret="hide")
 
 
@@ -113,7 +113,6 @@ def main():
                 )
                 for path, label in ROUTES:
                     page = ctx.new_page()
-                    page._koa_browser = browser_name
                     row = {"browser": browser_name, "viewport": viewport, "route": path}
                     try:
                         response = page.goto(base + path, wait_until="domcontentloaded", timeout=30000)
@@ -126,9 +125,9 @@ def main():
                         row["horizontalOverflowPx"] = round(overflow, 2)
                         require(overflow <= 2, f"{path}: horizontal overflow {overflow:.1f}px")
                         if path == "/":
-                            check_home(page, viewport)
+                            check_home(page, viewport, browser_name)
                         else:
-                            check_comparison(page, path, viewport)
+                            check_comparison(page, path, viewport, browser_name)
                         page.screenshot(
                             path=str(OUTPUT / f"{browser_name}-{viewport}-{label}-viewport.png"),
                             animations="disabled", caret="hide",
