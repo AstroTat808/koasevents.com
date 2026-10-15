@@ -43,3 +43,36 @@ export function signedPublishedCredentialMatches({verification,servingDeployId='
     &&Number(v.deployDetailHttpStatus)===200
   );
 }
+
+// Stable, non-sensitive component codes for production System Health.
+// The code is derived exclusively from signed scalar evidence, not raw responses.
+export function recoveryCredentialDiagnostic({
+  verification,productionCommit='',servingDeployId='',expectedSiteId='',now=Date.now(),
+}={}){
+  const v=verification||null;
+  const src=clean(productionCommit)?'netlify-runtime':'oidc-published-deploy';
+  const info=(code,authenticated=false,commitMatches=false,fresh=false)=>({
+    ok:code==='KOA_RECOVERY_OK',code,authenticated,commitMatches,fresh,identitySource:src,
+  });
+  if(!v)return info('KOA_RECOVERY_EVIDENCE_MISSING');
+  const checked=Date.parse(clean(v.checkedAt));
+  const age=now-checked;
+  const fresh=Number.isFinite(age)&&age>=-120000&&age<=36*3600000;
+  if(v.configured!==true)return info('KOA_RECOVERY_TOKEN_UNCONFIGURED',false,false,fresh);
+  const siteMatches=v.siteIdMatches===true&&clean(v.siteId)===clean(expectedSiteId)
+    &&Boolean(clean(expectedSiteId));
+  if(!siteMatches)return info('KOA_RECOVERY_SITE_MISMATCH',false,false,fresh);
+  const authenticated=v.usable===true&&Number(v.siteHttpStatus)===200
+    &&Number(v.deployListHttpStatus)===200;
+  if(!authenticated)return info('KOA_RECOVERY_CREDENTIAL_UNUSABLE',false,false,fresh);
+  if(!fresh)return info('KOA_RECOVERY_EVIDENCE_STALE',true,false,false);
+  const commit=clean(productionCommit);
+  if(commit){
+    const match=clean(v.commit)===commit;
+    return info(match?'KOA_RECOVERY_OK':'KOA_RECOVERY_RUNTIME_SHA_MISMATCH',true,match,true);
+  }
+  if(v.publishedDeployVerified!==true)
+    return info('KOA_RECOVERY_PUBLISHED_PROOF_MISSING',true,false,true);
+  const match=signedPublishedCredentialMatches({verification:v,servingDeployId});
+  return info(match?'KOA_RECOVERY_OK':'KOA_RECOVERY_PUBLISHED_IDENTITY_MISMATCH',true,match,true);
+}
