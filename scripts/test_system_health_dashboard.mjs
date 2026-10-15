@@ -668,7 +668,7 @@ for(const override of [
   }), 'Missing, moved or untrusted OIDC proof must never clear the credential check.');
 }
 assert(
-  systemHealth.includes('signedPublishedCredentialMatches({verification,servingDeployId})')
+  systemHealth.includes('recoveryCredentialDiagnostic({')&&systemHealth.includes('diagnosticCode:diagnosis.code')
   &&!systemHealth.includes("token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500)")
   &&systemHealth.includes('verification.commit===productionCommit')
   &&healthSignal.includes('readNetlifyRecoveryCredentialVerification(context)')
@@ -687,6 +687,31 @@ assert(
   &&recoveryCredentialCheck.includes('report.publishedDeployVerified'),
   'Pre-deploy auth access must never demand future published SHA, while post-deploy verification must still fail closed on exact-SHA proof.',
 );
+
+const {recoveryCredentialDiagnostic}=await import(new URL('../netlify/functions/_shared/netlify-published-identity.mjs',import.meta.url));
+const diagBase={
+  verification:{...record,configured:true,usable:true,siteId:'synthetic-site',siteIdMatches:true,
+    siteHttpStatus:200,deployListHttpStatus:200,checkedAt:'2026-10-15T18:00:00.000Z'},
+  productionCommit:'',servingDeployId:goodDeployId,expectedSiteId:'synthetic-site',
+  now:Date.parse('2026-10-15T18:02:00.000Z'),
+};
+assert.equal(recoveryCredentialDiagnostic(diagBase).code,'KOA_RECOVERY_OK');
+const codeFixtures=[
+  [{verification:null},'KOA_RECOVERY_EVIDENCE_MISSING'],
+  [{verification:{...diagBase.verification,configured:false}},'KOA_RECOVERY_TOKEN_UNCONFIGURED'],
+  [{verification:{...diagBase.verification,siteId:'other'}},'KOA_RECOVERY_SITE_MISMATCH'],
+  [{verification:{...diagBase.verification,usable:false}},'KOA_RECOVERY_CREDENTIAL_UNUSABLE'],
+  [{verification:{...diagBase.verification,checkedAt:'2026-10-01T00:00:00Z'}},'KOA_RECOVERY_EVIDENCE_STALE'],
+  [{productionCommit:'c'.repeat(40)},'KOA_RECOVERY_RUNTIME_SHA_MISMATCH'],
+  [{verification:{...diagBase.verification,publishedDeployVerified:false}},'KOA_RECOVERY_PUBLISHED_PROOF_MISSING'],
+  [{servingDeployId:'wrong-deploy'},'KOA_RECOVERY_PUBLISHED_IDENTITY_MISMATCH'],
+];
+for(const [overrides,expectedCode] of codeFixtures){
+  const response=recoveryCredentialDiagnostic({...diagBase,...overrides});
+  assert.equal(response.code,expectedCode,'Privacy-safe recovery diagnostic must identify its exact failure class.');
+  assert.equal(response.ok,false,'A failed recovery credential must never be classified as healthy.');
+}
+assert.equal(recoveryCredentialDiagnostic({...diagBase,productionCommit:goodCommit}).code,'KOA_RECOVERY_OK');
 
 console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
 
