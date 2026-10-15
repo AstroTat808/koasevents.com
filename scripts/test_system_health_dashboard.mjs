@@ -17,6 +17,9 @@ const visualWorkflow = await readFile(new URL('../.github/workflows/production-v
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 const netlifyBuildRunner = await readFile(new URL('./run_netlify_build.mjs', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
+const recoveryCredentialCheck = await readFile(new URL('./netlify_recovery_credential_check.mjs', import.meta.url), 'utf8');
+const recoveryCredentialPublish = await readFile(new URL('./publish_netlify_recovery_credential_health.mjs', import.meta.url), 'utf8');
+const responsiveReleasePublish = await readFile(new URL('./publish_responsive_release_evidence.mjs', import.meta.url), 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -175,7 +178,7 @@ assert(
     && systemHealth.includes("id:'dark-mode-qa'")
     && systemHealth.includes("id==='dark-mode-qa'")
     && systemHealth.includes('status:ok?200:mismatch?409:422')
-    && systemHealth.includes("'netlify-github-sync','dark-mode-qa'")
+    && systemHealth.includes("'netlify-github-sync','netlify-recovery-credential','dark-mode-qa'")
     && systemHealth.includes('visualQuality?:ProductionVisualQuality|null')
     && systemHealth.includes('visualQuality:input?.visualQuality||previous?.visualQuality||null')
     && healthSignal.includes("body?.action==='record-dark-mode-visual-quality'")
@@ -196,6 +199,42 @@ assert(
     && themeVisualQa.includes('thumbnail-{preference}-{viewport}.jpg'),
   'Production theme QA must persist route-level Chromium/WebKit evidence and four protected screenshots, and Dark Mode QA must be an immediate System Health alert check.',
 );
+assert(
+  recoveryCredentialCheck.includes("method:'GET'")
+    && recoveryCredentialCheck.includes('/api/v1/sites/')
+    && recoveryCredentialCheck.includes('/deploys?per_page=1')
+    && !recoveryCredentialCheck.includes("method:'POST'")
+    && recoveryCredentialCheck.includes('configured:Boolean(token)')
+    && recoveryCredentialCheck.includes('usable:false')
+    && !recoveryCredentialCheck.includes('tokenHash')
+    && !recoveryCredentialCheck.includes('fingerprint')
+    && recoveryCredentialPublish.includes("action:'record-netlify-recovery-credential'")
+    && healthSignal.includes("body?.action==='record-netlify-recovery-credential'")
+    && systemHealth.includes("id:'netlify-recovery-credential'")
+    && systemHealth.includes('netlifyRecoveryCredentialHealthCheck(context)')
+    && systemHealth.includes('token value and fingerprint are never stored')
+    && visualWorkflow.includes('Verify GitHub-owned Netlify recovery credential (read-only)')
+    && visualWorkflow.includes('Publish GitHub-owned Netlify recovery credential to System Health'),
+  'GitHub-owned Netlify recovery authentication must be verified with read-only calls and exposed as non-secret, fail-closed System Health evidence.',
+);
+
+assert(
+  responsiveReleasePublish.includes("action:'record-responsive-visual-quality'")
+    && healthSignal.includes("body?.action==='record-responsive-visual-quality'")
+    && systemHealth.includes('ProductionResponsiveQualityBrowser')
+    && systemHealth.includes('recordProductionResponsiveQuality')
+    && systemHealth.includes('responsiveQuality?:ProductionResponsiveQuality|null')
+    && healthSignal.includes('responsiveOk')
+    && healthSignal.includes("responsiveQaConclusion:'success'")
+    && visualWorkflow.includes('Persist responsive QA result in certified Release History')
+    && health.includes('Theme QA evidence')
+    && health.includes('Responsive QA evidence')
+    && health.includes('Certification timestamp')
+    && health.includes('data-release-entry')
+    && visualQa.includes('Certified Release History dialog did not show complete Theme QA, responsive QA, screenshot, commit/deploy, and certification evidence'),
+  'Certified Release History must persist responsive browser evidence and render exact certification, Theme QA, responsive QA, screenshot, commit, and deploy evidence.',
+);
+
 assert(
   visualQa.includes('def health_mobile_mode(browser_name,health_payload_path):')
     && visualQa.includes("headerPosition")
