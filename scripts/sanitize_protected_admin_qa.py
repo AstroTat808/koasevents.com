@@ -106,7 +106,7 @@ def main() -> int:
         output=args.safe_output.resolve()
         if output.parent != Path("/tmp"):
             raise SystemExit("ADMIN_QA_UNSAFE_OUTPUT_PATH")
-        output.write_text(serialized+"\\n",encoding="utf-8")
+        output.write_text(serialized+"\n",encoding="utf-8")
     print("[koa protected admin QA] " + serialized)
     return 0 if result.get("ok") and args.qa_exit == 0 else 1
 
