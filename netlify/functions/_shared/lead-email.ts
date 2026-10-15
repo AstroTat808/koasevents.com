@@ -68,6 +68,17 @@ function leadKind(record: LeadRecord): LeadKind {
   }
 }
 
+function lodgingLabel(value: unknown) {
+  const labels: Record<string, string> = {
+    'three-bedroom': 'Three-bedroom home (3 bed / 2 bath)',
+    'two-bedroom': 'Two-bedroom home (2 bed / 1 bath)',
+    both: 'Both homes (up to 10 overnight guests combined)',
+    either: 'Either home (flexible)',
+    'not-specified': 'Not specified',
+  };
+  return labels[String(value || 'not-specified')] || 'Not specified';
+}
+
 function heading(record: LeadRecord) {
   const kind = leadKind(record);
   if (kind === 'wedding') return 'New Wedding Inquiry';
@@ -151,6 +162,8 @@ function rowsFor(record: LeadRecord) {
     rows.push(row('Departure', formatDate(inquiry.departure)));
     rows.push(row('Guests', inquiry.guestCount));
     rows.push(row('Stay type', inquiry.stayType));
+    rows.push(row('Preferred lodging', lodgingLabel(inquiry.lodgingPreference)));
+    rows.push(row('Sleeping arrangements requested', inquiry.sleepingNeeds));
     rows.push(row('Notes', record.customer?.notes || inquiry.priorities));
     return rows.join('');
   }
@@ -317,6 +330,8 @@ function buildText(record: LeadRecord) {
       'Departure: ' + formatDate(inquiry.departure),
       'Guests: ' + (inquiry.guestCount || ''),
       'Stay type: ' + (inquiry.stayType || ''),
+      'Preferred lodging: ' + lodgingLabel(inquiry.lodgingPreference),
+      'Sleeping arrangements requested: ' + (inquiry.sleepingNeeds || ''),
       '',
       'Notes:',
       String(record.customer?.notes || inquiry.priorities || ''),
@@ -466,11 +481,12 @@ function clientConfirmationCopy(record: LeadRecord) {
       eyebrow: 'Stay inquiry received',
       title: 'We received your Stay at Koa’s request.',
       subject: 'We received your Stay at Koa’s inquiry',
-      intro: 'We received your stay request and will review the requested dates, party size, and stay type.',
+      intro: 'We received your stay request and will review the requested dates, lodging preference, overnight party size, and sleeping arrangements. This request does not reserve a home.',
       detail: [
         inquiry.arrival || record.customer?.eventDate ? 'Arrival: ' + formatDate(inquiry.arrival || record.customer?.eventDate) : '',
         inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '',
         inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : '',
+        inquiry.lodgingPreference ? 'Requested lodging: ' + lodgingLabel(inquiry.lodgingPreference) : '',
       ].filter(Boolean).join(' · '),
     };
   }
@@ -690,7 +706,7 @@ function clientFollowUpCopy(record: LeadRecord) {
       subject: 'A quick follow-up on your Stay at Koa’s inquiry',
       title: 'Just checking in on your stay request.',
       body: 'We wanted to make sure your stay request came through and let you know we still have the dates and details you shared. If your travel dates, party size, or plans have changed, reply here and send the latest information.',
-      detail: [inquiry.arrival ? 'Arrival: ' + formatDate(inquiry.arrival) : '', inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '', inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
+      detail: [inquiry.arrival ? 'Arrival: ' + formatDate(inquiry.arrival) : '', inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '', inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : '', inquiry.lodgingPreference ? 'Requested lodging: ' + lodgingLabel(inquiry.lodgingPreference) : ''].filter(Boolean).join(' · '),
     };
   }
 
