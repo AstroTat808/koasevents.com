@@ -507,7 +507,7 @@ def html_report(results):
 
 def admin_mode(browser_name):
  try:
-  from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+  from playwright.sync_api import sync_playwright, Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError
  except ImportError:
   print("Install Playwright: pip install playwright && python -m playwright install chromium",file=sys.stderr);return 2
 
@@ -524,6 +524,15 @@ def admin_mode(browser_name):
   # an otherwise-authorized QA page into a false session-expired redirect.
   def mock_authorized_shell(page):
    page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+  def navigation_race(error):
+   # A protected page's global session guard can redirect to /admin/ while
+   # Playwright is evaluating the original document. These are retried only
+   # while navigation settles; deterministic app/API failures still fail.
+   message=str(error).lower()
+   return any(marker in message for marker in (
+    "execution context was destroyed","because of a navigation",
+    "navigation in progress","frame was detached","net::err_aborted",
+   ))
   for name,path in ADMIN_ROUTES:
    page=ctx.new_page()
    page_errors=[];console_errors=[];request_failed=[]
@@ -540,9 +549,10 @@ def admin_mode(browser_name):
     # Wait for a real terminal, visible authorization state instead. A page
     # that never settles still fails closed after the bounded deadline.
     startup_timed_out=False
-    try:
-     page.wait_for_function(
-      """() => {
+    for startup_attempt in range(3):
+     try:
+      page.wait_for_function(
+       """() => {
         const visible=(el)=>{
           if(!el)return false;
           const s=getComputedStyle(el),r=el.getBoundingClientRect();
@@ -556,10 +566,16 @@ def admin_mode(browser_name):
                 '[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
         return selectors.some((selector)=>visible(document.querySelector(selector)));
       }""",
-      timeout=15000,
-     )
-    except PlaywrightTimeoutError:
-     startup_timed_out=True
+       timeout=15000,
+      )
+      break
+     except PlaywrightTimeoutError:
+      startup_timed_out=True
+      break
+     except PlaywrightError as exc:
+      if not navigation_race(exc) or startup_attempt==2:
+       raise
+      page.wait_for_timeout(200)
     if path=="/admin/crm/":
      try:
       page.wait_for_function(
@@ -578,7 +594,9 @@ def admin_mode(browser_name):
       )
      except Exception:
       pass
-    state=page.evaluate("""() => {
+    for evaluation_attempt in range(3):
+     try:
+      state=page.evaluate("""() => {
       const visible=(el)=>{
         if(!el)return false;
         const s=getComputedStyle(el),r=el.getBoundingClientRect();
@@ -593,6 +611,11 @@ def admin_mode(browser_name):
       const visibleSelectors=readySelectors.filter((selector)=>visible(document.querySelector(selector)));
       return {visibleSelectors,title:document.title,bodyText:(document.body.innerText||'').trim().slice(0,500)};
     }""")
+      break
+     except PlaywrightError as exc:
+      if not navigation_race(exc) or evaluation_attempt==2:
+       raise
+      page.wait_for_timeout(200)
     allowed_visible=bool(state.get("visibleSelectors"))
     if status>=400:
      detail=f"Document returned HTTP {status}"
