@@ -107,6 +107,8 @@ jobs:
         run: npm run build
       - name: Test inquiry security rules
         run: node --experimental-strip-types scripts/security_logic_qa.mjs
+      - name: Test stay lodging preference, dates and distinct-home CRM deduplication
+        run: npm run test:stay-lodging
       - name: Audit source structure
         run: python scripts/production_visual_qa.py --mode source
       - name: Install System Health responsive browser QA dependencies
