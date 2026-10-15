@@ -52,7 +52,7 @@ const pdf=certifiedReleasePdf(exported);
 const text=new TextDecoder().decode(pdf);
 assert(text.startsWith('%PDF-1.4\n'),'Must emit PDF bytes.');
 assert(text.includes('%%EOF'),'Must emit a valid PDF trailer.');
-assert(text.includes('Chromium / WebKit Theme QA'));
+assert(text.includes('CHROMIUM / WEBKIT THEME QA'));
 assert(text.includes(sha));
 assert(text.includes(deploy));
 assert(text.includes('390x844'));
