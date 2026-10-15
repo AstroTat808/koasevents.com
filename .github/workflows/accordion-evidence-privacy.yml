@@ -1,0 +1,27 @@
+name: Accordion evidence privacy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-privacy:
+    name: Fixed synthetic evidence never reads live Health artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test isolated capture, private credentials and strict artifact schema
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/prepare_accordion_release_evidence.py scripts/test_accordion_evidence_privacy.py
+          python -m unittest discover -s scripts -p test_accordion_evidence_privacy.py -v

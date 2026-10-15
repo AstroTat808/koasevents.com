@@ -3083,6 +3083,14 @@ export type ProductionReleaseAttestation = {
   systemHealth:{overall:string;passed:number;failed:number;checkedAt:string};
   productionGateState:string;
   source:'github-actions-oidc'|'certified-backfill';
+  accordionEvidence?:{
+    status:'passed';source:'synthetic-health-qa';commit:string;deployId:string;runId:string;
+    recordedAt:string;results:Array<{
+      key:string;browser:'chromium'|'webkit';viewport:'phone'|'desktop';
+      width:number;height:number;route:string;status:'passed';synthetic:true;
+      contentType:'image/jpeg';sha256:string;results:Record<string,boolean>;
+    }>;
+  };
 };
 
 export type ProductionRelease = {
@@ -3134,6 +3142,52 @@ function certifiedReleaseAttestationBackfill(release:ProductionRelease){
   const attestation=CERTIFIED_RELEASE_ATTESTATION_BACKFILLS[clean(release?.deployId,120)]||null;
   if(!attestation)return null;
   return clean(release?.commit,120)===attestation.expectedSha?attestation:null;
+}
+
+function accordionScreenshotStoreKey(deployId:string,key:string) {
+  const id=clean(deployId,120);
+  if(!/^[a-zA-Z0-9_-]{8,120}$/.test(id)
+      || !/^(chromium|webkit)-(phone|desktop)$/.test(String(key||''))) {
+    throw new Error('Invalid signed accordion screenshot reference.');
+  }
+  return 'deployments/accordion-evidence/screenshots/'+id+'/'+key;
+}
+
+export async function persistAccordionReleaseEvidence(context:Context,deployId:string,evidence:any){
+  if(!Array.isArray(evidence?.results)||evidence.results.length!==4
+      ||evidence?.status!=='passed'||evidence?.deployId!==deployId){
+    throw new Error('Four exact accordion QA screenshots are required before certification.');
+  }
+  const store=healthStore(context);
+  const records:any[]=[];
+  for(const row of evidence.results){
+    const key=accordionScreenshotStoreKey(deployId,row.key);
+    const stored={
+      key:row.key,browser:row.browser,viewport:row.viewport,width:row.width,height:row.height,
+      route:'/admin/health/',contentType:'image/jpeg',synthetic:true,sha256:row.sha256,
+      dataBase64:row.dataBase64,recordedAt:new Date().toISOString(),
+    };
+    await store.setJSON(key,stored);
+    const verified:any=await store.get(key,{type:'json'});
+    if(verified?.sha256!==row.sha256||verified?.dataBase64!==row.dataBase64){
+      throw new Error('Durable accordion screenshot read-after-write verification failed.');
+    }
+    const {dataBase64,...metadata}=stored;
+    records.push({...metadata,status:'passed',results:row.results});
+  }
+  return {
+    status:'passed' as const,source:'synthetic-health-qa' as const,
+    commit:evidence.commit,deployId,runId:evidence.runId,
+    recordedAt:new Date().toISOString(),results:records,
+  };
+}
+
+export async function readAccordionReleaseScreenshot(context:Context,deployId:string,key:string){
+  try{
+    const stored:any=await healthStore(context).get(accordionScreenshotStoreKey(deployId,key),{type:'json'});
+    if(!stored?.synthetic||!stored?.dataBase64||stored.key!==key)return null;
+    return stored;
+  }catch{return null;}
 }
 
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {

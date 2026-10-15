@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { validateAccordionReleaseEvidence, ACCORDION_EVIDENCE_CASES } from '../netlify/functions/_shared/accordion-release-evidence.mjs';
 import {
   evaluateProductionReleaseGate,
   isSuccessfulNetlifyState,
@@ -99,7 +101,6 @@ assert(server.includes("netlifyJson(token,'/deploys/'+encodeURIComponent(liveDep
 assert(workflow.includes('Persist certified release attestation history')
     && workflow.includes('record-production-release-attestation'),
   'A green release must persist its certified attestation and fail closed if persistence fails.');
-
 const persistStep=workflow.indexOf('      - name: Persist certified release attestation history');
 const shellStart=workflow.indexOf('        run: |\n',persistStep);
 const shellEnd=workflow.indexOf('\n  qa-summary:',shellStart);
@@ -124,5 +125,73 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
+assert(healthPage.includes("overview.dataset.releaseVerificationOverview=''")
+    && healthPage.includes('data-release-verification-fields')
+    && healthPage.includes('data-release-browser-results')
+    && healthPage.includes('card.dataset.releaseBrowser=name')
+    && healthPage.includes('exactCertification')
+    && healthPage.includes('exactVisual')
+    && healthPage.includes('exactAccordion')
+    && healthPage.includes("certification?.liveDeployId||'Not recorded'"),
+  'One Release History dialog must distinguish exact certified Netlify IDs, browser results, and four accordion screenshots without inventing missing evidence.');
+
+
+const accordionImage=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(1300,3)]);
+const accordionBase64=accordionImage.toString('base64');
+const accordionDigest=createHash('sha256').update(accordionImage).digest('hex');
+const interactions={
+  initialClosed:true,criticalInitiallyOpen:true,manuallyOpened:true,
+  manuallyClosed:true,criticalForcedOpen:true,recoveredCollapsed:true,
+};
+const expectedAccordion={
+  source:'synthetic-health-qa',commit:sha,deployId,runId:'98765',
+  results:ACCORDION_EVIDENCE_CASES.map((item)=>({
+    ...item,route:'/admin/health/',synthetic:true,status:'passed',
+    results:{...interactions},sha256:accordionDigest,dataBase64:accordionBase64,
+  })),
+};
+const validated=validateAccordionReleaseEvidence(expectedAccordion,{commit:sha,deployId,runId:'98765'});
+assert(validated.results.length===4&&validated.status==='passed',
+  'Four synthetic Chromium/WebKit phone/desktop screenshots must validate.');
+for(const invalid of [
+  {...expectedAccordion,commit:'b'.repeat(40)},
+  {...expectedAccordion,results:expectedAccordion.results.slice(1)},
+  {...expectedAccordion,results:expectedAccordion.results.map((r)=>({...r,key:'chromium-phone'}))},
+  {...expectedAccordion,results:expectedAccordion.results.map((r)=>({...r,synthetic:false}))},
+  {...expectedAccordion,results:expectedAccordion.results.map((r)=>({...r,results:{...r.results,criticalForcedOpen:false}}))},
+  {...expectedAccordion,results:expectedAccordion.results.map((r)=>({...r,dataBase64:'bad-image'}))},
+]) {
+  let rejected=false;
+  try{validateAccordionReleaseEvidence(invalid,{commit:sha,deployId,runId:'98765'});}
+  catch{rejected=true;}
+  assert(rejected,'Incomplete, mismatched, non-synthetic or failed accordion evidence was accepted.');
+}
+const accordionPrep=readFileSync('scripts/prepare_accordion_release_evidence.py','utf8');
+const healthApi=readFileSync('netlify/functions/admin-health.mts','utf8');
+const qaScript=readFileSync('scripts/production_visual_qa.py','utf8');
+assert(workflow.includes('Download exact-run synthetic System Health browser evidence')
+    &&workflow.includes('actions/download-artifact@v4')
+    &&workflow.includes('name: koa-accordion-synthetic-')
+    &&!workflow.includes('name: koa-system-health-mobile-')
+    &&workflow.includes('python scripts/prepare_accordion_release_evidence.py --collect')
+    &&workflow.includes('python scripts/prepare_accordion_release_evidence.py')
+    &&workflow.includes('payload["accordionEvidence"]')
+    &&workflow.includes('assert len(accordion.get("results") or [])==4'),
+  'Production final attestation must refuse missing exact-run accordion screenshots.');
+assert(accordionPrep.includes('accordion-synthetic')
+    &&accordionPrep.includes('staged_names')
+    &&accordionPrep.includes('no raw health snapshot staged')
+    &&accordionPrep.includes('sectionCollapse')
+    &&accordionPrep.includes('hashlib.sha256')
+    &&qaScript.includes('accordion-{viewport_name}.jpg')
+    &&qaScript.includes('SYNTHETIC SYSTEM HEALTH QA'),
+  'Release screenshots must originate from explicitly marked synthetic browser fixtures.');
+assert(server.includes('persistAccordionReleaseEvidence')
+    &&server.includes('validateAccordionReleaseEvidence')
+    &&server.includes("crypto.subtle.digest('SHA-256',bytes)")
+    &&healthShared.includes('readAccordionReleaseScreenshot')
+    &&healthApi.includes("requestUrl.searchParams.get('action')==='accordion-qa-screenshot'")
+    &&healthPage.includes('data-accordion-release-results'),
+  'Durable screenshots must be checksum-verified, access-controlled and visible in release history.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');
