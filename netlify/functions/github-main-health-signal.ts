@@ -1154,6 +1154,154 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='verify-certified-export-rejections'){
+      const workflow=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
+      const servingDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      const runtimeCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      const expectedSha=cleanText(claims?.sha,80);
+      const expectedSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      const verification:any=await readNetlifyRecoveryCredentialVerification(context).catch(()=>null);
+      const age=Date.now()-Date.parse(String(verification?.checkedAt||''));
+      // A missing runtime COMMIT_REF can only be replaced by the exact,
+      // recently verified published-deploy proof issued by the main workflow.
+      const signedPublishedProof=Boolean(
+        verification?.source==='github-actions-read-only'
+        &&verification?.configured===true&&verification?.usable===true
+        &&verification?.siteIdMatches===true&&verification?.siteId===expectedSiteId
+        &&verification?.publishedDeployVerified===true
+        &&verification?.publishedDeployId===servingDeployId
+        &&verification?.publishedDeployCommit===expectedSha
+        &&verification?.commit===expectedSha
+        &&verification?.publishedDeployContext==='production'
+        &&['ready','current'].includes(String(verification?.publishedDeployState||''))
+        &&verification?.deployDetailHttpStatus===200
+        &&Number.isFinite(age)&&age>=-120000&&age<=36*3600000
+      );
+      if(!workflow.includes('.github/workflows/production-visual-qa.yml')
+         ||claims?.ref!==MAIN_REF||!servingDeployId||!expectedSiteId
+         ||!/^[a-f0-9]{24}$/i.test(servingDeployId)
+         ||(runtimeCommit?runtimeCommit!==expectedSha:!signedPublishedProof)){
+        return Response.json({ok:false,code:'EXPORT_PROBE_IDENTITY_MISMATCH'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      // Every fixture is immutable and synthetic; no live release is read or
+      // interpreted as certified by the testing routine.
+      const {verifyCertifiedExportNegativeProbes}=await import('./_shared/certified-export-security-probe.mjs');
+      const result=verifyCertifiedExportNegativeProbes();
+      const safeCases=Array.isArray(result.cases)?result.cases:[];
+      const validCases=Boolean(safeCases.length===36
+        &&new Set(safeCases.map((row:any)=>row?.id)).size===36
+        &&safeCases.every((row:any)=>/^(PDF|JSON)_[A-Z0-9_]{4,64}$/.test(String(row?.id||''))
+          &&row?.id.startsWith(String(row?.format||'').toUpperCase()+'_')
+          &&row?.outcome==='denied')
+        &&safeCases.filter((row:any)=>row.format==='pdf').length===18
+        &&safeCases.filter((row:any)=>row.format==='json').length===18);
+      const valid=Boolean(result.ok&&result.denied===36&&result.expected===36
+        &&validCases&&JSON.stringify(result.formats)===JSON.stringify(['json','pdf']));
+      const checkedAt=new Date().toISOString();
+      const runId=cleanText(claims?.run_id||claims?.run_number||'',80);
+      const evidence={
+        status:valid?'passed' as const:'failed' as const,
+        checkedAt,commit:expectedSha,deployId:servingDeployId,runId,
+        expected:36,denied:Math.max(0,Math.floor(Number(result.denied)||0)),
+        formats:['json','pdf'] as ('json'|'pdf')[],
+        cases:validCases?safeCases.map((row:any)=>({
+          id:String(row.id),format:row.format as 'json'|'pdf',outcome:'denied' as const,
+        })):[],
+        source:'github-actions-oidc' as const,
+      };
+      try{
+        await recordProductionRelease(context,{
+          deployId:servingDeployId,commit:expectedSha,checkedAt,
+          certifiedExportSecurity:evidence,
+        });
+        const persisted=(await readProductionReleases(context,100))
+          .find((row:any)=>row?.deployId===servingDeployId&&row?.commit===expectedSha)
+          ?.certifiedExportSecurity;
+        const readbackVerified=Boolean(
+          persisted?.runId===runId&&persisted?.commit===expectedSha
+          &&persisted?.deployId===servingDeployId&&persisted?.checkedAt===checkedAt
+          &&persisted?.denied===evidence.denied
+          &&persisted?.expected===36&&persisted?.status===evidence.status
+          &&Array.isArray(persisted?.cases)&&persisted.cases.length===evidence.cases.length
+          &&JSON.stringify(persisted.cases)===JSON.stringify(evidence.cases)
+        );
+        return Response.json({
+          ok:valid&&readbackVerified,sha:expectedSha,deployId:servingDeployId,
+          denied:evidence.denied,expected:36,formats:evidence.formats,readbackVerified,
+          runId,
+        },{status:valid&&readbackVerified?200:503,
+          headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+      }catch{
+        return Response.json({ok:false,code:'EXPORT_SECURITY_RECORD_NOT_DURABLE'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='verify-certified-export-artifact-bytes'){
+      const sha=cleanText(claims?.sha,80);
+      const workflow=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
+      const deployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      const runtimeCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      const runId=cleanText(claims?.run_id,80);
+      if(claims?.ref!==MAIN_REF
+        ||!workflow.includes('.github/workflows/production-visual-qa.yml@refs/heads/main')
+        ||(runtimeCommit&&runtimeCommit!==sha)
+        ||!/^[a-f0-9]{24}$/.test(deployId)||!/^[0-9]{4,20}$/.test(runId)){
+        return Response.json({ok:false,code:'EXPORT_ATTESTATION_IDENTITY_MISMATCH'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const releases=await readProductionReleases(context,100);
+        const {buildCertifiedReleaseExport,certifiedReleasePdf}=await import('./_shared/release-attestation-export.mjs');
+        const document=buildCertifiedReleaseExport(releases,{productionCommit:sha,productionDeployId:deployId,allowPendingByteProof:true});
+        const security=document.certifiedExportSecurity||{};
+        const cases=Array.isArray(security.cases)?security.cases:[];
+        const json=JSON.stringify(document);
+        const jsonDoc=JSON.parse(json);
+        const pdf=certifiedReleasePdf(document);
+        const pdfText=new TextDecoder().decode(pdf);
+        const matches=Boolean(document.release?.commit===sha
+          &&document.release?.deployId===deployId
+          &&document.currentProduction?.matchesCertifiedRelease===true
+          &&document.certification?.status==='verified'
+          &&document.certification?.productionGate==='success'
+          &&security.status==='passed'&&security.signedEvidence===true
+          &&security.runId===runId&&security.commit===sha
+          &&security.deployId===deployId&&security.denied===36&&security.expected===36
+          &&cases.length===36&&new Set(cases.map((x:any)=>x.id)).size===36
+          &&jsonDoc.certifiedExportSecurity.cases.length===36
+          &&jsonDoc.certifiedExportSecurity.cases.every((item:any,index:number)=>item.id===cases[index].id)
+          &&pdfText.startsWith('%PDF-1.4\n')
+          &&pdfText.includes('SIGNED RESULT: 36 / 36')
+          &&cases.every((item:any)=>pdfText.includes(item.id))
+          &&pdf.byteLength>1000);
+        if(!matches)return Response.json({ok:false,code:'EXPORT_ATTESTATION_CONTENT_MISMATCH'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+        const selected=releases.find((row:any)=>row?.deployId===deployId&&row?.commit===sha);
+        if(!selected?.certifiedExportSecurity)return Response.json({ok:false,code:'EXPORT_ATTESTATION_MISSING_PROOF'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+        const verifiedAt=new Date().toISOString();
+        const byteProved={...selected.certifiedExportSecurity,
+          byteVerified:true,byteVerifiedAt:verifiedAt,byteVerifiedRunId:runId};
+        await recordProductionRelease(context,{commit:sha,deployId,checkedAt:verifiedAt,
+          certifiedExportSecurity:byteProved});
+        const readback=(await readProductionReleases(context,100)).find((row:any)=>
+          row?.deployId===deployId&&row?.commit===sha)?.certifiedExportSecurity;
+        const durable=Boolean(readback?.byteVerified===true
+          &&readback.byteVerifiedAt===verifiedAt&&readback.byteVerifiedRunId===runId
+          &&readback?.cases?.length===36&&readback?.denied===36);
+        return Response.json({
+          ok:durable,code:durable?'EXPORT_ATTESTATION_PDF_JSON_VERIFIED':'EXPORT_ATTESTATION_BYTE_PROOF_NOT_DURABLE',
+          sha,deployId,runId,caseCount:durable?36:0,pdfValidated:durable,jsonValidated:durable,
+          durableReadback:durable,
+        },{status:durable?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch{
+        return Response.json({ok:false,code:'EXPORT_ATTESTATION_NOT_CERTIFIED'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-dashboard-refresh'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){

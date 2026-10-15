@@ -73,6 +73,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
 
+        <section data-export-security-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]" aria-live="polite">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Certified export security</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">PDF / JSON denial tests</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Signed production verification rejects uncertified synthetic release evidence in both export formats. The result is retained with its exact production release.</p>
+            </div>
+            <span data-export-security-status class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Unverified</span>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <div class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.55rem] font-black uppercase text-[var(--koa-clay)]">Uncertified exports rejected</p><strong data-export-security-total class="display mt-2 block text-3xl text-[var(--koa-forest)]">— / 36</strong></div>
+            <div class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.55rem] font-black uppercase text-[var(--koa-clay)]">Protected formats</p><strong class="mt-2 block text-sm text-[var(--koa-forest)]">PDF and JSON</strong></div>
+            <div class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.55rem] font-black uppercase text-[var(--koa-clay)]">Latest signed check</p><strong data-export-security-time class="mt-2 block text-sm text-[var(--koa-forest)]">Not recorded</strong></div>
+          </div>
+          <p data-export-security-identity class="mt-3 break-all text-xs text-[var(--koa-ink)]/55">No signed result for the currently published release.</p>
+        </section>
+
         <section data-dark-mode-visual-quality data-theme-qa-card class="cursor-pointer rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -2529,8 +2546,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const prior=String(section.dataset.healthObservedStatus||'');
         if(prior===now)return;
         section.dataset.healthObservedStatus=now;
-        if(now==='red'||now==='yellow')setMobileCollapsed(section,false);
-        else if(now==='green'&&!isHealthSectionRememberedOpen(section)){
+        // Unverified export-security evidence is a visible noncritical
+        // warning, not a failed live security gate. Keep it collapsed by
+        // default even when this observer runs after the render callback.
+        const unsignedExportWarning=now==='yellow'&&section.hasAttribute('data-export-security-card');
+        if(now==='red'||(now==='yellow'&&!unsignedExportWarning)){
+          setMobileCollapsed(section,false);
+        }else if((now==='green'||unsignedExportWarning)&&!isHealthSectionRememberedOpen(section)){
           setMobileCollapsed(section,true);
         }
       });
@@ -3369,6 +3391,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         adminQaSection.appendChild(list);
       }
       releaseDetail.appendChild(adminQaSection);
+
+
+      const exportSecurity=release.certifiedExportSecurity||null;
+      const exportPassed=exportSecurity?.status==='passed'
+        &&exportSecurity?.commit===release.commit&&exportSecurity?.deployId===release.deployId
+        &&Number(exportSecurity?.denied)===36&&Number(exportSecurity?.expected)===36;
+      const exportSection=document.createElement('section');
+      exportSection.className='rounded-xl border p-4 '+(exportPassed?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+      exportSection.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Certified export security</p><p data-release-export-summary class="mt-2 text-sm font-semibold text-[var(--koa-forest)]"></p><div data-release-export-details class="mt-3 grid gap-2 text-xs sm:grid-cols-2"></div>';
+      exportSection.querySelector('[data-release-export-summary]').textContent=exportPassed
+        ?'36 of 36 synthetic uncertified PDF and JSON export requests rejected.'
+        :exportSecurity?.status==='failed'
+          ?'PDF/JSON export rejection test failed for this release.'
+          :'No matching signed PDF/JSON security evidence is stored for this release.';
+      const exportDetails=exportSection.querySelector('[data-release-export-details]');
+      [
+        ['Result',exportPassed?'Passed':String(exportSecurity?.status||'Unrecorded')],
+        ['Rejected assertions',String(exportSecurity?.denied??0)+' / '+String(exportSecurity?.expected??36)],
+        ['Checked at',exportSecurity?.checkedAt?new Date(exportSecurity.checkedAt).toLocaleString():'Not recorded'],
+        ['GitHub Actions run',String(exportSecurity?.runId||'Not recorded')],
+        ['Evidence commit',String(exportSecurity?.commit||'Not recorded')],
+        ['Netlify deployment',String(exportSecurity?.deployId||'Not recorded')],
+      ].forEach(([label,value])=>{
+        const item=document.createElement('div');
+        item.className='rounded-lg border border-black/10 bg-white/80 p-3';
+        const key=document.createElement('p');
+        key.className='text-[.52rem] font-black uppercase text-[var(--koa-clay)]';
+        key.textContent=label;
+        const val=document.createElement('p');
+        val.className='mt-1 break-all font-semibold text-[var(--koa-forest)]';
+        val.textContent=value;
+        item.append(key,val);
+        exportDetails.appendChild(item);
+      });
+      releaseDetail.appendChild(exportSection);
 
 
       const visual=release.visualQuality||null;
@@ -5217,6 +5274,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderCertifiedExportSecurity(value){
+      const evidence=value&&typeof value==='object'?value:{};
+      const verified=evidence.status==='passed'&&Number(evidence.denied)===36
+        &&Number(evidence.expected)===36&&evidence.source==='github-actions-oidc';
+      const failed=evidence.status==='failed';
+      const badge=document.querySelector('[data-export-security-status]');
+      const total=document.querySelector('[data-export-security-total]');
+      const time=document.querySelector('[data-export-security-time]');
+      const identity=document.querySelector('[data-export-security-identity]');
+      if(badge){
+        badge.textContent=verified?'Passed':failed?'Failed':'Unverified';
+        badge.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '
+          +(verified?'bg-emerald-100 text-emerald-900':failed?'bg-red-100 text-red-900':'bg-slate-100 text-slate-700');
+      }
+      if(total)total.textContent=String(evidence.denied??0)+' / 36';
+      if(time)time.textContent=evidence.checkedAt?new Date(evidence.checkedAt).toLocaleString():'Not recorded';
+      if(identity)identity.textContent=evidence.deployId
+        ?'Production commit '+String(evidence.commit||'unverified')+' · Netlify deploy '+String(evidence.deployId)
+          +' · GitHub Actions run '+String(evidence.runId||'unverified')
+        :'No matching signed export-security proof for the current production deployment.';
+      const exportPanel=document.querySelector('[data-export-security-card]');
+      setHealthSectionStatus(
+        exportPanel,
+        verified?'green':failed?'red':'yellow',
+        failed?1:0,
+        verified?'36/36 uncertified PDF/JSON exports blocked.':
+          failed?'Signed release export-security test failed.':'No signed 36-case result for the current deploy.',
+      );
+      // A missing signed result remains a visible Warning, not Good. However,
+      // unverified evidence is noncritical: keep the section collapsed until
+      // manually opened, while genuine failed tests remain force-expanded.
+      if(!verified&&!failed&&exportPanel?.dataset.mobileCollapsible==='true'
+        &&!isHealthSectionRememberedOpen(exportPanel)){
+        setMobileCollapsed(exportPanel,true);
+      }
+    }
+
     function renderDarkModeVisualQuality(visualQuality){
       const value=visualQuality&&typeof visualQuality==='object'?visualQuality:{};
       const available=String(value.status||'')!=='unavailable'&&Boolean(value.checkedAt||value.commit||value.deployId);
@@ -5503,6 +5597,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       // are isolated so one enrichment/rendering defect cannot leave Passed,
       // Failed, Overall, or Last checked at their placeholder values.
       renderDashboardPanel('Monitoring coverage',()=>renderCoverage(data.coverage||{}));
+      renderDashboardPanel('Certified PDF/JSON export security',()=>renderCertifiedExportSecurity(data.certifiedExportSecurity||{}));
       renderDashboardPanel('Dark Mode visual quality',()=>renderDarkModeVisualQuality(data.visualQuality||{}));
       renderDashboardPanel('Critical Integrations',()=>renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{}));
       renderDashboardPanel('Accounting Health',()=>renderAccountingHealth(data.accountingHealth||{},data.accountingReleaseAudits||[]));

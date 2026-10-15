@@ -23,6 +23,29 @@ const browserResponsive=(value)=>({
   criticalFailures:nat(value?.criticalCount),designAdvisories:nat(value?.designCount),
   reportMissing:value?.reportMissing===true,
 });
+function verifiedCertifiedExportSecurity(row,{allowPendingByteProof=false}={}){
+  const e=row?.certifiedExportSecurity||{},a=row?.releaseAttestation||{},cases=Array.isArray(e.cases)?e.cases:[];
+  const ids=new Set(cases.map(item=>item?.id)),checkedAt=timestamp(e.checkedAt);
+  if(e.status!=='passed'||e.source!=='github-actions-oidc'||e.commit!==row?.commit
+    ||e.deployId!==row?.deployId||!/^[0-9]+$/.test(String(e.runId||''))
+    ||String(e.runId)!==String(a.visualQaRunId||'')
+    ||e.expected!==36||e.denied!==36||!checkedAt
+    ||Date.parse(checkedAt)>Date.parse(String(a.verifiedAt||''))
+    ||!Array.isArray(e.formats)||e.formats.length!==2
+    ||!e.formats.includes('pdf')||!e.formats.includes('json')
+    ||cases.length!==36||ids.size!==36)return false;
+  // A completed release certificate is insufficient until the actual signed
+  // PDF and JSON serializer byte proof has been durably recorded.
+  if(!allowPendingByteProof&&!(e.byteVerified===true
+      &&e.byteVerifiedRunId===a.visualQaRunId
+      &&Number.isFinite(Date.parse(String(e.byteVerifiedAt||'')))
+      &&Date.parse(e.byteVerifiedAt)>=Date.parse(String(a.verifiedAt||''))))return false;
+  if(!cases.every(item=>/^(PDF|JSON)_[A-Z0-9_]{4,64}$/.test(String(item?.id||''))
+    &&item.id.startsWith(String(item.format||'').toUpperCase()+'_')
+    &&item.outcome==='denied'&&['pdf','json'].includes(item.format)))return false;
+  return cases.filter(item=>item.format==='pdf').length===18
+    &&cases.filter(item=>item.format==='json').length===18;
+}
 const DIAGNOSTIC_CASES=["severity-filter","troubleshooting-accordion","keyboard-access","copy-code","clipboard-fallback","private-field-exclusion"];
 function verifiedAdminEvidence(row){
   const q=row?.protectedAdminQa;
@@ -43,7 +66,7 @@ function validControlEvidence(q,runId){
     &&q.runId===runId&&q.webkit==='390x844'&&q.chromium==='1440x900'
     &&Array.isArray(q.cases)&&JSON.stringify(q.cases)===JSON.stringify(DIAGNOSTIC_CASES));
 }
-function isCertified(row){
+function isCertified(row,options={}){
   const a=row?.releaseAttestation||{},v=row?.visualQuality||{},r=row?.responsiveQuality||{};
   if(!sha40.test(String(row?.commit||''))||!deploy24.test(String(row?.deployId||'')))return false;
   if(a.status!=='verified'||a.productionGateState!=='success'||a.deployContext!=='production'
@@ -55,6 +78,7 @@ function isCertified(row){
   if(v.status!=='passed'||v.commit!==row.commit||v.deployId!==row.deployId||r.status!=='passed'
     ||r.commit!==row.commit||r.deployId!==row.deployId||!v.runId||!r.runId
     ||v.runId!==a.visualQaRunId||r.runId!==a.visualQaRunId)return false;
+  if(row?.certifiedExportSecurity&&!verifiedCertifiedExportSecurity(row,{allowPendingByteProof:options.allowPendingByteProof===true}))return false;
   for(const browser of ['chromium','webkit']){
     const theme=browserTheme(v[browser]),responsive=browserResponsive(r[browser]);
     if(theme.reportMissing||!theme.routes||!theme.cases||theme.failures||theme.failedRoutes
@@ -68,13 +92,28 @@ function isCertified(row){
 }
 export function buildCertifiedReleaseExport(releases,options={}){
   const rows=Array.isArray(releases)?releases:[];
-  const latest=rows.filter(isCertified).sort((a,b)=>
+  const latest=rows.filter(row=>isCertified(row,options)).sort((a,b)=>
     Date.parse(b.releaseAttestation.verifiedAt)-Date.parse(a.releaseAttestation.verifiedAt)
   )[0];
   if(!latest)throw new Error('No complete, independently certified production release is available for export.');
   const a=latest.releaseAttestation,v=latest.visualQuality,r=latest.responsiveQuality;
   const deployId=latest.deployId,commit=latest.commit;
   const signedAdmin=verifiedAdminEvidence(latest);
+  const proof=latest.certifiedExportSecurity&&verifiedCertifiedExportSecurity(latest,{allowPendingByteProof:options.allowPendingByteProof===true})
+    ?latest.certifiedExportSecurity:null;
+  // Preserve historical releases but never falsely claim they passed this newer gate.
+  const certifiedExportSecurity={
+    status:proof?'passed':'not-recorded',
+    outcome:proof?'36-of-36-denied':'historical-evidence-unavailable',
+    signedEvidence:Boolean(proof),
+    checkedAt:proof?timestamp(proof.checkedAt):null,
+    commit:proof?commit:null,deployId:proof?deployId:null,
+    runId:proof?cleaned(proof.runId,40):null,
+    denied:proof?36:null,expected:proof?36:null,
+    formats:proof?['pdf','json']:[],
+    cases:proof?proof.cases.map(item=>({id:cleaned(item.id,72),format:item.format,outcome:'denied'})):[],
+    githubRun:proof?'https://github.com/AstroTat808/koasevents.com/actions/runs/'+encodeURIComponent(proof.runId):null,
+  };
   const rawShots=new Map((Array.isArray(v.screenshots)?v.screenshots:[]).map(x=>[cleaned(x?.key,40),x]));
   const origin='https://koasevents.com';
   const screenshots=SHOTS.map(([key,title])=>{
@@ -117,6 +156,7 @@ export function buildCertifiedReleaseExport(releases,options={}){
       commit:cleaned(r.commit,80),deployId:cleaned(r.deployId,80),
       chromium:browserResponsive(r.chromium),webkit:browserResponsive(r.webkit),
     },
+    certifiedExportSecurity,
     protectedAdminQA:signedAdmin
       ?{status:signedAdmin.status,checkedAt:timestamp(signedAdmin.checkedAt),
         commit,deployId,runId:signedAdmin.runId,browser:'chromium',
@@ -202,6 +242,20 @@ function pdfPages(document){
   }
   push('Responsive commit: '+document.responsiveQA.commit);
   push('Responsive deploy: '+document.responsiveQA.deployId);
+  heading('PDF / JSON export security (36 synthetic denial checks)');
+  const security=document.certifiedExportSecurity||{};
+  if(security.signedEvidence){
+    push('SIGNED RESULT: 36 / 36 uncertified export requests denied',true);
+    push('PDF: 18 denied | JSON: 18 denied | Outcome: PASSED');
+    push('Checked: '+security.checkedAt+' | GitHub run: '+security.runId);
+    push('Exact evidence commit: '+security.commit);
+    push('Exact Netlify deploy: '+security.deployId);
+    for(const row of security.cases||[])push(String(row.format).toUpperCase()+': '+row.id+' | DENIED');
+    if(security.githubRun)push('Signed workflow: '+security.githubRun);
+  }else{
+    push('HISTORICAL: Signed 36-case PDF/JSON export security evidence was not recorded.');
+    push('No passing result is claimed for this release.');
+  }
   heading('Protected admin browser QA');
   push('Status: '+document.protectedAdminQA.status.toUpperCase());
   if(document.protectedAdminQA.status!=='not-recorded'){

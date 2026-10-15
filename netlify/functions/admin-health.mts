@@ -604,6 +604,30 @@ export async function runHealthDashboardRefresh(context:Context){
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
   const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
+  const liveDeployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'');
+  const liveCommit=String(Netlify.env.get('COMMIT_REF')||'');
+  const currentRelease=hydratedReleases.find((row:any)=>row?.deployId===liveDeployId)||null;
+  const exportAudit:any=currentRelease?.certifiedExportSecurity||null;
+  const exportIdentityMatches=Boolean(exportAudit&&exportAudit.deployId===liveDeployId
+    &&exportAudit.commit===currentRelease?.commit
+    &&(!liveCommit||exportAudit.commit===liveCommit)
+    &&exportAudit.source==='github-actions-oidc');
+  const exportSecurityPassed=Boolean(exportIdentityMatches
+    &&exportAudit.status==='passed'&&exportAudit.denied===36
+    &&exportAudit.expected===36
+    &&Array.isArray(exportAudit.formats)&&exportAudit.formats.includes('pdf')
+    &&exportAudit.formats.includes('json'));
+  const certifiedExportSecurity={
+    status:exportSecurityPassed?'passed':exportIdentityMatches&&exportAudit?.status==='failed'?'failed':'unrecorded',
+    denied:exportIdentityMatches?Math.max(0,Number(exportAudit?.denied||0)):0,
+    expected:36,
+    checkedAt:exportIdentityMatches?String(exportAudit?.checkedAt||''):'',
+    commit:exportIdentityMatches?String(exportAudit?.commit||''):'',
+    deployId:exportIdentityMatches?String(exportAudit?.deployId||''):'',
+    runId:exportIdentityMatches?String(exportAudit?.runId||''):'',
+    formats:['pdf','json'],
+    source:exportIdentityMatches?'github-actions-oidc':'unverified',
+  };
   const weeklyExecutiveSummary=await safeHealthSection(
     enrichmentWarnings,
     'Weekly executive summary',
@@ -611,7 +635,7 @@ export async function runHealthDashboardRefresh(context:Context){
     {} as any,
   );
   return {
-    ok:true,
+    ok:true,certifiedExportSecurity,
     current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,visualQuality,
     accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
     accountingReleaseAudits:accountingReleaseAudits(hydratedReleases),

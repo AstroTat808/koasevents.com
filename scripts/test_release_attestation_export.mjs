@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { buildCertifiedReleaseExport, certifiedReleasePdf } from '../netlify/functions/_shared/release-attestation-export.mjs';
+import { verifyCertifiedExportNegativeProbes } from '../netlify/functions/_shared/certified-export-security-probe.mjs';
 
 const sha='a'.repeat(40),deploy='b'.repeat(24),runId='38761414583';
 const screenshots=['light-phone','dark-phone','light-desktop','dark-desktop'].map(key=>({
@@ -49,6 +49,66 @@ for(const modified of [
 ]){
  assert.throws(()=>buildCertifiedReleaseExport([modified]),/certified/,'Incomplete evidence must never export as certified.');
 }
+// Synthetic per-assertion evidence is retained in both formats only when it
+// matches the exact signed release SHA, deploy and GitHub Actions run.
+const proofCases=verifyCertifiedExportNegativeProbes();
+assert.equal(proofCases.ok,true);
+assert.equal(proofCases.cases.length,36);
+assert.equal(new Set(proofCases.cases.map(row=>row.id)).size,36);
+const signedSecurity={
+  status:'passed',source:'github-actions-oidc',
+  checkedAt:'2026-10-15T16:30:00.000Z',commit:sha,deployId:deploy,runId,
+  expected:36,denied:36,formats:['pdf','json'],cases:proofCases.cases,
+  byteVerified:true,byteVerifiedAt:'2026-10-15T16:41:00.000Z',byteVerifiedRunId:runId,
+};
+const signedRelease={...release,certifiedExportSecurity:signedSecurity};
+const pendingSecurity={...signedSecurity,byteVerified:false};
+assert.throws(
+  ()=>buildCertifiedReleaseExport([{...release,certifiedExportSecurity:pendingSecurity}],{productionCommit:sha,productionDeployId:deploy}),
+  /certified/,'Before the serialized-byte proof, an otherwise certified release must not be exportable.',
+);
+const internalDocument=buildCertifiedReleaseExport(
+  [{...release,certifiedExportSecurity:pendingSecurity}],
+  {productionCommit:sha,productionDeployId:deploy,allowPendingByteProof:true},
+);
+assert.equal(internalDocument.certifiedExportSecurity.cases.length,36);
+const withSecurity=buildCertifiedReleaseExport([signedRelease],{productionCommit:sha,productionDeployId:deploy});
+assert.equal(withSecurity.certifiedExportSecurity.status,'passed');
+assert.equal(withSecurity.certifiedExportSecurity.signedEvidence,true);
+assert.equal(withSecurity.certifiedExportSecurity.cases.length,36);
+assert.equal(withSecurity.certifiedExportSecurity.runId,runId);
+assert.equal(withSecurity.certifiedExportSecurity.commit,sha);
+assert.equal(withSecurity.certifiedExportSecurity.deployId,deploy);
+const securityPdf=new TextDecoder().decode(certifiedReleasePdf(withSecurity));
+assert(securityPdf.includes('SIGNED RESULT: 36 / 36'));
+for(const row of proofCases.cases)assert(securityPdf.includes(row.id),'PDF must retain every synthetic assertion name.');
+assert.equal(exported.certifiedExportSecurity.status,'not-recorded','Historical evidence may not imply passed security probes.');
+assert.equal(exported.certifiedExportSecurity.signedEvidence,false);
+const historicalPdf=new TextDecoder().decode(certifiedReleasePdf(exported));
+assert(historicalPdf.includes('HISTORICAL: Signed 36-case'));
+assert(!historicalPdf.includes('SIGNED RESULT: 36 / 36'));
+for(const broken of [
+  {...signedSecurity,status:'failed'},
+  {...signedSecurity,source:'untrusted'},
+  {...signedSecurity,commit:'f'.repeat(40)},
+  {...signedSecurity,deployId:'f'.repeat(24)},
+  {...signedSecurity,runId:'other'},
+  {...signedSecurity,denied:35},
+  {...signedSecurity,expected:35},
+  {...signedSecurity,checkedAt:'2026-10-16T16:30:00.000Z'},
+  {...signedSecurity,cases:proofCases.cases.slice(1)},
+  {...signedSecurity,cases:[proofCases.cases[0],...proofCases.cases.slice(0,35)]},
+  {...signedSecurity,formats:['json']},
+  {...signedSecurity,byteVerified:false},
+  {...signedSecurity,byteVerifiedRunId:'other'},
+  {...signedSecurity,byteVerifiedAt:'2026-10-01T00:00:00.000Z'},
+])assert.throws(
+  ()=>buildCertifiedReleaseExport([{...release,certifiedExportSecurity:broken}]),
+  /certified/,'Forged, incomplete, or mismatched 36-test evidence must never export as certified.',
+);
+assert(!JSON.stringify(withSecurity).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+assert(!securityPdf.includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+
 // Permanent security contract: both output formats share the same certified-only gate.
 const handler=readFileSync(new URL('../netlify/functions/admin-health.mts',import.meta.url),'utf8');
 const start=handler.indexOf("if(url.searchParams.get('export')==='certified-release')");
@@ -89,31 +149,31 @@ const adminQa={
  checkedAt:'2026-10-15T16:36:00Z',commit:sha,deployId:deploy,runId,checkedCount:42,
  failureCount:0,failures:[],code:null
 };
-const signedRelease={...release,protectedAdminQa:adminQa,
+const adminControlRelease={...release,protectedAdminQa:adminQa,
  releaseAttestation:{...release.releaseAttestation,healthControlsQA:healthControls}};
-const signed=buildCertifiedReleaseExport([signedRelease],{productionCommit:sha,productionDeployId:deploy});
-assert.equal(signed.protectedAdminQA.status,'passed');
-assert.equal(signed.protectedAdminQA.failureCount,0);
-assert.equal(signed.protectedAdminQA.runId,runId);
-assert.equal(signed.systemHealthControlsQA.status,'passed');
-assert.equal(signed.systemHealthControlsQA.webkit,'390x844');
-assert.equal(signed.systemHealthControlsQA.chromium,'1440x900');
-assert.deepEqual(signed.systemHealthControlsQA.checks,healthControls.cases);
-const signedPdf=new TextDecoder().decode(certifiedReleasePdf(signed));
-assert(signedPdf.includes('PROTECTED ADMIN BROWSER QA'));
-assert(signedPdf.includes('SYSTEM HEALTH DIAGNOSTIC CONTROLS'));
-assert(signedPdf.includes('WEBKIT IPHONE 390X844')||signedPdf.includes('WebKit iPhone 390x844'));
-assert(!JSON.stringify(signed).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+const adminControlExport=buildCertifiedReleaseExport([adminControlRelease],{productionCommit:sha,productionDeployId:deploy});
+assert.equal(adminControlExport.protectedAdminQA.status,'passed');
+assert.equal(adminControlExport.protectedAdminQA.failureCount,0);
+assert.equal(adminControlExport.protectedAdminQA.runId,runId);
+assert.equal(adminControlExport.systemHealthControlsQA.status,'passed');
+assert.equal(adminControlExport.systemHealthControlsQA.webkit,'390x844');
+assert.equal(adminControlExport.systemHealthControlsQA.chromium,'1440x900');
+assert.deepEqual(adminControlExport.systemHealthControlsQA.checks,healthControls.cases);
+const adminControlPdf=new TextDecoder().decode(certifiedReleasePdf(adminControlExport));
+assert(adminControlPdf.includes('PROTECTED ADMIN BROWSER QA'));
+assert(adminControlPdf.includes('SYSTEM HEALTH DIAGNOSTIC CONTROLS'));
+assert(adminControlPdf.includes('WEBKIT IPHONE 390X844')||adminControlPdf.includes('WebKit iPhone 390x844'));
+assert(!JSON.stringify(adminControlExport).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
 for(const bad of [
- {...signedRelease,protectedAdminQa:{...adminQa,commit:'c'.repeat(40)}},
- {...signedRelease,protectedAdminQa:{...adminQa,status:'failed',failureCount:1,
+ {...adminControlRelease,protectedAdminQa:{...adminQa,commit:'c'.repeat(40)}},
+ {...adminControlRelease,protectedAdminQa:{...adminQa,status:'failed',failureCount:1,
   failures:[{route:'admin-health',code:'ADMIN_QA_CLIENT_EXCEPTION'}]}},
- {...signedRelease,protectedAdminQa:{...adminQa,failures:[{route:'CUSTOMER_EMAIL',code:'ADMIN_QA_TIMEOUT'}]}},
- {...signedRelease,releaseAttestation:{...signedRelease.releaseAttestation,
+ {...adminControlRelease,protectedAdminQa:{...adminQa,failures:[{route:'CUSTOMER_EMAIL',code:'ADMIN_QA_TIMEOUT'}]}},
+ {...adminControlRelease,releaseAttestation:{...adminControlRelease.releaseAttestation,
   healthControlsQA:{...healthControls,runId:'123'}}},
- {...signedRelease,releaseAttestation:{...signedRelease.releaseAttestation,
+ {...adminControlRelease,releaseAttestation:{...adminControlRelease.releaseAttestation,
   healthControlsQA:{...healthControls,webkit:'unverified'}}},
- {...signedRelease,protectedAdminQa:undefined},
+ {...adminControlRelease,protectedAdminQa:undefined},
 ])assert.throws(()=>buildCertifiedReleaseExport([bad]),/certified/,
  'Unsafe, mismatched or missing protected-admin/control QA must never be exported as certified.');
 assert.equal(exported.protectedAdminQA.status,'not-recorded');
