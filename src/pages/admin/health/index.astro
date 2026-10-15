@@ -5141,13 +5141,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ?'Production commit '+String(evidence.commit||'unverified')+' · Netlify deploy '+String(evidence.deployId)
           +' · GitHub Actions run '+String(evidence.runId||'unverified')
         :'No matching signed export-security proof for the current production deployment.';
+      const exportPanel=document.querySelector('[data-export-security-card]');
       setHealthSectionStatus(
-        document.querySelector('[data-export-security-card]'),
+        exportPanel,
         verified?'green':failed?'red':'yellow',
         failed?1:0,
         verified?'36/36 uncertified PDF/JSON exports blocked.':
           failed?'Signed release export-security test failed.':'No signed 36-case result for the current deploy.',
       );
+      // A missing signed result remains a visible Warning, not Good. However,
+      // unverified evidence is noncritical: keep the section collapsed until
+      // manually opened, while genuine failed tests remain force-expanded.
+      if(!verified&&!failed&&exportPanel?.dataset.mobileCollapsible==='true'
+        &&!isHealthSectionRememberedOpen(exportPanel)){
+        setMobileCollapsed(exportPanel,true);
+      }
     }
 
     function renderDarkModeVisualQuality(visualQuality){
