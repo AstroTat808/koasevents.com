@@ -59,8 +59,19 @@ const signedSecurity={
   status:'passed',source:'github-actions-oidc',
   checkedAt:'2026-10-15T16:30:00.000Z',commit:sha,deployId:deploy,runId,
   expected:36,denied:36,formats:['pdf','json'],cases:proofCases.cases,
+  byteVerified:true,byteVerifiedAt:'2026-10-15T16:41:00.000Z',byteVerifiedRunId:runId,
 };
 const signedRelease={...release,certifiedExportSecurity:signedSecurity};
+const pendingSecurity={...signedSecurity,byteVerified:false};
+assert.throws(
+  ()=>buildCertifiedReleaseExport([{...release,certifiedExportSecurity:pendingSecurity}],{productionCommit:sha,productionDeployId:deploy}),
+  /certified/,'Before the serialized-byte proof, an otherwise certified release must not be exportable.',
+);
+const internalDocument=buildCertifiedReleaseExport(
+  [{...release,certifiedExportSecurity:pendingSecurity}],
+  {productionCommit:sha,productionDeployId:deploy,allowPendingByteProof:true},
+);
+assert.equal(internalDocument.certifiedExportSecurity.cases.length,36);
 const withSecurity=buildCertifiedReleaseExport([signedRelease],{productionCommit:sha,productionDeployId:deploy});
 assert.equal(withSecurity.certifiedExportSecurity.status,'passed');
 assert.equal(withSecurity.certifiedExportSecurity.signedEvidence,true);
@@ -88,6 +99,9 @@ for(const broken of [
   {...signedSecurity,cases:proofCases.cases.slice(1)},
   {...signedSecurity,cases:[proofCases.cases[0],...proofCases.cases.slice(0,35)]},
   {...signedSecurity,formats:['json']},
+  {...signedSecurity,byteVerified:false},
+  {...signedSecurity,byteVerifiedRunId:'other'},
+  {...signedSecurity,byteVerifiedAt:'2026-10-01T00:00:00.000Z'},
 ])assert.throws(
   ()=>buildCertifiedReleaseExport([{...release,certifiedExportSecurity:broken}]),
   /certified/,'Forged, incomplete, or mismatched 36-test evidence must never export as certified.',
