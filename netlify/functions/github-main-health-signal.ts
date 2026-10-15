@@ -8,6 +8,7 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
+  readNetlifyRecoveryCredentialVerification,
   recordGithubMainSignal,
   recordNetlifyRecoveryCredentialVerification,
   recordProductionRelease,
@@ -1047,19 +1048,71 @@ export default async (req:Request,context:Context) => {
       const workflow=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
       const servingDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
       const runtimeCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
-      // Only exact main Production QA can run the bundled, immutable synthetic probes.
+      const expectedSha=cleanText(claims?.sha,80);
+      const expectedSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      const verification:any=await readNetlifyRecoveryCredentialVerification(context).catch(()=>null);
+      const age=Date.now()-Date.parse(String(verification?.checkedAt||''));
+      // A missing runtime COMMIT_REF can only be replaced by the exact,
+      // recently verified published-deploy proof issued by the main workflow.
+      const signedPublishedProof=Boolean(
+        verification?.source==='github-actions-read-only'
+        &&verification?.configured===true&&verification?.usable===true
+        &&verification?.siteIdMatches===true&&verification?.siteId===expectedSiteId
+        &&verification?.publishedDeployVerified===true
+        &&verification?.publishedDeployId===servingDeployId
+        &&verification?.publishedDeployCommit===expectedSha
+        &&verification?.commit===expectedSha
+        &&verification?.publishedDeployContext==='production'
+        &&['ready','current'].includes(String(verification?.publishedDeployState||''))
+        &&verification?.deployDetailHttpStatus===200
+        &&Number.isFinite(age)&&age>=-120000&&age<=36*3600000
+      );
       if(!workflow.includes('.github/workflows/production-visual-qa.yml')
-         ||claims?.ref!==MAIN_REF || !servingDeployId
-         ||(runtimeCommit&&runtimeCommit!==claims.sha)){
+         ||claims?.ref!==MAIN_REF||!servingDeployId||!expectedSiteId
+         ||!/^[a-f0-9]{24}$/i.test(servingDeployId)
+         ||(runtimeCommit?runtimeCommit!==expectedSha:!signedPublishedProof)){
         return Response.json({ok:false,code:'EXPORT_PROBE_IDENTITY_MISMATCH'},
           {status:409,headers:{'Cache-Control':'no-store'}});
       }
+      // Every fixture is immutable and synthetic; no live release is read or
+      // interpreted as certified by the testing routine.
       const {verifyCertifiedExportNegativeProbes}=await import('./_shared/certified-export-security-probe.mjs');
       const result=verifyCertifiedExportNegativeProbes();
-      return Response.json({
-        ok:result.ok,sha:claims.sha,deployId:servingDeployId,
-        denied:result.denied,expected:result.expected,formats:result.formats,
-      },{status:result.ok?200:503,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+      const valid=Boolean(result.ok&&result.denied===36&&result.expected===36
+        &&JSON.stringify(result.formats)===JSON.stringify(['json','pdf']));
+      const checkedAt=new Date().toISOString();
+      const runId=cleanText(claims?.run_id||claims?.run_number||'',80);
+      const evidence={
+        status:valid?'passed' as const:'failed' as const,
+        checkedAt,commit:expectedSha,deployId:servingDeployId,runId,
+        expected:36,denied:Math.max(0,Math.floor(Number(result.denied)||0)),
+        formats:['json','pdf'] as ('json'|'pdf')[],
+        source:'github-actions-oidc' as const,
+      };
+      try{
+        await recordProductionRelease(context,{
+          deployId:servingDeployId,commit:expectedSha,checkedAt,
+          certifiedExportSecurity:evidence,
+        });
+        const persisted=(await readProductionReleases(context,100))
+          .find((row:any)=>row?.deployId===servingDeployId&&row?.commit===expectedSha)
+          ?.certifiedExportSecurity;
+        const readbackVerified=Boolean(
+          persisted?.runId===runId&&persisted?.commit===expectedSha
+          &&persisted?.deployId===servingDeployId&&persisted?.checkedAt===checkedAt
+          &&persisted?.denied===evidence.denied
+          &&persisted?.expected===36&&persisted?.status===evidence.status
+        );
+        return Response.json({
+          ok:valid&&readbackVerified,sha:expectedSha,deployId:servingDeployId,
+          denied:evidence.denied,expected:36,formats:evidence.formats,readbackVerified,
+          runId,
+        },{status:valid&&readbackVerified?200:503,
+          headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+      }catch{
+        return Response.json({ok:false,code:'EXPORT_SECURITY_RECORD_NOT_DURABLE'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+      }
     }
 
     if(body?.action==='run-dashboard-refresh'){
