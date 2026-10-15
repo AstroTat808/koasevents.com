@@ -9,6 +9,8 @@ import {
   requestUserAgent,
   sendSuspiciousLoginAlert,
   TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
+  REMEMBER_SESSION_MAX_AGE_SECONDS,
+  REMEMBER_SESSION_COOKIE,
 } from './_shared/auth-security';
 import { ipFingerprint } from './_shared/security';
 
@@ -58,7 +60,7 @@ export default async(req:Request,context:Context)=>{
       userId:clean(user.id,160),
       deviceFingerprint,
     });
-    const session=await registerManagedSession(req,user);
+    const session=await registerManagedSession(req,user,{remember:body.remember===true});
     const createdAt=new Date().toISOString();
 
     let alert:{sent:boolean;suppressed:boolean;error?:string;reason?:string;lastSentAt?:string}={
@@ -116,6 +118,7 @@ export default async(req:Request,context:Context)=>{
       session,
     });
     if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
+    response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'='+(body.remember===true?'1':'')+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+(body.remember===true?REMEMBER_SESSION_MAX_AGE_SECONDS:0));
     return response;
   }
 

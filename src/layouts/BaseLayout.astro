@@ -381,7 +381,6 @@ const seoSchema = {
           window.__koaAdminSessionRedirecting = true;
           window.location.replace(loginUrl.pathname + loginUrl.search);
         };
-
         const sameOriginApiUrl = (input) => {
           try {
             const raw = typeof input === 'string'
@@ -398,24 +397,57 @@ const seoSchema = {
         };
 
         const originalFetch = window.fetch.bind(window);
+        let verificationInFlight = null;
+        const readAuthCode = async (response) => {
+          try { return String((await response.clone().json())?.code || ''); }
+          catch { return ''; }
+        };
+        // Never treat an endpoint-specific 401 as proof that Identity expired.
+        // Verify the authoritative workspace session, then attempt one Identity
+        // refresh before redirecting. Share the probe across simultaneous requests.
+        const verifySession = () => {
+          if (verificationInFlight) return verificationInFlight;
+          verificationInFlight = (async () => {
+            try {
+              const probe = () => originalFetch('/api/admin/session', {cache:'no-store',credentials:'same-origin'});
+              let session = await probe();
+              if (session.ok) return {active:true,refreshed:false};
+              if (session.status !== 401) return {active:null,refreshed:false};
+              if (await readAuthCode(session) === 'session_revoked') return {active:false,refreshed:false};
+
+              const refresh = await originalFetch('/api/auth/session-refresh', {
+                method:'POST',cache:'no-store',credentials:'same-origin',
+                headers:{'Content-Type':'application/json'},body:'{}',
+              });
+              if (refresh.ok) {
+                session = await probe();
+                if (session.ok) return {active:true,refreshed:true};
+              }
+              const code = await readAuthCode(session);
+              if (session.status === 401 && ['unauthenticated','session_revoked'].includes(code))
+                return {active:false,refreshed:false};
+              return {active:null,refreshed:false};
+            } catch {
+              // Network failures are not evidence that the user was signed out.
+              return {active:null,refreshed:false};
+            }
+          })().finally(() => { verificationInFlight = null; });
+          return verificationInFlight;
+        };
         window.fetch = async (...args) => {
           const response = await originalFetch(...args);
           const requestUrl = sameOriginApiUrl(args[0]);
+          if (!requestUrl || response.status !== 401 ||
+              requestUrl.pathname === '/api/auth/session-refresh') return response;
 
-          if (requestUrl && response.status === 401) {
-            redirectToLogin();
-            return response;
+          const verdict = await verifySession();
+          if (verdict.active === false) redirectToLogin();
+          // Replay only safe, idempotent reads after a successful refresh.
+          // Never repeat mutations without the caller deciding what to do.
+          const method = String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
+          if (verdict.active === true && verdict.refreshed && ['GET','HEAD'].includes(method)) {
+            try { return await originalFetch(...args); } catch { return response; }
           }
-
-          if (requestUrl?.pathname === '/api/admin/session' && response.ok) {
-            try {
-              const session = await response.clone().json();
-              if (session?.accessBlocked && session?.blockReason === 'session_revoked') {
-                redirectToLogin();
-              }
-            } catch {}
-          }
-
           return response;
         };
       })();
