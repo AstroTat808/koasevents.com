@@ -90,6 +90,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--qa-exit", type=int, default=0)
+    parser.add_argument("--safe-output", type=Path)
     args = parser.parse_args()
     try:
         result = summarize(json.loads(args.report.read_text(encoding="utf-8")))
@@ -98,7 +99,15 @@ def main() -> int:
     # Only the JSON produced from hard-coded allowlists is ever printed.
     if args.qa_exit != 0 and result.get("ok") is True:
         result = {"ok": False, "code": "ADMIN_QA_UNEXPECTED_PROCESS_FAILURE", "failures": []}
-    print("[koa protected admin QA] " + json.dumps(result, sort_keys=True, separators=(",", ":")))
+    serialized=json.dumps(result, sort_keys=True, separators=(",", ":"))
+    if args.safe_output:
+        # The output never contains raw URLs, response bodies or browser diagnostics.
+        # Only use the designated temporary location, never a retained artifact.
+        output=args.safe_output.resolve()
+        if output.parent != Path("/tmp"):
+            raise SystemExit("ADMIN_QA_UNSAFE_OUTPUT_PATH")
+        output.write_text(serialized+"\\n",encoding="utf-8")
+    print("[koa protected admin QA] " + serialized)
     return 0 if result.get("ok") and args.qa_exit == 0 else 1
 
 if __name__ == "__main__":
