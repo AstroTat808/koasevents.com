@@ -590,6 +590,26 @@ export default async (req: Request, context: Context) => {
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
+  // Lodging preferences are recorded as requests, not inventory holds or reservations.
+  // Do not silently truncate oversize party counts, invalid date ranges, or unknown units.
+  if (formName === 'koa-stay-inquiry') {
+    const preference = cleanText(payload.inquiry?.lodgingPreference, 40) || 'not-specified';
+    if (!['three-bedroom', 'two-bedroom', 'both', 'either', 'not-specified'].includes(preference)) {
+      return json(req, { error: 'Choose a valid lodging option.' }, 400);
+    }
+    const partySize = Number(payload.inquiry?.guestCount);
+    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 10) {
+      return json(req, { error: 'Overnight guests must be between 1 and 10.' }, 400);
+    }
+    const arrival = cleanText(payload.inquiry?.arrival, 40);
+    const departure = cleanText(payload.inquiry?.departure, 40);
+    const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
+      && !Number.isNaN(Date.parse(value))
+      && new Date(value).toISOString().slice(0, 10) === value;
+    if (!isDate(arrival) || !isDate(departure) || departure <= arrival) {
+      return json(req, { error: 'A valid departure date after arrival is required.' }, 400);
+    }
+  }
   const store = salesStoreFor(context, req);
   const businessLine = formName.startsWith('wild-ones-')
     ? 'wild-ones'
@@ -665,6 +685,10 @@ export default async (req: Request, context: Context) => {
       arrival: cleanText(payload.inquiry?.arrival, 40),
       departure: cleanText(payload.inquiry?.departure, 40),
       stayType: cleanText(payload.inquiry?.stayType, 120),
+      lodgingPreference: formName === 'koa-stay-inquiry'
+        ? (cleanText(payload.inquiry?.lodgingPreference, 40) || 'not-specified') : '',
+      sleepingNeeds: formName === 'koa-stay-inquiry'
+        ? cleanText(payload.inquiry?.sleepingNeeds, 1000) : '',
       planningFrom: cleanText(payload.inquiry?.planningFrom, 160),
       barStyle: cleanText(payload.inquiry?.barStyle, 160),
       venueTour: cleanText(payload.inquiry?.venueTour, 160),
@@ -811,6 +835,9 @@ export default async (req: Request, context: Context) => {
       if (!entry || entry.source !== formName) return false;
       if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
+      // Two different homes requested for the same travel dates are distinct leads.
+      if (formName === 'koa-stay-inquiry' &&
+          String(entry.inquiry?.lodgingPreference || 'not-specified') !== record.inquiry.lodgingPreference) return false;
       if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
       const createdAt = Date.parse(String(entry.createdAt || ''));
       return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;
