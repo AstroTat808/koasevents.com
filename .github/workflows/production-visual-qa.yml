@@ -156,6 +156,19 @@ jobs:
             exit 1
           fi
           python scripts/test_accommodations_responsive.py --base-url http://127.0.0.1:4178
+      - name: Diagnose protected admin startup on live production without exposing payloads
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-pr-private.log 2>&1; then
+            echo 'PASS | protected-admin production startup and authorization contracts.'
+          else
+            result=$?
+            node scripts/safe_protected_admin_qa_report.mjs visual-results/admin-chromium/report.json || true
+            echo '::error::Protected-admin startup evidence failed; sensitive details withheld.'
+            exit "$result"
+          fi
       - name: Verify site-wide Light / Dark / System themes in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
@@ -689,6 +702,9 @@ jobs:
             echo 'Authenticated browser audit passed; private output withheld.'
           else
             result=$?
+            # The parser prints only fixed, allowlisted QA case IDs and error codes.
+            # Never echo the private browser log, customer responses, or screenshots.
+            node scripts/safe_protected_admin_qa_report.mjs visual-results/admin-chromium/report.json || true
             echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
             exit "$result"
           fi
