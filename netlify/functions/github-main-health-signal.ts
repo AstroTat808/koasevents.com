@@ -1078,8 +1078,16 @@ export default async (req:Request,context:Context) => {
       // interpreted as certified by the testing routine.
       const {verifyCertifiedExportNegativeProbes}=await import('./_shared/certified-export-security-probe.mjs');
       const result=verifyCertifiedExportNegativeProbes();
+      const safeCases=Array.isArray(result.cases)?result.cases:[];
+      const validCases=Boolean(safeCases.length===36
+        &&new Set(safeCases.map((row:any)=>row?.id)).size===36
+        &&safeCases.every((row:any)=>/^(PDF|JSON)_[A-Z0-9_]{4,64}$/.test(String(row?.id||''))
+          &&row?.id.startsWith(String(row?.format||'').toUpperCase()+'_')
+          &&row?.outcome==='denied')
+        &&safeCases.filter((row:any)=>row.format==='pdf').length===18
+        &&safeCases.filter((row:any)=>row.format==='json').length===18);
       const valid=Boolean(result.ok&&result.denied===36&&result.expected===36
-        &&JSON.stringify(result.formats)===JSON.stringify(['json','pdf']));
+        &&validCases&&JSON.stringify(result.formats)===JSON.stringify(['json','pdf']));
       const checkedAt=new Date().toISOString();
       const runId=cleanText(claims?.run_id||claims?.run_number||'',80);
       const evidence={
@@ -1087,6 +1095,9 @@ export default async (req:Request,context:Context) => {
         checkedAt,commit:expectedSha,deployId:servingDeployId,runId,
         expected:36,denied:Math.max(0,Math.floor(Number(result.denied)||0)),
         formats:['json','pdf'] as ('json'|'pdf')[],
+        cases:validCases?safeCases.map((row:any)=>({
+          id:String(row.id),format:row.format as 'json'|'pdf',outcome:'denied' as const,
+        })):[],
         source:'github-actions-oidc' as const,
       };
       try{
@@ -1102,6 +1113,8 @@ export default async (req:Request,context:Context) => {
           &&persisted?.deployId===servingDeployId&&persisted?.checkedAt===checkedAt
           &&persisted?.denied===evidence.denied
           &&persisted?.expected===36&&persisted?.status===evidence.status
+          &&Array.isArray(persisted?.cases)&&persisted.cases.length===evidence.cases.length
+          &&JSON.stringify(persisted.cases)===JSON.stringify(evidence.cases)
         );
         return Response.json({
           ok:valid&&readbackVerified,sha:expectedSha,deployId:servingDeployId,
