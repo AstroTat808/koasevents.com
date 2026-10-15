@@ -14,7 +14,7 @@ for(const required of [
   'data-health-safe-diagnostics', 'data-health-safe-copy-code',
   'data-health-safe-copy-status', 'role="status"', 'aria-live="polite"',
   'healthSafeCopyCode?.addEventListener(\'click\'',
-  'navigator.clipboard?.writeText(code)', "document.execCommand('copy')",
+  'navigator.clipboard.writeText(code)', "document.execCommand('copy')",
   'healthSafeCopyCode.dataset.diagnosticCode=safe?.errorCode',
   "healthSafeCopyStatus.textContent=copied",
 ]){
