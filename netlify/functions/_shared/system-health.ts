@@ -3142,6 +3142,9 @@ export type ProductionCertifiedExportSecurity = {
   denied:number;
   formats:('pdf'|'json')[];
   cases?:{id:string;format:'pdf'|'json';outcome:'denied'}[];
+  byteVerified?:boolean;
+  byteVerifiedAt?:string;
+  byteVerifiedRunId?:string;
   source:'github-actions-oidc';
 };
 
