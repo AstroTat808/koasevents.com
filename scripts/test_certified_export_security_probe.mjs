@@ -39,10 +39,15 @@ for(const needle of [
 assert(dashboard.includes('certifiedExportSecurity')&&ui.includes('data-export-security-total')
   &&ui.includes('release.certifiedExportSecurity||null'),
   'Current System Health and permanent Release History must both render the retained evidence.');
-assert(exportModule.includes('verifiedCertifiedExportSecurity(row)')
+assert(exportModule.includes('verifiedCertifiedExportSecurity(row')
   &&exportModule.includes('heading(\'PDF / JSON export security')
   &&exportModule.includes('certifiedExportSecurity,'),
   'PDF and JSON certified exports must include the same exact signed 36-case manifest.');
+assert(exportModule.includes('allowPendingByteProof')&&exportModule.includes('e.byteVerified===true')
+  &&signal.includes('byteVerifiedAt:verifiedAt')
+  &&signal.includes('const durable=Boolean(')
+  &&certifiedBytes.includes('result.durableReadback!==true'),
+  'Certified export availability must be gated by a durable signed byte-proof readback.');
 assert(workflow.includes('Verify actual certified PDF and JSON serializer bytes')
   &&workflow.includes('node scripts/verify_live_certified_export_bytes.mjs')
   &&certifiedBytes.includes("verify-certified-export-artifact-bytes")
