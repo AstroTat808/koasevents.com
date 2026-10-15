@@ -403,6 +403,9 @@ jobs:
           PY
           rm -f "$verification_file"
           test "$http_status" = "200"
+      - name: Verify live uncertified PDF and JSON exports are rejected
+        if: github.event_name == 'push'
+        run: node scripts/verify_live_certified_export_rejections.mjs
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
