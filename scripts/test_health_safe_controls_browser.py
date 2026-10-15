@@ -53,13 +53,19 @@ def run(browser_name,base_url,width,height):
             assert response and response.status==200,"Synthetic Health page must load"
             page.wait_for_selector("[data-app]:not(.hidden)",timeout=12000)
             page.wait_for_function("() => document.querySelectorAll('[data-results] button').length === 3",timeout=12000)
-            container=page.locator("[data-results]").locator("xpath=ancestor::section[1]")
-            if container.get_attribute("data-mobile-collapsed")=="true":
-                container.locator("[data-mobile-collapse-toggle]").click()
+            container=page.locator("[data-results]").locator("xpath=ancestor::*[@data-mobile-collapsible][1]")
+            if container.count() and container.get_attribute("data-mobile-collapsed")=="true":
+                container.locator("[data-mobile-collapse-toggle]").first.click()
+                page.wait_for_function("""() => {
+                    const el=document.querySelector('[data-results]')?.closest('[data-mobile-collapsible]');
+                    return el?.dataset.mobileCollapsed==='false';
+                }""",timeout=5000)
             selector=page.locator("[data-health-severity-filter]")
             selector.select_option("critical")
             assert page.locator("[data-results] button").count()==1,"Critical filter count"
-            assert "Critical" in page.locator("[data-results] button").first.inner_text(),"Critical severity label"
+            card=page.locator("[data-results] button").first
+            assert card.get_attribute("data-health-severity")=="critical","Critical severity card metadata"
+            assert card.is_visible(),"Critical card must be visible after expanding Health section"
             page.locator("[data-results] button").first.click()
             dialog=page.locator("[data-health-detail-dialog]")
             assert dialog.evaluate("(el) => el.open"),"Diagnostic dialog must open"
