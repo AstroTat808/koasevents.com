@@ -15,7 +15,7 @@ import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
-import { signedPublishedCredentialMatches, recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
+import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
