@@ -24,7 +24,8 @@ function rawCookieValue(req:Request,name:string){
 }
 function sameOrigin(req:Request){
   const origin=clean(req.headers.get('origin'),300);
-  return !origin||origin==='https://koasevents.com'||origin==='https://www.koasevents.com';
+  if(!origin)return true;
+  try{return new URL(origin).origin===new URL(req.url).origin;}catch{return false;}
 }
 
 export default async(req:Request,context:Context)=>{
