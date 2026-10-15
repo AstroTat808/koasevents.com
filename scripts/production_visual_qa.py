@@ -507,7 +507,7 @@ def html_report(results):
 
 def admin_mode(browser_name):
  try:
-  from playwright.sync_api import sync_playwright
+  from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
  except ImportError:
   print("Install Playwright: pip install playwright && python -m playwright install chromium",file=sys.stderr);return 2
 
@@ -534,7 +534,28 @@ def admin_mode(browser_name):
    try:
     response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
     status=response.status if response else 0
-    page.wait_for_timeout(800)
+    # The protected admin shells intentionally hide both authorized and denied
+    # panels while /api/admin/session resolves. A fixed 800ms delay reported
+    # false production failures on large CRM bundles and cold Netlify sessions.
+    # Wait for a real terminal, visible authorization state instead. A page
+    # that never settles still fails closed after the bounded deadline.
+    startup_timed_out=False
+    try:
+     page.wait_for_function(
+      """() => {
+        const visible=(el)=>{
+          if(!el)return false;
+          const s=getComputedStyle(el),r=el.getBoundingClientRect();
+          return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
+        };
+        const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]',
+          '[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
+        return selectors.some((selector)=>visible(document.querySelector(selector)));
+      }""",
+      timeout=15000,
+     )
+    except PlaywrightTimeoutError:
+     startup_timed_out=True
     if path=="/admin/crm/":
      try:
       page.wait_for_function(
@@ -569,7 +590,9 @@ def admin_mode(browser_name):
     elif page_errors:
      detail="JavaScript page errors: "+" | ".join(page_errors[:5])
     elif not allowed_visible:
-     detail="No visible admin UI, login, role-warning, or unauthorized state after startup."
+     detail=("Admin startup timed out before a visible authorized or denied state."
+             if startup_timed_out else
+             "No visible admin UI, login, role-warning, or unauthorized state after startup.")
     if detail:
      failures.append({"route":path,"detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
    except Exception as exc:
