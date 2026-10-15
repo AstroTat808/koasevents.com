@@ -1181,7 +1181,7 @@ export default async (req:Request,context:Context) => {
       try{
         const releases=await readProductionReleases(context,100);
         const {buildCertifiedReleaseExport,certifiedReleasePdf}=await import('./_shared/release-attestation-export.mjs');
-        const document=buildCertifiedReleaseExport(releases,{productionCommit:sha,productionDeployId:deployId});
+        const document=buildCertifiedReleaseExport(releases,{productionCommit:sha,productionDeployId:deployId,allowPendingByteProof:true});
         const security=document.certifiedExportSecurity||{};
         const cases=Array.isArray(security.cases)?security.cases:[];
         const json=JSON.stringify(document);
@@ -1203,10 +1203,26 @@ export default async (req:Request,context:Context) => {
           &&pdfText.includes('SIGNED RESULT: 36 / 36')
           &&cases.every((item:any)=>pdfText.includes(item.id))
           &&pdf.byteLength>1000);
+        if(!matches)return Response.json({ok:false,code:'EXPORT_ATTESTATION_CONTENT_MISMATCH'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+        const selected=releases.find((row:any)=>row?.deployId===deployId&&row?.commit===sha);
+        if(!selected?.certifiedExportSecurity)return Response.json({ok:false,code:'EXPORT_ATTESTATION_MISSING_PROOF'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+        const verifiedAt=new Date().toISOString();
+        const byteProved={...selected.certifiedExportSecurity,
+          byteVerified:true,byteVerifiedAt:verifiedAt,byteVerifiedRunId:runId};
+        await recordProductionRelease(context,{commit:sha,deployId,checkedAt:verifiedAt,
+          certifiedExportSecurity:byteProved});
+        const readback=(await readProductionReleases(context,100)).find((row:any)=>
+          row?.deployId===deployId&&row?.commit===sha)?.certifiedExportSecurity;
+        const durable=Boolean(readback?.byteVerified===true
+          &&readback.byteVerifiedAt===verifiedAt&&readback.byteVerifiedRunId===runId
+          &&readback?.cases?.length===36&&readback?.denied===36);
         return Response.json({
-          ok:matches,code:matches?'EXPORT_ATTESTATION_PDF_JSON_VERIFIED':'EXPORT_ATTESTATION_CONTENT_MISMATCH',
-          sha,deployId,runId,caseCount:matches?36:0,pdfValidated:matches,jsonValidated:matches,
-        },{status:matches?200:503,headers:{'Cache-Control':'no-store'}});
+          ok:durable,code:durable?'EXPORT_ATTESTATION_PDF_JSON_VERIFIED':'EXPORT_ATTESTATION_BYTE_PROOF_NOT_DURABLE',
+          sha,deployId,runId,caseCount:durable?36:0,pdfValidated:durable,jsonValidated:durable,
+          durableReadback:durable,
+        },{status:durable?200:503,headers:{'Cache-Control':'no-store'}});
       }catch{
         return Response.json({ok:false,code:'EXPORT_ATTESTATION_NOT_CERTIFIED'},
           {status:409,headers:{'Cache-Control':'no-store'}});
