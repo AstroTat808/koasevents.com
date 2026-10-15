@@ -90,7 +90,7 @@ export function verifyCertifiedExportNegativeProbes(){
   }
   const validJson=encodeRelease([base],'json');
   const validPdf=new TextDecoder().decode(encodeRelease([base],'pdf'));
-  if(JSON.parse(validJson)?.certification?.status!=='verified'||!validPdf.startsWith('%PDF-1.4\\n'))
+  if(JSON.parse(validJson)?.certification?.status!=='verified'||!validPdf.startsWith('%PDF-1.4\n'))
     return {ok:false,denied:cases.length,expected,formats,cases};
   return {ok:true,denied:cases.length,expected,formats,cases};
 }
