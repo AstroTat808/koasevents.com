@@ -30,6 +30,16 @@ const att=(change)=>({...base,releaseAttestation:{...base.releaseAttestation,...
 const vis=(change)=>({...base,visualQuality:{...base.visualQuality,...change}});
 const resp=(change)=>({...base,responsiveQuality:{...base.responsiveQuality,...change}});
 
+// Stable synthetic negative-case names: no data from production requests.
+const CASE_IDS=[
+  'NO_RELEASES','MISSING_ATTESTATION','ATTESTATION_FAILED','RELEASE_GATE_PENDING',
+  'WRONG_DEPLOY_CONTEXT','DEPLOY_BUILDING','MISMATCHED_LIVE_DEPLOY',
+  'MISMATCHED_EXPECTED_SHA','MISMATCHED_REPORTED_DEPLOY','VISUAL_QA_FAILED',
+  'UNHEALTHY_SYSTEM','NONZERO_HEALTH_FAILURES','VISUAL_COMMIT_MISMATCH',
+  'WEBKIT_VISUAL_REPORT_MISSING','RESPONSIVE_DEPLOY_MISMATCH',
+  'WEBKIT_RESPONSIVE_FAILURE','QA_RUN_MISMATCH','MISSING_DEPLOY_ID',
+];
+
 function uncertifiedFixtures(){
   return [
     [],
@@ -63,22 +73,24 @@ function encodeRelease(rows,format){
 export function verifyCertifiedExportNegativeProbes(){
   const formats=['json','pdf'];
   const fixtures=uncertifiedFixtures();
-  let denied=0;
+  const expected=formats.length*fixtures.length;
+  if(fixtures.length!==CASE_IDS.length)return {ok:false,denied:0,expected,formats,cases:[]};
+  const cases=[];
   for(const format of formats){
-    for(const rows of fixtures){
+    for(const [index,rows] of fixtures.entries()){
       let rejected=false;
       try{
         encodeRelease(rows,format);
       }catch(error){
         rejected=error instanceof Error && /certified production release/i.test(error.message);
       }
-      if(!rejected)return {ok:false,denied,expected:formats.length*fixtures.length,formats};
-      denied++;
+      if(!rejected)return {ok:false,denied:cases.length,expected,formats,cases};
+      cases.push({id:format.toUpperCase()+'_'+CASE_IDS[index],format,outcome:'denied'});
     }
   }
   const validJson=encodeRelease([base],'json');
   const validPdf=new TextDecoder().decode(encodeRelease([base],'pdf'));
-  if(JSON.parse(validJson)?.certification?.status!=='verified'||!validPdf.startsWith('%PDF-1.4\n'))
-    return {ok:false,denied,expected:formats.length*fixtures.length,formats};
-  return {ok:true,denied,expected:formats.length*fixtures.length,formats};
+  if(JSON.parse(validJson)?.certification?.status!=='verified'||!validPdf.startsWith('%PDF-1.4\\n'))
+    return {ok:false,denied:cases.length,expected,formats,cases};
+  return {ok:true,denied:cases.length,expected,formats,cases};
 }
