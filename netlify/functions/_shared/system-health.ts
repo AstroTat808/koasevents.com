@@ -15,6 +15,7 @@ import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
+import { resolvePublishedDeployCommit } from './netlify-published-identity.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -3298,6 +3299,7 @@ export async function readProductionVisualThumbnail(context:Context,deployId:str
 export async function netlifyRecoveryCredentialHealthCheck(context:Context):Promise<HealthCheck>{
   const started=Date.now();
   const productionCommit=clean(Netlify.env.get('COMMIT_REF'),80);
+  const servingDeployId=clean((context as any)?.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
   const expectedSiteId=clean(Netlify.env.get('SITE_ID')||'d1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
   let verification:NetlifyRecoveryCredentialVerification|null=null;
   try{
@@ -3324,7 +3326,20 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
   }
   const checkedMs=Date.parse(verification.checkedAt);
   const fresh=Number.isFinite(checkedMs)&&Date.now()-checkedMs<=36*60*60*1000;
-  const commitMatches=Boolean(productionCommit&&verification.commit===productionCommit);
+  let authoritativeCommit=productionCommit;
+  let identitySource=productionCommit?'netlify-runtime':'unverified';
+  if(!authoritativeCommit){
+    const resolved=await resolvePublishedDeployCommit({
+      siteId:expectedSiteId,
+      servingDeployId,
+      token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500),
+    });
+    if(resolved.verified){
+      authoritativeCommit=resolved.commit;
+      identitySource=resolved.source;
+    }
+  }
+  const commitMatches=Boolean(authoritativeCommit&&verification.commit===authoritativeCommit);
   const siteMatches=Boolean(verification.siteIdMatches&&verification.siteId===expectedSiteId);
   const authenticated=Boolean(
     verification.configured&&verification.usable&&siteMatches
@@ -3348,7 +3363,7 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
     kind:'api',
     path:'GitHub Actions → Netlify recovery · read-only verification',
     ok,status:ok?200:503,ms:Date.now()-started,severity:ok?'green':'red',
-    detail:clean(detail,1400),
+    detail:clean(detail+' · identity source '+identitySource,1400),
   };
 }
 

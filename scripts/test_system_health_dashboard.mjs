@@ -604,4 +604,65 @@ assert(
 
 
 
+
+const { resolvePublishedDeployCommit } = await import(
+  new URL('../netlify/functions/_shared/netlify-published-identity.mjs', import.meta.url)
+);
+const goodCommit='a'.repeat(40);
+const goodSiteId='synthetic-site';
+const goodDeployId='synthetic-deploy';
+const goodSite={
+  id:goodSiteId,
+  published_deploy:{id:goodDeployId,state:'ready',commit_ref:goodCommit},
+};
+const goodDeploy={
+  id:goodDeployId,site_id:goodSiteId,context:'production',
+  state:'ready',commit_ref:goodCommit,
+};
+async function publishedProof(options={}){
+  const calls=[];
+  const request=async (url,init)=>{
+    calls.push({url,method:init.method});
+    if(options.networkError)throw new Error('synthetic provider unavailable');
+    if(options.httpError)return {ok:false,status:503};
+    const value=url.includes('/sites/')?(options.site||goodSite):(options.deploy||goodDeploy);
+    return {ok:true,json:async()=>value};
+  };
+  const resolved=await resolvePublishedDeployCommit({
+    siteId:options.siteId===undefined?goodSiteId:options.siteId,
+    servingDeployId:options.servingDeployId===undefined?goodDeployId:options.servingDeployId,
+    token:options.token===undefined?'synthetic-token':options.token,
+    fetchImpl:request,
+  });
+  assert(calls.every(row=>row.method==='GET' && row.url.startsWith('https://api.netlify.com/api/v1/')),
+    'Recovery identity must only perform read-only Netlify metadata checks.');
+  return {resolved,calls};
+}
+const validProof=await publishedProof();
+assert(validProof.resolved.verified && validProof.resolved.commit===goodCommit
+  && validProof.resolved.source==='netlify-published-deploy' && validProof.calls.length===2,
+  'Current published production deploy must resolve only to its own 40-character SHA.');
+for(const options of [
+  {siteId:''},{servingDeployId:''},{token:''},
+  {site:{...goodSite,id:'wrong-site'}},
+  {site:{...goodSite,published_deploy:{id:'different-deploy'}}},
+  {site:{...goodSite,published_deploy:null}},
+  {site:{...goodSite,published_deploy:{...goodSite.published_deploy,commit_ref:'b'.repeat(40)}}},
+  {deploy:{...goodDeploy,id:'different-deploy'}},
+  {deploy:{...goodDeploy,site_id:'another-site'}},
+  {deploy:{...goodDeploy,context:'deploy-preview'}},
+  {deploy:{...goodDeploy,state:'building'}},
+  {deploy:{...goodDeploy,commit_ref:'invalid'}},
+  {httpError:true},{networkError:true},
+]){
+  const proof=await publishedProof(options);
+  assert(proof.resolved.verified===false && proof.resolved.commit==='',
+    'Missing, moved, nonproduction, unready, malformed or unavailable deploy evidence must fail closed.');
+}
+assert(systemHealth.includes('verification.commit===authoritativeCommit')
+  && systemHealth.includes('resolvePublishedDeployCommit({')
+  && systemHealth.includes("identity source '+identitySource"),
+  'System Health must require matching trusted release SHA, never a missing-runtime-commit shortcut.');
+console.log('Netlify published production commit fallback: 15 synthetic valid/fail-closed scenarios passed.');
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
