@@ -14,7 +14,14 @@ async function main(){
   if(!requestUrl||!requestToken)return fail('GitHub Actions OIDC is unavailable.');
   let report;
   try{report=JSON.parse(await readFile(reportPath,'utf8'));}catch{return fail('read-only credential report is unavailable.');}
-  if(report?.usable!==true||report?.configured!==true)return fail('read-only credential verification did not pass.');
+  const expectedSha=String(process.env.GITHUB_SHA||'').trim();
+  if(report?.usable!==true||report?.configured!==true
+    ||report?.publishedDeployVerified!==true
+    ||!(/^[a-f0-9]{40}$/i.test(expectedSha))
+    ||report?.publishedDeployCommit!==expectedSha
+    ||!report?.publishedDeployId
+    ||Number(report?.deployDetailHttpStatus)!==200
+  )return fail('read-only exact published deployment verification did not pass.');
 
   const oidcResponse=await fetch(requestUrl+'&audience=koasevents-system-health',{
     headers:{Authorization:'Bearer '+requestToken},
@@ -33,12 +40,17 @@ async function main(){
     signal:AbortSignal.timeout(60_000),
   });
   const body=await response.json().catch(()=>({}));
-  if(!response.ok||body?.ok!==true||body?.recorded!==true)return fail('System Health rejected credential verification with HTTP '+response.status+'.');
+  if(!response.ok||body?.ok!==true||body?.recorded!==true||body?.readbackVerified!==true)return fail('System Health rejected credential verification or its durable readback with HTTP '+response.status+'.');
   const verification=body?.verification||{};
   if(
     verification?.configured!==true||verification?.usable!==true||verification?.siteIdMatches!==true
     ||Number(verification?.siteHttpStatus)!==200||Number(verification?.deployListHttpStatus)!==200
-  )return fail('persisted recovery credential evidence is incomplete.');
+    ||Number(verification?.deployDetailHttpStatus)!==200
+    ||verification?.publishedDeployVerified!==true
+    ||verification?.publishedDeployId!==report?.publishedDeployId
+    ||verification?.publishedDeployCommit!==expectedSha
+    ||verification?.commit!==expectedSha
+  )return fail('persisted recovery credential evidence is incomplete or mismatched.');
 
   console.log('[koa recovery credential health] PASS: safe verification metadata persisted; secret material was not transmitted.');
 }
