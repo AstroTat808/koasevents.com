@@ -5141,6 +5141,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ?'Production commit '+String(evidence.commit||'unverified')+' · Netlify deploy '+String(evidence.deployId)
           +' · GitHub Actions run '+String(evidence.runId||'unverified')
         :'No matching signed export-security proof for the current production deployment.';
+      setHealthSectionStatus(
+        document.querySelector('[data-export-security-card]'),
+        verified?'green':failed?'red':'yellow',
+        failed?1:0,
+        verified?'36/36 uncertified PDF/JSON exports blocked.':
+          failed?'Signed release export-security test failed.':'No signed 36-case result for the current deploy.',
+      );
     }
 
     function renderDarkModeVisualQuality(visualQuality){
