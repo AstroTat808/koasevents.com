@@ -68,7 +68,7 @@ export function buildCertifiedReleaseExport(releases,options={}){
     exportedAt:new Date().toISOString(),
     source:'System Health immutable certified release history',
     release:{
-      commit,deployId,commitTitle:cleaned(latest.commitTitle,180),
+      commit,deployId,
       publishedAt:timestamp(latest.publishedAt||a.publishedAt),
       pullRequestNumber:latest.pullRequestNumber==null?null:nat(latest.pullRequestNumber),
     },
