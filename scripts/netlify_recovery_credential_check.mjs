@@ -8,6 +8,8 @@ import { verifyPublishedRecoveryProof } from '../netlify/functions/_shared/netli
 const token=String(process.env.NETLIFY_AUTH_TOKEN||'').trim();
 const siteId=String(process.env.NETLIFY_SITE_ID||'').trim();
 const outputPath=String(process.env.NETLIFY_RECOVERY_CREDENTIAL_REPORT||'visual-results/netlify-recovery-credential.json').trim();
+// Before deployment only verify credential access; post-deploy must verify the published exact SHA.
+const accessOnly=process.argv.includes('--access-only');
 
 const report={
   checkedAt:new Date().toISOString(),
@@ -71,6 +73,19 @@ async function main(){
     );
     report.deployListHttpStatus=deployResult.response.status;
     const deployListReadable=deployResult.response.ok&&Array.isArray(deployResult.body);
+
+    if(accessOnly){
+      report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches&&deployListReadable);
+      report.status=report.usable?'access-only':'failed';
+      await writeReport();
+      if(!report.usable){
+        console.error('[koa recovery credential] BLOCKED: pre-deploy read-only credential access failed.');
+        process.exitCode=1;
+      }else{
+        console.log('[koa recovery credential] PASS: pre-deploy read-only credential access verified; published SHA proof intentionally deferred.');
+      }
+      return;
+    }
 
     // The GitHub Actions credential alone performs all provider requests.
     // A deploy list is NOT evidence of which SHA is currently published.
