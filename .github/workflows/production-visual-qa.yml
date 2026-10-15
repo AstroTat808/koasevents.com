@@ -93,7 +93,7 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
-        run: node scripts/netlify_recovery_credential_check.mjs
+        run: node scripts/netlify_recovery_credential_check.mjs --access-only
       - name: Diagnose exact-main Netlify production gate with authenticated GitHub evidence
         if: github.event_name == 'pull_request'
         shell: bash

@@ -3,10 +3,13 @@
 // It deliberately performs no deploy, build, restore, environment, or site mutation.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { verifyPublishedRecoveryProof } from '../netlify/functions/_shared/netlify-published-identity.mjs';
 
 const token=String(process.env.NETLIFY_AUTH_TOKEN||'').trim();
 const siteId=String(process.env.NETLIFY_SITE_ID||'').trim();
 const outputPath=String(process.env.NETLIFY_RECOVERY_CREDENTIAL_REPORT||'visual-results/netlify-recovery-credential.json').trim();
+// Before deployment only verify credential access; post-deploy must verify the published exact SHA.
+const accessOnly=process.argv.includes('--access-only');
 
 const report={
   checkedAt:new Date().toISOString(),
@@ -18,6 +21,12 @@ const report={
   siteIdMatches:false,
   siteHttpStatus:0,
   deployListHttpStatus:0,
+  deployDetailHttpStatus:0,
+  publishedDeployId:'',
+  publishedDeployCommit:'',
+  publishedDeployState:'',
+  publishedDeployContext:'',
+  publishedDeployVerified:false,
   source:'github-actions-read-only',
 };
 
@@ -65,7 +74,41 @@ async function main(){
     report.deployListHttpStatus=deployResult.response.status;
     const deployListReadable=deployResult.response.ok&&Array.isArray(deployResult.body);
 
-    report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches&&deployListReadable);
+    if(accessOnly){
+      report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches&&deployListReadable);
+      report.status=report.usable?'access-only':'failed';
+      await writeReport();
+      if(!report.usable){
+        console.error('[koa recovery credential] BLOCKED: pre-deploy read-only credential access failed.');
+        process.exitCode=1;
+      }else{
+        console.log('[koa recovery credential] PASS: pre-deploy read-only credential access verified; published SHA proof intentionally deferred.');
+      }
+      return;
+    }
+
+    // The GitHub Actions credential alone performs all provider requests.
+    // A deploy list is NOT evidence of which SHA is currently published.
+    const publishedId=String(siteResult.body?.published_deploy?.id||'').trim();
+    if(siteResult.response.ok&&report.siteIdMatches&&deployListReadable&&publishedId){
+      const exact=await getJson('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(publishedId));
+      report.deployDetailHttpStatus=exact.response.status;
+      if(exact.response.ok){
+        const proof=verifyPublishedRecoveryProof({
+          site:siteResult.body,deploy:exact.body,siteId,
+          expectedSha:String(process.env.GITHUB_SHA||'').trim(),
+        });
+        if(proof.verified){
+          report.publishedDeployId=proof.deployId;
+          report.publishedDeployCommit=proof.commit;
+          report.publishedDeployState=proof.state;
+          report.publishedDeployContext=proof.context;
+          report.publishedDeployVerified=true;
+        }
+      }
+    }
+    report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches
+      &&deployListReadable&&report.publishedDeployVerified);
     report.status=report.usable?'passed':'failed';
     await writeReport();
 
