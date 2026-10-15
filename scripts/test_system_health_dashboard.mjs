@@ -17,6 +17,7 @@ const visualWorkflow = await readFile(new URL('../.github/workflows/production-v
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 const netlifyBuildRunner = await readFile(new URL('./run_netlify_build.mjs', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
+const certifiedReleaseExport = await readFile(new URL('../netlify/functions/_shared/release-attestation-export.mjs', import.meta.url), 'utf8');
 const recoveryCredentialCheck = await readFile(new URL('./netlify_recovery_credential_check.mjs', import.meta.url), 'utf8');
 const recoveryCredentialPublish = await readFile(new URL('./publish_netlify_recovery_credential_health.mjs', import.meta.url), 'utf8');
 const responsiveReleasePublish = await readFile(new URL('./publish_responsive_release_evidence.mjs', import.meta.url), 'utf8');
@@ -622,16 +623,19 @@ assert(
 );
 
 
+
 assert(
-  health.includes('function certifiedReleaseEvidence(release)')
-    && health.includes('function pdfReleaseEvidence(data)')
-    && health.includes('function exportLatestCertifiedRelease(format)')
-    && health.includes("button.dataset.releaseExport=format")
-    && health.includes("exportLatestCertifiedRelease(format)")
-    && health.includes("attestation?.status==='verified'")
-    && health.includes("attestation?.productionGateState==='success'")
-    && health.includes('protectedReference:')
-    && health.includes('verificationStatus:')
-    && !health.includes('JSON.stringify(latestHealthSnapshot)'),
-  'Certified release PDF and JSON export must only include allowlisted evidence and fail closed when no certified release exists.',
+  health.includes('data-certified-release-export="pdf"')
+    && health.includes('data-certified-release-export="json"')
+    && !health.includes('function pdfReleaseEvidence(data)')
+    && !health.includes('installReleaseExportControls();')
+    && adminHealth.includes("url.searchParams.get('export')==='certified-release'")
+    && adminHealth.includes('buildCertifiedReleaseExport(releases')
+    && adminHealth.includes('certifiedReleasePdf(attestation)')
+    && certifiedReleaseExport.includes('function isCertified(row)')
+    && certifiedReleaseExport.includes("productionGateState!=='success'")
+    && certifiedReleaseExport.includes("visualQaConclusion!=='success'")
+    && certifiedReleaseExport.includes("responsiveQaConclusion!=='success'")
+    && certifiedReleaseExport.includes('screenshotReferences:screenshots'),
+  'Certified release PDF and JSON downloads must use the single server-side fail-closed evidence validator.',
 );
