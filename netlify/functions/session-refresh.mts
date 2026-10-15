@@ -19,7 +19,7 @@ function rawCookie(req:Request,name:string){
   const entry=String(req.headers.get('cookie')||'').split(';').map(p=>p.trim())
     .find(p=>p.startsWith(name+'='));
   const raw=entry?entry.slice(name.length+1):'';
-  return /^[A-Za-z0-9_~.%+\\/-]{1,8192}$/.test(raw)?raw:'';
+  return /^[A-Za-z0-9_.%+~-]{1,8192}$/.test(raw)?raw:'';
 }
 function promoteExistingIdentityCookies(req:Request,response:Response){
   // Do not overwrite the newly rotated cookies issued by refreshSession().
