@@ -670,7 +670,7 @@ for(const override of [
 assert(
   systemHealth.includes('recoveryCredentialDiagnostic({')&&systemHealth.includes('diagnosticCode:diagnosis.code')
   &&!systemHealth.includes("token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500)")
-  &&systemHealth.includes('verification.commit===productionCommit')
+  &&systemHealth.includes('productionCommit,servingDeployId,expectedSiteId')
   &&healthSignal.includes('readNetlifyRecoveryCredentialVerification(context)')
   &&healthSignal.includes('readbackVerified')
   &&recoveryCredentialCheck.includes('verifyPublishedRecoveryProof({')
