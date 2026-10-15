@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { buildCertifiedReleaseExport, certifiedReleasePdf } from '../netlify/functions/_shared/release-attestation-export.mjs';
+import { verifyCertifiedExportNegativeProbes } from '../netlify/functions/_shared/certified-export-security-probe.mjs';
 
 const sha='a'.repeat(40),deploy='b'.repeat(24),runId='38761414583';
 const screenshots=['light-phone','dark-phone','light-desktop','dark-desktop'].map(key=>({
@@ -48,6 +49,52 @@ for(const modified of [
 ]){
  assert.throws(()=>buildCertifiedReleaseExport([modified]),/certified/,'Incomplete evidence must never export as certified.');
 }
+// Synthetic per-assertion evidence is retained in both formats only when it
+// matches the exact signed release SHA, deploy and GitHub Actions run.
+const proofCases=verifyCertifiedExportNegativeProbes();
+assert.equal(proofCases.ok,true);
+assert.equal(proofCases.cases.length,36);
+assert.equal(new Set(proofCases.cases.map(row=>row.id)).size,36);
+const signedSecurity={
+  status:'passed',source:'github-actions-oidc',
+  checkedAt:'2026-10-15T16:30:00.000Z',commit:sha,deployId:deploy,runId,
+  expected:36,denied:36,formats:['pdf','json'],cases:proofCases.cases,
+};
+const signedRelease={...release,certifiedExportSecurity:signedSecurity};
+const withSecurity=buildCertifiedReleaseExport([signedRelease],{productionCommit:sha,productionDeployId:deploy});
+assert.equal(withSecurity.certifiedExportSecurity.status,'passed');
+assert.equal(withSecurity.certifiedExportSecurity.signedEvidence,true);
+assert.equal(withSecurity.certifiedExportSecurity.cases.length,36);
+assert.equal(withSecurity.certifiedExportSecurity.runId,runId);
+assert.equal(withSecurity.certifiedExportSecurity.commit,sha);
+assert.equal(withSecurity.certifiedExportSecurity.deployId,deploy);
+const securityPdf=new TextDecoder().decode(certifiedReleasePdf(withSecurity));
+assert(securityPdf.includes('SIGNED RESULT: 36 / 36'));
+for(const row of proofCases.cases)assert(securityPdf.includes(row.id),'PDF must retain every synthetic assertion name.');
+assert.equal(exported.certifiedExportSecurity.status,'not-recorded','Historical evidence may not imply passed security probes.');
+assert.equal(exported.certifiedExportSecurity.signedEvidence,false);
+const historicalPdf=new TextDecoder().decode(certifiedReleasePdf(exported));
+assert(historicalPdf.includes('HISTORICAL: Signed 36-case'));
+assert(!historicalPdf.includes('SIGNED RESULT: 36 / 36'));
+for(const broken of [
+  {...signedSecurity,status:'failed'},
+  {...signedSecurity,source:'untrusted'},
+  {...signedSecurity,commit:'f'.repeat(40)},
+  {...signedSecurity,deployId:'f'.repeat(24)},
+  {...signedSecurity,runId:'other'},
+  {...signedSecurity,denied:35},
+  {...signedSecurity,expected:35},
+  {...signedSecurity,checkedAt:'2026-10-16T16:30:00.000Z'},
+  {...signedSecurity,cases:proofCases.cases.slice(1)},
+  {...signedSecurity,cases:[proofCases.cases[0],...proofCases.cases.slice(0,35)]},
+  {...signedSecurity,formats:['json']},
+])assert.throws(
+  ()=>buildCertifiedReleaseExport([{...release,certifiedExportSecurity:broken}]),
+  /certified/,'Forged, incomplete, or mismatched 36-test evidence must never export as certified.',
+);
+assert(!JSON.stringify(withSecurity).includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+assert(!securityPdf.includes('PRIVATE_CLIENT_MARKER_EMAIL'));
+
 const pdf=certifiedReleasePdf(exported);
 const text=new TextDecoder().decode(pdf);
 assert(text.startsWith('%PDF-1.4\n'),'Must emit PDF bytes.');
