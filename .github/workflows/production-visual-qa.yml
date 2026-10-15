@@ -157,6 +157,27 @@ jobs:
           fi
           python scripts/theme_visual_qa.py --browser chromium --base-url http://127.0.0.1:4174
           python scripts/theme_visual_qa.py --browser webkit --base-url http://127.0.0.1:4174
+      - name: Verify remembered-session UI in iPhone Safari WebKit and desktop browsers
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4178 --directory dist > /tmp/koa-session-browser-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4178/admin/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'Session browser QA server failed to start'
+            exit 1
+          fi
+          python scripts/test_session_persistence_browser.py --base-url http://127.0.0.1:4178
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && always()
         with:
@@ -165,6 +186,7 @@ jobs:
             visual-results/theme-source-audit.json
             visual-results/theme-chromium
             visual-results/theme-webkit
+            visual-results/session-persistence-qa
           retention-days: 30
           if-no-files-found: error
       - name: Create local System Health QA snapshot

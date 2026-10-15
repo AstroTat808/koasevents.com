@@ -1474,7 +1474,22 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 </style>
 
 <script>
-  import { logout } from '@netlify/identity';
+  import { logout, onAuthChange } from '@netlify/identity';
+  import { keepIdentitySessionAlive, forgetIdentityRememberPreference } from '../lib/remembered-session';
+  onAuthChange((event,user)=>{
+    if(event==='logout')forgetIdentityRememberPreference();
+    else if(user&&(event==='token_refresh'||event==='login')){
+      const kept=keepIdentitySessionAlive();
+      if(kept&&event==='token_refresh'){
+        // Server-set persistence remains intact after rotating browser tokens.
+        void fetch('/api/auth/session-refresh',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',body:'{}',cache:'no-store',
+        }).catch(()=>null);
+      }
+    }
+  });
+  keepIdentitySessionAlive();
   import { getAdminSession } from '../lib/admin-session';
 
   const nav = document.querySelector('[data-workspace-nav]');
@@ -2585,12 +2600,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
   });
 
-  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
+  async function signOutTrackedSession(){
+    await fetch('/api/auth/record',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'logout'}),credentials:'same-origin',
+    }).catch(()=>null);
     await logout();
+  }
+  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
+    await signOutTrackedSession();
     window.location.assign('/staff/');
   });
   nav?.querySelector('[data-workspace-account-logout]')?.addEventListener('click', async () => {
-    await logout();
+    await signOutTrackedSession();
     window.location.assign('/staff/');
   });
 

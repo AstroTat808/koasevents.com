@@ -55,6 +55,9 @@ export type ManagedSession = {
   device:string;
   revokedAt:string;
   revokedBy:string;
+  rememberedUntil?:string;
+  lastRefreshedAt?:string;
+  refreshCount?:number;
 };
 
 export type TrustedDevice = {
@@ -79,6 +82,8 @@ export type TrustedDeviceSettings = {
 };
 
 export const TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS=365*24*60*60;
+export const REMEMBER_SESSION_MAX_AGE_SECONDS=30*24*60*60;
+export const REMEMBER_SESSION_COOKIE='koa_remember';
 
 type LoginAlertState = {
   suppressionKey:string;
@@ -284,19 +289,52 @@ export async function isTrustedDevice(
   return true;
 }
 
-export async function registerManagedSession(req:Request,user:any){
-  const sessionId=await requestSessionId(req);if(!sessionId||!user?.id)return null;
+export async function registerManagedSession(req:Request,user:any,options:{remember?:boolean}={}){
+  const requestId=await requestSessionId(req);if(!requestId||!user?.id)return null;
   const s=store();const key='sessions/'+clean(user.id,160);
   const current=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
   const now=new Date().toISOString();const ua=requestUserAgent(req);const ip=await ipFingerprint(req);const jwt=cookie(req,'nf_jwt');
-  const existing=current.find(row=>row.id===sessionId);
-  if(existing?.revokedAt)return existing;
-  const row:ManagedSession=existing?{...existing,lastSeenAt:now,ipFingerprint:ip||existing.ipFingerprint,userAgent:ua||existing.userAgent,device:deviceLabel(ua||existing.userAgent)}:{
-    id:sessionId,userId:clean(user.id,160),email:clean(user.email,240).toLowerCase(),createdAt:now,lastSeenAt:now,expiresAt:jwtExpiry(jwt),ipFingerprint:ip,userAgent:ua,device:deviceLabel(ua),revokedAt:'',revokedBy:''
+  // A fresh, successful Identity login must not inherit a previously revoked session.
+  const prior=current.find(row=>row.id===requestId);
+  // Do not turn a revoked browser session into an authorized one merely
+  // because an existing Identity JWT calls the login-record endpoint.
+  // Sign out first to clear koa_sid; then a NEW Identity login gets a new SID.
+  if(prior?.revokedAt)return prior;
+  const sessionId=requestId;
+  const existing=prior||null;
+  const rememberedUntil=options.remember===true
+    ?new Date(Date.now()+REMEMBER_SESSION_MAX_AGE_SECONDS*1000).toISOString()
+    :options.remember===false?'':existing?.rememberedUntil||'';
+  const row:ManagedSession=existing?{
+    ...existing,lastSeenAt:now,expiresAt:jwtExpiry(jwt)||existing.expiresAt,
+    ipFingerprint:ip||existing.ipFingerprint,userAgent:ua||existing.userAgent,
+    device:deviceLabel(ua||existing.userAgent),rememberedUntil,
+  }:{
+    id:sessionId,userId:clean(user.id,160),email:clean(user.email,240).toLowerCase(),
+    createdAt:now,lastSeenAt:now,expiresAt:jwtExpiry(jwt),ipFingerprint:ip,
+    userAgent:ua,device:deviceLabel(ua),revokedAt:'',revokedBy:'',rememberedUntil,
+    lastRefreshedAt:'',refreshCount:0,
   };
-  const next=[row,...current.filter(x=>x.id!==sessionId)].slice(0,30);
-  await s.setJSON(key,next);
+  await s.setJSON(key,[row,...current.filter(x=>x.id!==sessionId)].slice(0,30));
   return row;
+}
+
+// Records refresh metadata only. Netlify Identity remains the authority for JWT issuance
+// and validation; neither access nor refresh credentials are stored in Koa Blobs.
+export async function recordManagedSessionRefresh(req:Request,userId:string,accessToken:string){
+  const sid=await requestSessionId(req);if(!sid||!userId||!accessToken)return false;
+  const s=store();const key='sessions/'+clean(userId,160);
+  const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
+  const prior=rows.find(row=>row.id===sid);
+  if(!prior||prior.revokedAt)return false;
+  const now=new Date().toISOString();
+  const expiresAt=jwtExpiry(accessToken)||prior.expiresAt;
+  const updated={...prior,lastSeenAt:now,lastRefreshedAt:now,
+    refreshCount:(Number(prior.refreshCount)||0)+1,expiresAt,
+    rememberedUntil:prior.rememberedUntil&&Date.parse(prior.rememberedUntil)>Date.now()
+      ?new Date(Date.now()+REMEMBER_SESSION_MAX_AGE_SECONDS*1000).toISOString():prior.rememberedUntil||''};
+  await s.setJSON(key,[updated,...rows.filter(row=>row.id!==sid)].slice(0,30));
+  return true;
 }
 export async function managedSessionStatus(req:Request,userId:string){
   const sid=await requestSessionId(req);if(!sid)return{sessionId:'',revoked:false};

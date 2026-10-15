@@ -38,6 +38,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <label class="grid gap-2 text-sm font-semibold">Password
               <span class="relative block"><input data-login-password name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 pr-24" /><button data-toggle-login-password type="button" class="absolute inset-y-0 right-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Show</button></span>
             </label>
+            <label class="flex items-start gap-3 text-sm font-semibold leading-5 text-[var(--koa-forest)]"><input name="remember" type="checkbox" checked class="mt-1 h-4 w-4 shrink-0 accent-[var(--koa-forest)]" /><span>Keep me signed in for up to 30 days<span class="mt-1 block text-xs font-normal text-[var(--koa-ink)]/55">Renews securely on this browser while your account remains authorized. Signing out or revoking access ends the session.</span></span></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
             <p data-auth-error class="hidden text-sm text-red-700"></p>
             <div class="flex flex-wrap gap-4"><button data-show-recovery-request type="button" class="text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Forgot password?</button><button data-show-bootstrap type="button" class="text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Create or repair an approved admin account</button></div>
@@ -179,9 +180,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { acceptInvite, getUser, handleAuthCallback, login, logout, recoverPassword, requestPasswordRecovery, updateUser } from '@netlify/identity';
+    import { acceptInvite, getUser, handleAuthCallback, login, logout, onAuthChange, recoverPassword, refreshSession, requestPasswordRecovery, updateUser } from '@netlify/identity';
     import { getAdminSession } from '../../lib/admin-session';
+    import { rememberIdentitySession, keepIdentitySessionAlive, forgetIdentityRememberPreference } from '../../lib/remembered-session';
 
+    onAuthChange((event,user)=>{
+      if(event==='logout')forgetIdentityRememberPreference();
+      else if(user&&(event==='token_refresh'||event==='login')){
+        const kept=keepIdentitySessionAlive();
+        if(kept&&event==='token_refresh'){
+          void fetch('/api/auth/session-refresh',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',body:'{}',cache:'no-store',
+          }).catch(()=>null);
+        }
+      }
+    });
+    async function endTrackedIdentitySession(){
+      await fetch('/api/auth/record',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'logout'}),credentials:'same-origin',
+      }).catch(()=>null);
+      await logout();
+    }
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
     const links = document.querySelector('[data-admin-links]');
@@ -802,7 +823,32 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           return;
         }
 
-        const user = await getUser();
+        let user = await getUser();
+        if (!user) {
+          // Safari may reopen after the access JWT has expired. Netlify Identity
+          // retains a separate refresh credential on remembered browsers.
+          try {
+            const recovery = await fetch('/api/auth/session-refresh',{
+              method:'POST',headers:{'Content-Type':'application/json'},body:'{}',
+              credentials:'same-origin',cache:'no-store',
+            });
+            if (recovery.ok) {
+              keepIdentitySessionAlive();
+              await refreshSession().catch(()=>null);
+              user = await getUser();
+              keepIdentitySessionAlive();
+            }
+          } catch {}
+        }
+        if (user && loginReason === 'session_expired') {
+          const check = await fetch('/api/admin/session',{cache:'no-store'}).catch(()=>null);
+          if (check?.status === 401) {
+            // Revoke/expired session must never auto-return into a redirect loop.
+            await endTrackedIdentitySession();
+            user = null;
+          }
+        }
+        if (user) sessionExpiredMessage?.classList.add('hidden');
         if (returnAfterLogin(user)) return;
         showAuthState(user);
       } catch (err) {
@@ -963,7 +1009,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       const email = String(data.get('email') || '').trim().toLowerCase();
       try {
         const user = await login(email, String(data.get('password')));
-        await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'success',email})}).catch(()=>null);
+        rememberIdentitySession(data.get('remember')==='on');
+        await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'success',email,remember:data.get('remember')==='on'})}).catch(()=>null);
         if (authError) authError.classList.add('hidden');
         if (returnAfterLogin(user)) return;
         showAuthState(user);
@@ -1055,7 +1102,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
 
     async function signOut() {
-      await logout();
+      await endTrackedIdentitySession();
       showAuthState(null);
     }
 

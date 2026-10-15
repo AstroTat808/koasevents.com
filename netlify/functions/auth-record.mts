@@ -4,18 +4,30 @@ import {
   appendAuthEvent,
   evaluateLoginRisk,
   registerManagedSession,
+  managedSessionStatus,
+  revokeManagedSession,
   recordLoginFailureSignal,
   requestDeviceFingerprint,
   requestUserAgent,
   sendSuspiciousLoginAlert,
   TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
+  REMEMBER_SESSION_MAX_AGE_SECONDS,
+  REMEMBER_SESSION_COOKIE,
 } from './_shared/auth-security';
 import { ipFingerprint } from './_shared/security';
 
 function clean(v:unknown,max=300){return String(v||'').trim().slice(0,max);}
+function rawCookieValue(req:Request,name:string){
+  const entry=String(req.headers.get('cookie')||'').split(';').map(p=>p.trim())
+    .find(p=>p.startsWith(name+'='));
+  const raw=entry?entry.slice(name.length+1):'';
+  // Strictly constrain Set-Cookie value syntax; do not decode or expose it.
+  return /^[A-Za-z0-9_~.%+\/-]{1,8192}$/.test(raw)?raw:'';
+}
 function sameOrigin(req:Request){
   const origin=clean(req.headers.get('origin'),300);
-  return !origin||origin==='https://koasevents.com'||origin==='https://www.koasevents.com';
+  if(!origin)return true;
+  try{return new URL(origin).origin===new URL(req.url).origin;}catch{return false;}
 }
 
 export default async(req:Request,context:Context)=>{
@@ -26,6 +38,22 @@ export default async(req:Request,context:Context)=>{
   const email=clean(body.email,240).toLowerCase();
   const ip=await ipFingerprint(req);
   const ua=requestUserAgent(req);
+
+  if(action==='logout'){
+    const user=await getUser();
+    if(user?.id){
+      const status=await managedSessionStatus(req,String(user.id));
+      if(status.session&&!status.revoked)await revokeManagedSession(
+        String(user.id),status.session.id,clean(user.email,240)||'self',context,clean(user.email,240),
+      ).catch(()=>null);
+    }
+    const response=Response.json({ok:true},{headers:{'Cache-Control':'private, no-store'}});
+    response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    // koa_sid identifies the old managed session. Do not let a subsequent
+    // fresh login silently inherit that revoked session or its fingerprint.
+    response.headers.append('Set-Cookie','koa_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    return response;
+  }
 
   if(action==='failure'){
     if(!email.includes('@'))return Response.json({ok:true});
@@ -58,7 +86,7 @@ export default async(req:Request,context:Context)=>{
       userId:clean(user.id,160),
       deviceFingerprint,
     });
-    const session=await registerManagedSession(req,user);
+    const session=await registerManagedSession(req,user,{remember:body.remember===true});
     const createdAt=new Date().toISOString();
 
     let alert:{sent:boolean;suppressed:boolean;error?:string;reason?:string;lastSentAt?:string}={
@@ -113,9 +141,26 @@ export default async(req:Request,context:Context)=>{
       reasons:risk.reasons,
       trustedDevice:risk.trustedDevice,
       alert:{sent:alert.sent,suppressed:alert.suppressed,reason:alert.reason||''},
-      session,
+      // Never return the raw HttpOnly device handle or session fingerprints.
+      session:session?{
+        device:session.device,
+        expiresAt:session.expiresAt,
+        rememberedUntil:session.rememberedUntil||'',
+        revoked:Boolean(session.revokedAt),
+      }:null,
     });
     if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
+    response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'='+(body.remember===true?'1':'')+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+(body.remember===true?REMEMBER_SESSION_MAX_AGE_SECONDS:0));
+    // The Identity SDK's nf_jwt/nf_refresh cookies are session-only by
+    // default. Promote the already-authenticated cookies for an opted-in
+    // browser so they survive a restart (including iPhone Safari).
+    // They intentionally stay browser-readable because SDK hydration requires it.
+    if(body.remember===true){
+      for(const name of ['nf_jwt','nf_refresh']){
+        const value=rawCookieValue(req,name);
+        if(value)response.headers.append('Set-Cookie',name+'='+value+'; Path=/; Secure; SameSite=Lax; Max-Age='+REMEMBER_SESSION_MAX_AGE_SECONDS);
+      }
+    }
     return response;
   }
 
