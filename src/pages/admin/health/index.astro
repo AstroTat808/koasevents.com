@@ -824,7 +824,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-          <div><p class="eyebrow text-[var(--koa-clay)]">Current production</p><h2 class="display mt-2 text-4xl">Deployment</h2></div>
+          <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Current production</p>
+              <h2 class="display mt-2 text-4xl">Deployment</h2>
+            </div>
+            <div class="flex flex-wrap items-center gap-2" aria-label="Latest certified release exports">
+              <a data-certified-release-export="pdf" href="/api/admin/health?export=certified-release&amp;format=pdf" download
+                 class="inline-flex min-h-11 items-center rounded-full border border-[var(--koa-line)] bg-[var(--koa-forest)] px-4 py-2 text-xs font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koa-clay)]">Export certified PDF ↓</a>
+              <a data-certified-release-export="json" href="/api/admin/health?export=certified-release&amp;format=json" download
+                 class="inline-flex min-h-11 items-center rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-2 text-xs font-bold text-[var(--koa-forest)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koa-clay)]">Export certified JSON ↓</a>
+            </div>
+          </div>
+          <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Exports include only the latest fully certified release, its exact QA evidence, and links to protected screenshots. Uncertified releases are blocked.</p>
           <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">GitHub commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Netlify deploy ID</p><p data-deploy-id class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
