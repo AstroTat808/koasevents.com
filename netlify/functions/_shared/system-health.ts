@@ -3132,6 +3132,20 @@ export type ProductionReleaseAttestation = {
   source:'github-actions-oidc'|'certified-backfill';
 };
 
+export type ProductionProtectedAdminQa = {
+  status:'passed'|'failed';
+  browser:'chromium';
+  checkedAt:string;
+  commit:string;
+  deployId:string;
+  runId:string;
+  source:'github-actions-oidc';
+  checkedCount:number;
+  failureCount:number;
+  failures:{route:string;code:string}[];
+  code:string|null;
+};
+
 export type ProductionCertifiedExportSecurity = {
   status:'passed'|'failed';
   checkedAt:string;
@@ -3165,6 +3179,7 @@ export type ProductionRelease = {
   rollbackProtection?:ProductionRollbackProtection|null;
   releaseAttestation?:ProductionReleaseAttestation|null;
   certifiedExportSecurity?:ProductionCertifiedExportSecurity|null;
+  protectedAdminQa?:ProductionProtectedAdminQa|null;
   authorName:string;
   authorLogin:string;
   pullRequestNumber:number|null;
@@ -3878,6 +3893,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     releaseAttestation:input?.releaseAttestation||previous?.releaseAttestation||null,
     certifiedExportSecurity:input?.certifiedExportSecurity||previous?.certifiedExportSecurity||null,
+    protectedAdminQa:input?.protectedAdminQa||previous?.protectedAdminQa||null,
     authorName,
     authorLogin,
     pullRequestNumber,

@@ -3244,6 +3244,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
       }
       releaseDetail.appendChild(attestationSection);
+      // Immutable per-deploy storage holds only signed, allowlisted browser
+      // route identifiers and stable categories, never private browser logs.
+      const adminQa=release.protectedAdminQa||null;
+      const adminQaMatches=Boolean(adminQa&&adminQa.commit===release.commit
+        &&adminQa.deployId===release.deployId&&adminQa.source==='github-actions-oidc');
+      const adminQaPassed=adminQaMatches&&adminQa.status==='passed'
+        &&Number(adminQa.failureCount)===0;
+      const adminQaSection=document.createElement('section');
+      adminQaSection.className='rounded-xl border p-4 '+(
+        adminQaPassed?'border-emerald-200 bg-emerald-50'
+        :adminQaMatches&&adminQa.status==='failed'?'border-red-200 bg-red-50'
+        :'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+      const adminQaHeading=document.createElement('p');
+      adminQaHeading.className='text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';
+      adminQaHeading.textContent='Protected admin browser QA · permanently retained';
+      const adminQaStatus=document.createElement('p');
+      adminQaStatus.className='mt-2 text-sm font-semibold text-[var(--koa-forest)]';
+      adminQaStatus.textContent=adminQaPassed?'Passed · 0 protected-admin failures'
+        :adminQaMatches&&adminQa.status==='failed'
+          ?'Failed · '+Number(adminQa.failureCount||0)+' sanitized findings'
+          :'Not recorded for this exact production release';
+      const adminQaMeta=document.createElement('p');
+      adminQaMeta.className='mt-2 break-all text-xs text-[var(--koa-ink)]/60';
+      adminQaMeta.textContent=adminQaMatches
+        ?'Chromium · '+new Date(adminQa.checkedAt).toLocaleString()
+          +' · GitHub run '+adminQa.runId+' · Commit '+adminQa.commit
+          +' · Deploy '+adminQa.deployId
+        :'Older releases without a signed QA record are not claimed as passing.';
+      adminQaSection.append(adminQaHeading,adminQaStatus,adminQaMeta);
+      if(adminQaMatches&&Array.isArray(adminQa.failures)&&adminQa.failures.length){
+        const list=document.createElement('ul');
+        list.className='mt-3 space-y-1 text-xs text-red-800';
+        for(const finding of adminQa.failures.slice(0,40)){
+          const li=document.createElement('li');
+          li.textContent=String(finding.route||'unknown')+' · '+String(finding.code||'ADMIN_QA_ASSERTION_FAILED');
+          list.appendChild(li);
+        }
+        adminQaSection.appendChild(list);
+      }
+      releaseDetail.appendChild(adminQaSection);
+
 
       const exportSecurity=release.certifiedExportSecurity||null;
       const exportPassed=exportSecurity?.status==='passed'

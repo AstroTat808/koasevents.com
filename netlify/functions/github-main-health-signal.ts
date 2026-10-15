@@ -826,6 +826,61 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='record-protected-admin-qa'){
+      const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
+      const sha=cleanText(claims?.sha,80);
+      const runId=cleanText(claims?.run_id,80);
+      const deployedCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      const servingDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+      const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml@refs/heads/main')
+        ||claims?.ref!==MAIN_REF||!/^[0-9]{4,20}$/.test(runId)
+        ||!siteId||!token||!/^[a-f0-9]{24}$/.test(servingDeployId)
+        ||(deployedCommit&&deployedCommit!==sha)){
+        return Response.json({ok:false,code:'ADMIN_QA_SIGNED_IDENTITY_REQUIRED'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      // OIDC verifies the running main SHA. Verify the deployed production
+      // commit separately, even when Netlify omits COMMIT_REF in Functions.
+      try{
+        const deploy=await productionDeployForCommit(token,siteId,sha);
+        const deployId=cleanText(deploy?.id,120);
+        const actualCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
+        const contextName=cleanText(deploy?.context,80);
+        const deployState=cleanText(deploy?.state,80).toLowerCase();
+        const publishedAt=cleanText(deploy?.published_at,80);
+        const exact=Boolean(deploy&&productionDeployMatchesAttestation({
+          expectedSha:sha,deployId,deployState,deployContext:contextName,
+          deployCommit:actualCommit,publishedAt,liveDeployId:servingDeployId,
+          liveCommit:deployedCommit||actualCommit,
+        }));
+        if(!exact)return Response.json({ok:false,code:'ADMIN_QA_DEPLOY_IDENTITY_MISMATCH'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+        const {normalizeProtectedAdminQa}=await import('./_shared/protected-admin-release-evidence.mjs');
+        const evidence=normalizeProtectedAdminQa(body?.result,{
+          commit:sha,deployId,runId,checkedAt:new Date().toISOString(),
+        });
+        await recordProductionRelease(context,{deployId,commit:sha,
+          checkedAt:evidence.checkedAt,protectedAdminQa:evidence});
+        const row=(await readProductionReleases(context,100))
+          .find((item:any)=>item?.deployId===deployId&&item?.commit===sha);
+        const recorded:any=row?.protectedAdminQa||null;
+        const persisted=Boolean(recorded&&recorded.commit===sha
+          &&recorded.deployId===deployId&&recorded.runId===runId
+          &&recorded.checkedAt===evidence.checkedAt
+          &&recorded.status===evidence.status&&recorded.failureCount===evidence.failureCount
+          &&JSON.stringify(recorded.failures)===JSON.stringify(evidence.failures));
+        return Response.json({ok:persisted,recorded:persisted,sha,deployId,runId,
+          qaStatus:evidence.status,failureCount:evidence.failureCount,
+          code:persisted?'ADMIN_QA_EVIDENCE_RECORDED':'ADMIN_QA_DURABLE_READBACK_FAILED'},
+          {status:persisted?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch{
+        return Response.json({ok:false,code:'ADMIN_QA_EVIDENCE_PERSISTENCE_FAILED'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='record-production-release-attestation'){
       const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
       if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
