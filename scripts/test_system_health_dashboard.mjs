@@ -676,6 +676,18 @@ assert(
   &&recoveryCredentialCheck.includes('verifyPublishedRecoveryProof({')
   &&recoveryCredentialPublish.includes('verification?.publishedDeployId!==report?.publishedDeployId'),
   'The GitHub-owned credential must stay in CI while signed current-published identity and readback remain mandatory.');
+const preliminaryCredentialStep=visualWorkflow.indexOf('run: node scripts/netlify_recovery_credential_check.mjs --access-only');
+const strictCredentialStep=visualWorkflow.indexOf('run: node scripts/netlify_recovery_credential_check.mjs\n',preliminaryCredentialStep+1);
+assert(
+  preliminaryCredentialStep>=0
+  &&preliminaryCredentialStep<visualWorkflow.indexOf('- name: Build production site')
+  &&strictCredentialStep>visualWorkflow.indexOf('- name: Wait for exact Netlify production SHA')
+  &&recoveryCredentialCheck.includes("const accessOnly=process.argv.includes('--access-only')")
+  &&recoveryCredentialCheck.includes('if(accessOnly){')
+  &&recoveryCredentialCheck.includes('report.publishedDeployVerified'),
+  'Pre-deploy auth access must never demand future published SHA, while post-deploy verification must still fail closed on exact-SHA proof.',
+);
+
 console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
 
 
