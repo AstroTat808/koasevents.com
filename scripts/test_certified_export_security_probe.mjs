@@ -6,6 +6,12 @@ const result=verifyCertifiedExportNegativeProbes();
 assert.equal(result.ok,true,'Both PDF and JSON must reject every uncertified synthetic release.');
 assert.equal(result.denied,result.expected,'All synthetic negative fixtures must be rejected.');
 assert.deepEqual(result.formats,['json','pdf']);
+assert.equal(result.cases.length,36,'Each synthetic denial must have durable individual evidence.');
+assert.equal(new Set(result.cases.map(row=>row.id)).size,36);
+assert.equal(result.cases.filter(row=>row.format==='pdf').length,18);
+assert.equal(result.cases.filter(row=>row.format==='json').length,18);
+assert(result.cases.every(row=>row.outcome==='denied'&&/^(PDF|JSON)_[A-Z0-9_]+$/.test(row.id)));
+
 // Release History must remain durable across dashboard refreshes and preserve
 // the test's exact GitHub run, commit, deployment, and server readback.
 const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8');
@@ -14,6 +20,7 @@ const signal=read('../netlify/functions/github-main-health-signal.ts');
 const dashboard=read('../netlify/functions/admin-health.mts');
 const ui=read('../src/pages/admin/health/index.astro');
 const workflow=read('../.github/workflows/production-visual-qa.yml');
+const exportModule=read('../netlify/functions/_shared/release-attestation-export.mjs');
 const liveTest=read('./verify_live_certified_export_rejections.mjs');
 for(const needle of [
   'certifiedExportSecurity:input?.certifiedExportSecurity||previous?.certifiedExportSecurity||null',
@@ -29,6 +36,10 @@ for(const needle of [
 assert(dashboard.includes('certifiedExportSecurity')&&ui.includes('data-export-security-total')
   &&ui.includes('release.certifiedExportSecurity||null'),
   'Current System Health and permanent Release History must both render the retained evidence.');
+assert(exportModule.includes('verifiedCertifiedExportSecurity(row)')
+  &&exportModule.includes('heading(\'PDF / JSON export security')
+  &&exportModule.includes('certifiedExportSecurity,'),
+  'PDF and JSON certified exports must include the same exact signed 36-case manifest.');
 assert(workflow.includes('Verify live uncertified PDF and JSON exports are rejected')
   &&liveTest.includes('result.readbackVerified!==true')
   &&liveTest.includes("for(const format of ['pdf','json'])"),
