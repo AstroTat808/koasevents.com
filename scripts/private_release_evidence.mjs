@@ -93,10 +93,20 @@ export function sanitizeDashboard(data, expectedSha) {
         + '&key=' + encodeURIComponent(shot.key) };
   });
   requireValue(Array.isArray(dashboard.enrichmentWarnings), 'Enrichment warning evidence is missing.');
+  // Preserve component identifiers only. Never expose check names, paths,
+  // details, upstream payloads, client records or credential metadata in CI.
+  const failedCheckIds=Array.isArray(current.checks)
+    ? [...new Set(current.checks
+        .filter(row=>row?.ok===false||row?.severity==='red')
+        .map(row=>String(row?.id||'').trim())
+        .filter(id=>/^[a-z0-9-]{1,64}$/.test(id)))].slice(0,100)
+    : [];
+  requireValue(current.failed===0||failedCheckIds.length<=current.failed,
+    'A sanitized health failure count exceeds the authoritative snapshot.');
   return {
     ok: true, sha: expectedSha, deployId: data.deployId,
     current: { overall: current.overall, passed: current.passed, failed: current.failed,
-      checkedAt: current.checkedAt, checks: [] },
+      checkedAt: current.checkedAt, failedCheckIds, checks: [] },
     coverage: {}, criticalIntegrations: {}, rollbackReady: {}, runtime: {}, deployments: {},
     office365: {}, emailHealth: {}, credentialHealth: {}, weeklyExecutiveSummary: {}, accountingHealth: {},
     visualQuality: { status: q.status, checkedAt: q.checkedAt, source: 'production-visual-qa',
@@ -132,6 +142,13 @@ function selfTest() {
   assert.equal(safe.visualQuality.chromium.cases, 4);
   assert.equal(safe.visualQuality.screenshots.length, 4);
   assert.equal(safe.enrichmentWarnings.length, 1);
+  const failedFixture={...input, current:{...input.current, overall:'unhealthy',passed:81,failed:1,
+    checks:[{id:'netlify-recovery-credential',ok:false,detail:'PRIVATE_CUSTOMER'},
+      {id:'customer@example.invalid',ok:false,detail:'PRIVATE_CUSTOMER'}]}};
+  const failedSafe=sanitizeDashboard(failedFixture,commit);
+  assert.deepEqual(failedSafe.current.failedCheckIds,['netlify-recovery-credential']);
+  assert(!JSON.stringify(failedSafe).includes('PRIVATE_CUSTOMER'));
+  assert(!JSON.stringify(failedSafe).includes('customer@example.invalid'));
   // Match the actual OIDC run-dashboard-refresh response, whose detailed
   // browser evidence is nested under dashboard rather than at the top level.
   const envelope = { ok: true, sha: commit, deployId, source: 'github-actions-oidc',
@@ -175,7 +192,8 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
         const safe = sanitizeDashboard(data, expectedSha);
         writeFileSync(outputFile, JSON.stringify(safe));
         console.log(JSON.stringify({ ok: true, overall: safe.current.overall, passed: safe.current.passed,
-          failed: safe.current.failed, checkedAt: safe.current.checkedAt, enrichmentWarningCount: safe.enrichmentWarnings.length }));
+          failed: safe.current.failed, failedCheckIds: safe.current.failedCheckIds,
+          checkedAt: safe.current.checkedAt, enrichmentWarningCount: safe.enrichmentWarnings.length }));
       } else throw new Error('Unknown private evidence mode.');
     }
   } catch {

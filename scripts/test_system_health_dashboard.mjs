@@ -17,6 +17,7 @@ const visualWorkflow = await readFile(new URL('../.github/workflows/production-v
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 const netlifyBuildRunner = await readFile(new URL('./run_netlify_build.mjs', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
+const certifiedReleaseExport = await readFile(new URL('../netlify/functions/_shared/release-attestation-export.mjs', import.meta.url), 'utf8');
 const recoveryCredentialCheck = await readFile(new URL('./netlify_recovery_credential_check.mjs', import.meta.url), 'utf8');
 const recoveryCredentialPublish = await readFile(new URL('./publish_netlify_recovery_credential_health.mjs', import.meta.url), 'utf8');
 const responsiveReleasePublish = await readFile(new URL('./publish_responsive_release_evidence.mjs', import.meta.url), 'utf8');
@@ -604,7 +605,6 @@ assert(
 
 
 
-
 const { verifyPublishedRecoveryProof, signedPublishedCredentialMatches } = await import(
   new URL('../netlify/functions/_shared/netlify-published-identity.mjs', import.meta.url)
 );
@@ -678,4 +678,38 @@ assert(
   'The GitHub-owned credential must stay in CI while signed current-published identity and readback remain mandatory.');
 console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
 
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
+
+
+assert(
+  health.includes('function installHealthPanelToolbar()')
+    && health.includes("bar.dataset.healthPanelsToolbar=''")
+    && health.includes("button.dataset.healthPanelsAction=attribute")
+    && health.includes("app.querySelectorAll('[data-mobile-collapsible]')")
+    && health.includes("installHealthPanelToolbar();")
+    && health.includes("prepareMobileCollapsible(section);")
+    && health.includes("toggleButton.setAttribute('aria-label',(collapsed?'Expand ':'Collapse ')+title)")
+    && health.includes("button.setAttribute('aria-controls',bodyIds.join(' '))")
+    && health.includes("const startCollapsed=!isHealthSectionRememberedOpen(section)")
+    && health.includes("sessionStorage.setItem(healthCollapsedSessionKey"),
+  'System Health must keep the summary visible and expose accessible, session-persistent collapsible diagnostic panels at all viewport widths.',
+);
+
+
+
+assert(
+  health.includes('data-certified-release-export="pdf"')
+    && health.includes('data-certified-release-export="json"')
+    && !health.includes('function pdfReleaseEvidence(data)')
+    && !health.includes('installReleaseExportControls();')
+    && adminHealth.includes("url.searchParams.get('export')==='certified-release'")
+    && adminHealth.includes('buildCertifiedReleaseExport(releases')
+    && adminHealth.includes('certifiedReleasePdf(attestation)')
+    && certifiedReleaseExport.includes('function isCertified(row)')
+    && certifiedReleaseExport.includes("productionGateState!=='success'")
+    && certifiedReleaseExport.includes("visualQaConclusion!=='success'")
+    && certifiedReleaseExport.includes("responsiveQaConclusion!=='success'")
+    && certifiedReleaseExport.includes('screenshotReferences:screenshots'),
+  'Certified release PDF and JSON downloads must use the single server-side fail-closed evidence validator.',
+);
