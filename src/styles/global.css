@@ -2363,3 +2363,32 @@ html[data-theme="dark"] body.koa-admin-page main .display.mt-2.text-4xl {
   color: var(--koa-text-strong) !important;
 }
 
+
+
+/* System Health diagnostic accordion: identical behavior at every viewport. */
+body.koa-admin-page main[data-system-health-page] [data-mobile-collapsible] > .koa-mobile-collapsed-content {display:none !important;}
+body.koa-admin-page main[data-system-health-page] .health-section-mobile-controls {
+ display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.75rem;
+}
+body.koa-admin-page main[data-system-health-page] .health-section-mobile-header {cursor:pointer;}
+body.koa-admin-page main[data-system-health-page] .health-mobile-detail-toggle {
+ display:inline-flex;align-items:center;gap:.4rem;min-height:44px;padding:.6rem .9rem;
+ margin-top:0;border:1px solid var(--koa-line);border-radius:9999px;
+ background:var(--koa-surface);color:var(--koa-forest);
+ font-size:.7rem;font-weight:800;letter-spacing:.025em;
+}
+body.koa-admin-page main[data-system-health-page] .health-mobile-detail-toggle:focus-visible {
+ outline:2px solid var(--koa-clay);outline-offset:3px;
+}
+body.koa-admin-page main[data-system-health-page] [data-mobile-collapsed="false"] .health-mobile-detail-toggle [aria-hidden="true"] {transform:rotate(180deg);}
+body.koa-admin-page main[data-system-health-page] .health-section-mobile-summary {display:none;}
+body.koa-admin-page main[data-system-health-page] [data-mobile-collapsed="true"] .health-section-mobile-summary:not(.hidden) {display:block;white-space:normal;text-align:left;}
+body.koa-admin-page main[data-system-health-page] .health-panels-toolbar {
+ position:relative;z-index:1;
+}
+@media (max-width:767px) {
+ body.koa-admin-page main[data-system-health-page] .health-panels-toolbar {order:1;}
+}
+@media (prefers-reduced-motion:reduce) {
+ body.koa-admin-page main[data-system-health-page] .health-mobile-detail-toggle [aria-hidden="true"] {transition:none;}
+}
