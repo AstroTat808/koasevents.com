@@ -9,7 +9,9 @@ import {
   readLatestHourlyHealth,
   readProductionReleases,
   recordGithubMainSignal,
+  recordNetlifyRecoveryCredentialVerification,
   recordProductionRelease,
+  recordProductionResponsiveQuality,
   recordProductionVisualThumbnail,
   rollbackFailedProductionRelease,
   runSystemHealth,
@@ -695,6 +697,97 @@ export default async (req:Request,context:Context) => {
     }
 
 
+    if(body?.action==='record-netlify-recovery-credential'){
+      const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
+      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
+        return Response.json({ok:false,error:'Only Production visual QA may record the Netlify recovery credential verification.'},{status:403,headers:{'Cache-Control':'no-store'}});
+      }
+      const expectedSha=cleanText(claims?.sha,80);
+      const deployedCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      if(deployedCommit&&deployedCommit!==expectedSha){
+        return Response.json({ok:false,error:'Production is not serving the requesting GitHub commit.',expected:expectedSha,deployed:deployedCommit},{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      const expectedSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      const providedSiteId=cleanText(body?.siteId,120);
+      const siteIdMatches=Boolean(body?.siteIdMatches&&expectedSiteId&&providedSiteId===expectedSiteId);
+      const verification=await recordNetlifyRecoveryCredentialVerification(context,{
+        checkedAt:body?.checkedAt,
+        configured:Boolean(body?.configured),
+        usable:Boolean(body?.usable),
+        siteId:providedSiteId,
+        siteName:body?.siteName,
+        siteIdMatches,
+        siteHttpStatus:Number(body?.siteHttpStatus||0),
+        deployListHttpStatus:Number(body?.deployListHttpStatus||0),
+        commit:expectedSha,
+        runId:cleanText(claims?.run_id||claims?.run_number,80),
+      });
+      const ok=Boolean(
+        verification.configured&&verification.usable&&verification.siteIdMatches
+        &&verification.siteHttpStatus===200&&verification.deployListHttpStatus===200
+      );
+      return Response.json({
+        ok,recorded:true,source:'github-actions-oidc',
+        verification:{
+          checkedAt:verification.checkedAt,
+          configured:verification.configured,
+          usable:verification.usable,
+          siteId:verification.siteId,
+          siteName:verification.siteName,
+          siteIdMatches:verification.siteIdMatches,
+          siteHttpStatus:verification.siteHttpStatus,
+          deployListHttpStatus:verification.deployListHttpStatus,
+          commit:verification.commit,
+          runId:verification.runId,
+        },
+      },{status:ok?200:422,headers:{'Cache-Control':'no-store'}});
+    }
+
+    if(body?.action==='record-responsive-visual-quality'){
+      const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
+      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
+        return Response.json({ok:false,error:'Only Production visual QA may record responsive release evidence.'},{status:403,headers:{'Cache-Control':'no-store'}});
+      }
+      const expectedSha=cleanText(claims?.sha,80);
+      const deployedCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      if(deployedCommit&&deployedCommit!==expectedSha){
+        return Response.json({ok:false,error:'Production is not serving the requesting GitHub commit.',expected:expectedSha,deployed:deployedCommit},{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      const deployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      if(!deployId)return Response.json({ok:false,error:'Production deploy id is unavailable.'},{status:503,headers:{'Cache-Control':'no-store'}});
+      try{
+        const release:any=await recordProductionResponsiveQuality(context,{
+          deployId,
+          commit:expectedSha,
+          runId:cleanText(claims?.run_id||claims?.run_number,80),
+          checkedAt:body?.checkedAt,
+          browser:body?.browser,
+          cases:body?.cases,
+          viewportNames:body?.viewportNames,
+          criticalCount:body?.criticalCount,
+          designCount:body?.designCount,
+          reportMissing:body?.reportMissing,
+        });
+        const responsive=release?.responsiveQuality||null;
+        const browser=body?.browser==='webkit'?'webkit':'chromium';
+        const recorded=Boolean(
+          responsive
+          &&responsive.commit===expectedSha
+          &&responsive.deployId===deployId
+          &&responsive?.[browser]?.browser===browser
+        );
+        return Response.json({
+          ok:recorded,recorded,sha:expectedSha,deployId,source:'github-actions-oidc',
+          responsiveQuality:responsive,
+        },{status:recorded?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,error:error instanceof Error?error.message:'Unable to persist responsive production QA.',
+          sha:expectedSha,deployId,source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='record-production-release-attestation'){
       const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
       if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
@@ -751,11 +844,23 @@ export default async (req:Request,context:Context) => {
           &&visualQaRunId===runId
           &&body?.visualQaConclusion==='success'
         );
-        if(!healthOk||!visualOk||body?.productionGateState!=='success'){
+        const responsive:any=release?.responsiveQuality||null;
+        const responsiveOk=Boolean(
+          responsive
+          &&responsive?.status==='passed'
+          &&cleanText(responsive?.commit,80)===expectedSha
+          &&cleanText(responsive?.deployId,120)===deployId
+          &&cleanText(responsive?.runId,80)===runId
+          &&responsive?.chromium?.reportMissing===false
+          &&responsive?.webkit?.reportMissing===false
+          &&Number(responsive?.chromium?.criticalCount||0)===0
+          &&Number(responsive?.webkit?.criticalCount||0)===0
+        );
+        if(!healthOk||!visualOk||!responsiveOk||body?.productionGateState!=='success'){
           return Response.json({
             ok:false,
             error:'Release-history evidence is incomplete or does not match the exact production release.',
-            expectedSha,deployId,healthOk,visualOk,
+            expectedSha,deployId,healthOk,visualOk,responsiveOk,
           },{status:409,headers:{'Cache-Control':'no-store'}});
         }
 
@@ -767,6 +872,7 @@ export default async (req:Request,context:Context) => {
           deployState,deployContext,publishedAt,
           visualQaRunId:runId,
           visualQaConclusion:'success',
+          responsiveQaConclusion:'success',
           systemHealth:{overall:'healthy',passed:Number(health.passed),failed:0,checkedAt},
           productionGateState:'success',
           source:'github-actions-oidc' as const,
