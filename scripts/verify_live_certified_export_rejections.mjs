@@ -28,7 +28,20 @@ if(!url||!secret||!/^[a-f0-9]{40}$/i.test(sha||'')){
       JSON.stringify(result.formats)!==JSON.stringify(['json','pdf'])){
       throw Error('production identity or 36/36 negative tests did not match');
     }
-    console.log('PASS | exact-SHA production PDF/JSON security: 36/36 uncertified synthetic exports rejected.');
+    // Exercise both real public-facing export routes without a session.
+    // No bearer token, cookie, response payload or customer identifier is used.
+    for(const format of ['pdf','json']){
+      const denied=await fetch(
+        'https://koasevents.com/api/admin/health?export=certified-release&format='+format,
+        {redirect:'manual',signal:AbortSignal.timeout(15000)},
+      );
+      if(![401,403].includes(denied.status)
+        ||denied.headers.get('content-disposition')?.includes('attachment')
+        ||!String(denied.headers.get('cache-control')||'').includes('no-store')){
+        throw Error('Anonymous '+format+' export was not blocked at the production HTTP boundary');
+      }
+    }
+    console.log('PASS | exact-SHA production PDF/JSON security: 36/36 synthetic uncertified exports rejected; anonymous PDF/JSON HTTP access denied.');
   }catch{
     fail('signed exact-release verification failed; private details withheld');
   }
