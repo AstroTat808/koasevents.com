@@ -87,7 +87,7 @@ jobs:
       - name: Test independent exact-SHA Netlify recovery policy
         run: node scripts/test_production_deploy_recovery.mjs
       - name: Verify GitHub-owned Netlify recovery credential (read-only)
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name != 'pull_request'
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
