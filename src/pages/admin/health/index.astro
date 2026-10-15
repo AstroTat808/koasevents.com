@@ -2762,6 +2762,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(creditPanel instanceof HTMLElement&&!creditPanel.id)creditPanel.id='health-credit-usage';
       prepareMobileCollapsible(creditPanel);
       installHealthPanelToolbar();
+      installReleaseExportControls();
 
       makeHealthJumpCard(passedCard,showHealthyChecks,'Show healthy System Health checks');
       makeHealthJumpCard(checkedCard,()=>jumpToHealthSection('#health-history'),'Open recent System Health history');
@@ -3004,6 +3005,155 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(hours)parts.push(hours+'h');
       if(mins||!parts.length)parts.push(mins+'m');
       return parts.join(' ');
+    }
+
+    function certifiedReleaseEvidence(release){
+      const attestation=release?.releaseAttestation||null;
+      const visual=release?.visualQuality||null;
+      const responsive=release?.responsiveQuality||null;
+      // Explicit allowlist: never export authenticated responses, cookies,
+      // client details, untrusted logs, screenshot bytes, or credential material.
+      return {
+        schemaVersion:1,
+        exportedAt:new Date().toISOString(),
+        verificationStatus:attestation?.status==='verified'&&attestation?.productionGateState==='success'&&attestation?.matchingDeployId===true?'certified':'not-certified',
+        release:{
+          commit:String(release?.commit||''),
+          deployId:String(release?.deployId||''),
+          publishedAt:String(release?.publishedAt||''),
+          certificationTimestamp:String(attestation?.verifiedAt||''),
+          liveDeployId:String(attestation?.liveDeployId||''),
+          matchingDeployId:attestation?.matchingDeployId===true,
+          productionGateState:String(attestation?.productionGateState||'unknown'),
+        },
+        systemHealth:attestation?.systemHealth?{
+          overall:String(attestation.systemHealth.overall||'unknown'),
+          passed:Number(attestation.systemHealth.passed||0),
+          failed:Number(attestation.systemHealth.failed||0),
+          checkedAt:String(attestation.systemHealth.checkedAt||''),
+        }:null,
+        themeQa:visual?{
+          status:String(visual.status||'unknown'),commit:String(visual.commit||''),deployId:String(visual.deployId||''),
+          checkedAt:String(visual.checkedAt||''),runId:String(visual.runId||''),
+          chromium:visual.chromium?{routes:Number(visual.chromium.routes||0),cases:Number(visual.chromium.cases||0),failures:Number(visual.chromium.failureCount||0)}:null,
+          webkit:visual.webkit?{routes:Number(visual.webkit.routes||0),cases:Number(visual.webkit.cases||0),failures:Number(visual.webkit.failureCount||0)}:null,
+        }:null,
+        responsiveQa:responsive?{
+          status:String(responsive.status||'unknown'),commit:String(responsive.commit||''),deployId:String(responsive.deployId||''),
+          checkedAt:String(responsive.checkedAt||''),runId:String(responsive.runId||''),
+          chromium:responsive.chromium?{cases:Number(responsive.chromium.cases||0),viewports:Number(responsive.chromium.viewports||0),criticalCount:Number(responsive.chromium.criticalCount||0),viewportNames:(responsive.chromium.viewportNames||[]).map(String)}:null,
+          webkit:responsive.webkit?{cases:Number(responsive.webkit.cases||0),viewports:Number(responsive.webkit.viewports||0),criticalCount:Number(responsive.webkit.criticalCount||0),viewportNames:(responsive.webkit.viewportNames||[]).map(String)}:null,
+        }:null,
+        screenshots:(Array.isArray(visual?.screenshots)?visual.screenshots:[]).map((shot)=>({
+          key:String(shot.key||''),theme:String(shot.theme||''),viewport:String(shot.viewport||''),
+          width:Number(shot.width||0),height:Number(shot.height||0),
+          protectedReference:'/api/admin/health?action=dark-mode-qa-screenshot&deployId='+
+            encodeURIComponent(String(release?.deployId||''))+'&key='+encodeURIComponent(String(shot.key||'')),
+        })),
+      };
+    }
+
+    function downloadReleaseEvidence(name,mime,body){
+      const url=URL.createObjectURL(new Blob([body],{type:mime}));
+      const link=document.createElement('a');link.href=url;link.download=name;
+      document.body.appendChild(link);link.click();link.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+
+    function pdfReleaseEvidence(data){
+      // Small self-contained PDF writer: sanitized ASCII only; no external
+      // PDF library or network requests. Long evidence paginates safely.
+      const lines=['KOA EVENTS - PRODUCTION RELEASE ATTESTATION','Status: '+data.verificationStatus.toUpperCase()];
+      function item(label,value){lines.push(label+': '+String(value??'not recorded'));}
+      item('Exported UTC',data.exportedAt);
+      for(const [key,value] of Object.entries(data.release))item('Release '+key,value);
+      if(data.systemHealth)for(const [key,value] of Object.entries(data.systemHealth))item('Health '+key,value);
+      for(const [label,qa] of [['Theme',data.themeQa],['Responsive',data.responsiveQa]]){
+        lines.push('',label+' QA');
+        if(!qa){lines.push('No persisted '+label+' QA evidence');continue;}
+        for(const [key,value] of Object.entries(qa)){
+          if(value===null||typeof value==='object')continue;
+          item(key,value);
+        }
+        for(const browser of ['chromium','webkit']){
+          const row=qa[browser];
+          lines.push(browser.toUpperCase()+': '+(row?JSON.stringify(row):'not recorded'));
+        }
+      }
+      lines.push('','Protected screenshot references (metadata only)');
+      data.screenshots.forEach((shot)=>lines.push(
+        shot.key+' | '+shot.width+'x'+shot.height+' | '+shot.protectedReference
+      ));
+      if(!data.screenshots.length)lines.push('No screenshot references recorded');
+      const wrap=(value)=>{
+        const plain=String(value).normalize('NFKD').replace(/[^\x20-\x7E]/g,'?');
+        const out=[];
+        for(let i=0;i<plain.length;i+=92)out.push(plain.slice(i,i+92));
+        return out.length?out:[''];
+      };
+      const textLines=lines.flatMap(wrap);
+      const pages=[];
+      for(let i=0;i<textLines.length;i+=54)pages.push(textLines.slice(i,i+54));
+      const objects=[null];
+      const add=(value)=>{objects.push(value);return objects.length-1;};
+      const catalog=add('');const pagesId=add('');const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+      const pageIds=[];
+      for(const pageLines of pages){
+        const escapePdf=(v)=>v.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+        const stream='BT /F1 9 Tf 12 TL 45 785 Td '+pageLines.map((line,index)=>
+          (index?'T* ':'')+'('+escapePdf(line)+') Tj'
+        ).join('\n')+' ET';
+        const content=add('<< /Length '+new TextEncoder().encode(stream).length+' >>\nstream\n'+stream+'\nendstream');
+        const page=add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 '+font+' 0 R >> >> /Contents '+content+' 0 R >>');
+        pageIds.push(page);
+      }
+      objects[catalog]='<< /Type /Catalog /Pages '+pagesId+' 0 R >>';
+      objects[pagesId]='<< /Type /Pages /Kids ['+pageIds.map(i=>i+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>';
+      const encoder=new TextEncoder();
+      let doc='%PDF-1.4\n';const offsets=[0];
+      for(let i=1;i<objects.length;i++){
+        offsets[i]=encoder.encode(doc).length;
+        doc+=i+' 0 obj\n'+objects[i]+'\nendobj\n';
+      }
+      const xref=encoder.encode(doc).length;
+      doc+='xref\n0 '+objects.length+'\n0000000000 65535 f \n';
+      for(let i=1;i<objects.length;i++)doc+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+      doc+='trailer\n<< /Size '+objects.length+' /Root '+catalog+' 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+      return encoder.encode(doc);
+    }
+
+    function exportLatestCertifiedRelease(format){
+      const release=latestReleases.find((item)=>{
+        const attestation=item?.releaseAttestation;
+        return attestation?.status==='verified'
+          &&attestation?.productionGateState==='success'
+          &&attestation?.matchingDeployId===true;
+      });
+      if(!release){
+        window.alert('No certified production release is available to export.');
+        return;
+      }
+      const evidence=certifiedReleaseEvidence(release);
+      const stem='koa-certified-release-'+String(release.deployId||'unknown').replace(/[^a-zA-Z0-9_-]/g,'');
+      if(format==='json')downloadReleaseEvidence(stem+'.json','application/json',JSON.stringify(evidence,null,2));
+      else downloadReleaseEvidence(stem+'.pdf','application/pdf',pdfReleaseEvidence(evidence));
+    }
+
+    function installReleaseExportControls(){
+      const section=findDirectHealthSection('Deployment');
+      if(!(section instanceof HTMLElement)||section.querySelector('[data-release-export-controls]'))return;
+      const controls=document.createElement('div');
+      controls.dataset.releaseExportControls='';
+      controls.className='mt-3 flex flex-wrap items-center gap-2';
+      for(const [format,label] of [['pdf','Export certified PDF'],['json','Export certified JSON']]){
+        const button=document.createElement('button');
+        button.type='button';button.dataset.releaseExport=format;
+        button.className='rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-xs font-bold text-[var(--koa-forest)] focus-visible:outline focus-visible:outline-2';
+        button.textContent=label;
+        button.addEventListener('click',()=>exportLatestCertifiedRelease(format));
+        controls.appendChild(button);
+      }
+      section.firstElementChild?.appendChild(controls);
     }
 
     function renderReleaseTimeline(){
