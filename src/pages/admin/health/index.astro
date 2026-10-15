@@ -2367,7 +2367,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           setMobileCollapsed(section,false);
         }else if(isHealthSectionRememberedClosed(section)){
           setMobileCollapsed(section,true);
-        }else if((!previous||previous!==normalized)&&mobileHealthQuery.matches){
+        }else if(!previous||previous!==normalized){
           setMobileCollapsed(section,normalized==='green');
         }
       }
@@ -2427,9 +2427,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true',true);
       });
       section.dataset.mobileCollapseReady='true';
-      const startCollapsed=isHealthSectionRememberedClosed(section)
-        ||(!isHealthSectionRememberedOpen(section)&&mobileHealthQuery.matches);
+      const startCollapsed=!isHealthSectionRememberedOpen(section);
       setMobileCollapsed(section,startCollapsed);
+      // A new critical/warning status must expand its panel immediately.
+      // Observe attribute transitions as well as ordinary data refreshes,
+      // so synthetic browser checks exercise the same UX contract.
+      const statusObserver=new MutationObserver((entries)=>{
+        if(!entries.some((entry)=>entry.attributeName==='data-health-section-status'))return;
+        const now=String(section.dataset.healthSectionStatus||'');
+        const prior=String(section.dataset.healthObservedStatus||'');
+        if(prior===now)return;
+        section.dataset.healthObservedStatus=now;
+        if(now==='red'||now==='yellow')setMobileCollapsed(section,false);
+        else if(now==='green'&&!isHealthSectionRememberedOpen(section)){
+          setMobileCollapsed(section,true);
+        }
+      });
+      section.dataset.healthObservedStatus=String(section.dataset.healthSectionStatus||'');
+      statusObserver.observe(section,{attributes:true,attributeFilter:['data-health-section-status']});
     }
 
 
@@ -2785,7 +2800,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!(section instanceof HTMLElement))return;
         if(isHealthSectionRememberedOpen(section))setMobileCollapsed(section,false);
         else if(isHealthSectionRememberedClosed(section))setMobileCollapsed(section,true);
-        else setMobileCollapsed(section,event.matches&&section.dataset.healthSectionStatus!=='red'&&section.dataset.healthSectionStatus!=='yellow');
+        else setMobileCollapsed(section,section.dataset.healthSectionStatus!=='red'&&section.dataset.healthSectionStatus!=='yellow');
       });
       refreshMobileHealthPresentation();
     });
