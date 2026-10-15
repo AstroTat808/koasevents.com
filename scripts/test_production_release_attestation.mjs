@@ -119,12 +119,12 @@ assert(persistShell.includes('trap fail_history ERR')
     && persistShell.includes('koa-release-history-failure-status.json'),
   'Release-history persistence must preserve fail-closed status publication and durable recorder enforcement.');
 const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes',shellEnd);
-const bytesShellStart=workflow.indexOf('        run: |\\n',bytesStep);
-const bytesShellEnd=workflow.indexOf('\\n  qa-summary:',bytesShellStart);
+const bytesShellStart=workflow.indexOf('        run: |\n',bytesStep);
+const bytesShellEnd=workflow.indexOf('\n  qa-summary:',bytesShellStart);
 assert(bytesStep>shellEnd&&bytesShellStart>bytesStep&&bytesShellEnd>bytesShellStart,
   'Certified PDF/JSON byte-proof shell step was not found.');
-const bytesShell=workflow.slice(bytesShellStart+'        run: |\\n'.length,bytesShellEnd)
-  .split('\\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\\n');
+const bytesShell=workflow.slice(bytesShellStart+'        run: |\n'.length,bytesShellEnd)
+  .split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
 const bytesSyntax=spawnSync('bash',['-n'],{input:bytesShell,encoding:'utf8'});
 assert(bytesSyntax.status===0,
   'Certified export-byte fail-closed shell must pass bash -n: '+String(bytesSyntax.stderr||'').slice(0,350));
