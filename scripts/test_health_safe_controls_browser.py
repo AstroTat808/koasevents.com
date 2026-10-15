@@ -64,7 +64,7 @@ def run(browser_name,base_url,width,height):
             dialog=page.locator("[data-health-detail-dialog]")
             assert dialog.evaluate("(el) => el.open"),"Diagnostic dialog must open"
             panel=page.locator("[data-health-safe-diagnostics]")
-            assert not panel.is_visible(),"Troubleshooting panel must start collapsed or hidden"
+            assert not panel.evaluate("(el) => el.open"),"Troubleshooting panel must start collapsed"
             summary=panel.locator("summary")
             summary.click()
             assert panel.evaluate("(el) => el.open"),"Click must expand troubleshooting"
