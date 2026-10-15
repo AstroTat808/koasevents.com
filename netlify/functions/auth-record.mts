@@ -4,6 +4,8 @@ import {
   appendAuthEvent,
   evaluateLoginRisk,
   registerManagedSession,
+  managedSessionStatus,
+  revokeManagedSession,
   recordLoginFailureSignal,
   requestDeviceFingerprint,
   requestUserAgent,
@@ -36,6 +38,22 @@ export default async(req:Request,context:Context)=>{
   const email=clean(body.email,240).toLowerCase();
   const ip=await ipFingerprint(req);
   const ua=requestUserAgent(req);
+
+  if(action==='logout'){
+    const user=await getUser();
+    if(user?.id){
+      const status=await managedSessionStatus(req,String(user.id));
+      if(status.session&&!status.revoked)await revokeManagedSession(
+        String(user.id),status.session.id,clean(user.email,240)||'self',context,clean(user.email,240),
+      ).catch(()=>null);
+    }
+    const response=Response.json({ok:true},{headers:{'Cache-Control':'private, no-store'}});
+    response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    // koa_sid identifies the old managed session. Do not let a subsequent
+    // fresh login silently inherit that revoked session or its fingerprint.
+    response.headers.append('Set-Cookie','koa_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0');
+    return response;
+  }
 
   if(action==='failure'){
     if(!email.includes('@'))return Response.json({ok:true});

@@ -296,8 +296,12 @@ export async function registerManagedSession(req:Request,user:any,options:{remem
   const now=new Date().toISOString();const ua=requestUserAgent(req);const ip=await ipFingerprint(req);const jwt=cookie(req,'nf_jwt');
   // A fresh, successful Identity login must not inherit a previously revoked session.
   const prior=current.find(row=>row.id===requestId);
-  const sessionId=prior?.revokedAt?crypto.randomUUID():requestId;
-  const existing=prior?.revokedAt?null:prior;
+  // Do not turn a revoked browser session into an authorized one merely
+  // because an existing Identity JWT calls the login-record endpoint.
+  // Sign out first to clear koa_sid; then a NEW Identity login gets a new SID.
+  if(prior?.revokedAt)return prior;
+  const sessionId=requestId;
+  const existing=prior||null;
   const rememberedUntil=options.remember===true
     ?new Date(Date.now()+REMEMBER_SESSION_MAX_AGE_SECONDS*1000).toISOString()
     :options.remember===false?'':existing?.rememberedUntil||'';

@@ -2591,12 +2591,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
   });
 
-  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
+  async function signOutTrackedSession(){
+    await fetch('/api/auth/record',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'logout'}),credentials:'same-origin',
+    }).catch(()=>null);
     await logout();
+  }
+  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
+    await signOutTrackedSession();
     window.location.assign('/staff/');
   });
   nav?.querySelector('[data-workspace-account-logout]')?.addEventListener('click', async () => {
-    await logout();
+    await signOutTrackedSession();
     window.location.assign('/staff/');
   });
 

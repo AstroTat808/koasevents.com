@@ -21,6 +21,10 @@ must(/name="remember"[^>]*checked/,login,'30-day opt-in login checkbox must be c
 must(/body:JSON\.stringify\(\{action:'success',email,remember:/,login,'login must send remember preference to server');
 must(/REMEMBER_SESSION_MAX_AGE_SECONDS=30\*24\*60\*60/,sessions,'remembered-session TTL must be 30 days');
 must(/koa_remember/,sessions,'remember marker must be distinct from koa_sid');
+must(/if\(prior\?\.revokedAt\)return prior/,sessions,'revoked session must not be revived by bookkeeping endpoint');
+must(/if\(action==='logout'\)/,record,'explicit logout must revoke the current session');
+must(/revokeManagedSession\(/,record,'logout must revoke server-side session record');
+must(/koa_sid=; Path=\//,record,'logout must clear the old managed-session handle');
 must(/COOKIE_NAMES=\['nf_jwt','nf_refresh'\]/,remembered,'both Identity cookies must survive restarts');
 must(/Max-Age='\+MAX_AGE/,remembered,'client refresh rotation must preserve browser cookie persistence');
 must(/keepIdentitySessionAlive\(\)/,staff,'refresh listener must run in protected workspace');

@@ -188,6 +188,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if(event==='logout')forgetIdentityRememberPreference();
       else if(user&&(event==='token_refresh'||event==='login'))keepIdentitySessionAlive();
     });
+    async function endTrackedIdentitySession(){
+      await fetch('/api/auth/record',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'logout'}),credentials:'same-origin',
+      }).catch(()=>null);
+      await logout();
+    }
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
     const links = document.querySelector('[data-admin-links]');
@@ -829,7 +836,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           const check = await fetch('/api/admin/session',{cache:'no-store'}).catch(()=>null);
           if (check?.status === 401) {
             // Revoke/expired session must never auto-return into a redirect loop.
-            await logout();
+            await endTrackedIdentitySession();
             user = null;
           }
         }
@@ -1087,7 +1094,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
 
     async function signOut() {
-      await logout();
+      await endTrackedIdentitySession();
       showAuthState(null);
     }
 
