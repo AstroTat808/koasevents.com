@@ -82,6 +82,8 @@ jobs:
           python-version: '3.12'
       - name: Install site dependencies
         run: npm install --no-audit --no-fund
+      - name: Check privacy-safe protected admin QA diagnostics
+        run: python scripts/test_sanitized_protected_admin_qa.py
       - name: Structural build-safety gate
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
@@ -687,11 +689,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          trap 'rm -rf /tmp/admin-chromium.private.log visual-results/admin-chromium' EXIT
           if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1; then
-            echo 'Authenticated browser audit passed; private output withheld.'
+            echo 'Protected admin browser QA passed; private browser output withheld.'
           else
             result=$?
-            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
+            # Emit only static route labels and fixed error codes from private QA.
+            python scripts/sanitize_protected_admin_qa.py --report visual-results/admin-chromium/report.json --qa-exit "$result" || true
+            echo '::error::Protected admin browser QA failed. See the privacy-safe diagnostic codes above.'
             exit "$result"
           fi
   system-health-mobile-audit:
