@@ -548,8 +548,12 @@ def admin_mode(browser_name):
           const s=getComputedStyle(el),r=el.getBoundingClientRect();
           return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
         };
-        const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]',
-          '[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
+        const selectors=window.location.pathname.startsWith('/admin/clients/')
+          ? ['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-app]']
+          : window.location.pathname.startsWith('/admin/quotes/')
+            ? ['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-admin-ui]']
+            : ['[data-unauthorized]','[data-login-form]','[data-role-warning]',
+                '[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
         return selectors.some((selector)=>visible(document.querySelector(selector)));
       }""",
       timeout=15000,
@@ -581,7 +585,12 @@ def admin_mode(browser_name):
         return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
       };
       const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
-      const visibleSelectors=selectors.filter((selector)=>visible(document.querySelector(selector)));
+      const readySelectors=window.location.pathname.startsWith('/admin/clients/')
+        ? ['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-app]']
+        : window.location.pathname.startsWith('/admin/quotes/')
+          ? ['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-admin-ui]']
+          : selectors;
+      const visibleSelectors=readySelectors.filter((selector)=>visible(document.querySelector(selector)));
       return {visibleSelectors,title:document.title,bodyText:(document.body.innerText||'').trim().slice(0,500)};
     }""")
     allowed_visible=bool(state.get("visibleSelectors"))
