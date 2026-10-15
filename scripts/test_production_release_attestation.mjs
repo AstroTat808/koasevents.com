@@ -83,8 +83,12 @@ const server=readFileSync('netlify/functions/github-main-health-signal.ts','utf8
 const healthShared=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
 const healthPage=readFileSync('src/pages/admin/health/index.astro','utf8');
 const gateContextOccurrences=(workflow.match(/System Health production release gate/g)||[]).length;
-assert(gateContextOccurrences===3,
-  'Production release gate context must appear only in initial pending, final attestation, and release-history failure override publishers; found '+gateContextOccurrences+'.');
+assert(gateContextOccurrences===4
+  &&workflow.includes('Verify actual certified PDF and JSON serializer bytes')
+  &&workflow.includes('fail_export_proof()')
+  &&workflow.includes('node scripts/verify_live_certified_export_bytes.mjs')
+  &&workflow.includes('Certified PDF/JSON byte-level security evidence verification failed.'),
+  'Production release gate must have exactly four authorized publishers: initial pending, final attestation, history failure override and certified PDF/JSON byte-proof failure override; found '+gateContextOccurrences+'.');
 assert(workflow.includes("import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';"),
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
