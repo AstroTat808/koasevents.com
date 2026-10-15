@@ -15,6 +15,21 @@ function isSameOrigin(req:Request){
   if(origin){try{return new URL(origin).origin===new URL(req.url).origin;}catch{return false;}}
   return req.headers.get('sec-fetch-site')==='same-origin';
 }
+function rawCookie(req:Request,name:string){
+  const entry=String(req.headers.get('cookie')||'').split(';').map(p=>p.trim())
+    .find(p=>p.startsWith(name+'='));
+  const raw=entry?entry.slice(name.length+1):'';
+  return /^[A-Za-z0-9_~.%+\\/-]{1,8192}$/.test(raw)?raw:'';
+}
+function promoteExistingIdentityCookies(req:Request,response:Response){
+  // Do not overwrite the newly rotated cookies issued by refreshSession().
+  for(const name of ['nf_jwt','nf_refresh']){
+    const value=rawCookie(req,name);
+    if(value)response.headers.append('Set-Cookie',name+'='+value+
+      '; Path=/; Secure; SameSite=Lax; Max-Age='+REMEMBER_SESSION_MAX_AGE_SECONDS);
+  }
+  return response;
+}
 function tokenSubject(token:string){
   try {
     const payload=token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
@@ -28,7 +43,18 @@ export default async (req:Request)=>{
   if(!isSameOrigin(req))return Response.json({error:'Invalid request origin.'},{status:403,headers});
   try {
     const user=await getUser();
-    if(user?.id) return Response.json({ok:true,refreshed:false},{headers});
+    if(user?.id){
+      const response=Response.json({ok:true,refreshed:false},{headers});
+      if(hasRememberCookie(req)){
+        // After browser-side Identity rotation, reissue from our first-party
+        // server to avoid relying solely on Safari's script-set cookie lifetime.
+        await recordManagedSessionRefresh(req,String(user.id),rawCookie(req,'nf_jwt')).catch(()=>false);
+        promoteExistingIdentityCookies(req,response);
+        response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+
+          '=1; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+REMEMBER_SESSION_MAX_AGE_SECONDS);
+      }
+      return response;
+    }
     if(!hasRememberCookie(req))return Response.json({ok:false,code:'unauthenticated'},{status:401,headers});
     // Netlify Identity verifies the refresh token and rotates credentials.
     // Never return, log, or store either credential.

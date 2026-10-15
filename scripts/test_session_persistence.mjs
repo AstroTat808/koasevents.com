@@ -31,6 +31,9 @@ must(/keepIdentitySessionAlive\(\)/,staff,'refresh listener must run in protecte
 must(/rawCookieValue\(req,name\)/,record,'authenticated server records must preserve Identity cookie lifetime');
 must(/HttpOnly; Secure; SameSite=Lax; Max-Age=/,record,'preference must use safe cookie attributes');
 must(/hasRememberCookie\(req\)/,refresh,'refresh requires remembered login preference');
+must(/promoteExistingIdentityCookies\\(req,response\\)/,refresh,'valid Identity rotation must use server Set-Cookie');
+must(/event==='token_refresh'/,staff,'browser refresh must trigger server-backed persistence');
+must(/event==='token_refresh'/,login,'login page refresh must trigger server-backed persistence');
 must(/await refreshSession\(\)/,refresh,'Netlify Identity remains the refresh credential authority');
 must(/recordManagedSessionRefresh/,refresh,'successful refresh must record session health');
 must(/Vary':'Cookie'/,refresh,'refresh response must not be shared between users');

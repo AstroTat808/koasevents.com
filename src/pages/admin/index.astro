@@ -186,7 +186,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     onAuthChange((event,user)=>{
       if(event==='logout')forgetIdentityRememberPreference();
-      else if(user&&(event==='token_refresh'||event==='login'))keepIdentitySessionAlive();
+      else if(user&&(event==='token_refresh'||event==='login')){
+        const kept=keepIdentitySessionAlive();
+        if(kept&&event==='token_refresh'){
+          void fetch('/api/auth/session-refresh',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',body:'{}',cache:'no-store',
+          }).catch(()=>null);
+        }
+      }
     });
     async function endTrackedIdentitySession(){
       await fetch('/api/auth/record',{

@@ -1478,7 +1478,16 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   import { keepIdentitySessionAlive, forgetIdentityRememberPreference } from '../lib/remembered-session';
   onAuthChange((event,user)=>{
     if(event==='logout')forgetIdentityRememberPreference();
-    else if(user&&(event==='token_refresh'||event==='login'))keepIdentitySessionAlive();
+    else if(user&&(event==='token_refresh'||event==='login')){
+      const kept=keepIdentitySessionAlive();
+      if(kept&&event==='token_refresh'){
+        // Server-set persistence remains intact after rotating browser tokens.
+        void fetch('/api/auth/session-refresh',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',body:'{}',cache:'no-store',
+        }).catch(()=>null);
+      }
+    }
   });
   keepIdentitySessionAlive();
   import { getAdminSession } from '../lib/admin-session';
