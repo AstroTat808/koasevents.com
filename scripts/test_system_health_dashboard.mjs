@@ -614,7 +614,7 @@ assert(
     && health.includes("app.querySelectorAll('[data-mobile-collapsible]')")
     && health.includes("installHealthPanelToolbar();")
     && health.includes("prepareMobileCollapsible(section);")
-    && health.includes("button.setAttribute('aria-label',(collapsed?'Expand ':'Collapse ')+title)")
+    && health.includes("toggleButton.setAttribute('aria-label',(collapsed?'Expand ':'Collapse ')+title)")
     && health.includes("button.setAttribute('aria-controls',bodyIds.join(' '))")
     && health.includes("const startCollapsed=isHealthSectionRememberedClosed(section)")
     && health.includes("sessionStorage.setItem(healthCollapsedSessionKey"),
