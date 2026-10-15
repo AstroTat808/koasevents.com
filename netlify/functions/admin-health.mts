@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
+import { buildCertifiedReleaseExport, certifiedReleasePdf } from './_shared/release-attestation-export.mjs';
 import { resolveTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
@@ -944,6 +945,41 @@ export default async (req:Request,context:Context) => {
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
 
   const url=new URL(req.url);
+  if(url.searchParams.get('export')==='certified-release'){
+    if(!admin)return Response.json({error:'System Health management permission required.'},{status:403,headers:{'Cache-Control':'private, no-store'}});
+    const format=String(url.searchParams.get('format')||'pdf').toLowerCase();
+    if(format!=='pdf'&&format!=='json'){
+      return Response.json({error:'Certified release exports support PDF or JSON.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+    }
+    try{
+      // Exact stored, signed release evidence; never regenerate a green status
+      // from a currently pending production workflow or untrusted UI fields.
+      const releases=await readProductionReleases(context,100);
+      const attestation=buildCertifiedReleaseExport(releases,{
+        productionCommit:String(Netlify.env.get('COMMIT_REF')||''),
+        productionDeployId:String(context.deploy?.id||''),
+      });
+      const filename='koa-certified-release-'+attestation.release.deployId+'.'+format;
+      const headers={
+        'Content-Disposition':'attachment; filename="'+filename+'"',
+        'Cache-Control':'private, no-store',
+        'X-Content-Type-Options':'nosniff',
+      };
+      if(format==='json'){
+        return new Response(JSON.stringify(attestation,null,2)+'\\n',{
+          status:200,
+          headers:{...headers,'Content-Type':'application/json; charset=utf-8'},
+        });
+      }
+      return new Response(certifiedReleasePdf(attestation),{
+        status:200,headers:{...headers,'Content-Type':'application/pdf'},
+      });
+    }catch{
+      return Response.json({
+        error:'No complete, independently certified release is available for export.',
+      },{status:409,headers:{'Cache-Control':'private, no-store'}});
+    }
+  }
   if(url.searchParams.get('export')==='critical-integrations'){
     if(!admin)return Response.json({error:'System Health management permission required.'},{status:403,headers:{'Cache-Control':'private, no-store'}});
     try{
