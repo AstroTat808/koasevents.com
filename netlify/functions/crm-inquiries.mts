@@ -3,6 +3,7 @@ import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tena
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
+import { normalizeLodgingPreference, sameStayLodgingChoice, validateStayInquiry } from './_shared/lodging-inquiry.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
   analyzeInquirySecurity,
@@ -590,6 +591,13 @@ export default async (req: Request, context: Context) => {
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
+  // Validate but never claim that a requested home is held or available.
+  if (formName === 'koa-stay-inquiry') {
+    const stayValidation = validateStayInquiry(payload.inquiry);
+    if (!stayValidation.ok) {
+      return json(req, { error: stayValidation.error }, 400);
+    }
+  }
   const store = salesStoreFor(context, req);
   const businessLine = formName.startsWith('wild-ones-')
     ? 'wild-ones'
@@ -665,6 +673,10 @@ export default async (req: Request, context: Context) => {
       arrival: cleanText(payload.inquiry?.arrival, 40),
       departure: cleanText(payload.inquiry?.departure, 40),
       stayType: cleanText(payload.inquiry?.stayType, 120),
+      lodgingPreference: formName === 'koa-stay-inquiry'
+        ? (normalizeLodgingPreference(payload.inquiry?.lodgingPreference) || 'not-specified') : '',
+      sleepingNeeds: formName === 'koa-stay-inquiry'
+        ? cleanText(payload.inquiry?.sleepingNeeds, 1000) : '',
       planningFrom: cleanText(payload.inquiry?.planningFrom, 160),
       barStyle: cleanText(payload.inquiry?.barStyle, 160),
       venueTour: cleanText(payload.inquiry?.venueTour, 160),
@@ -811,6 +823,9 @@ export default async (req: Request, context: Context) => {
       if (!entry || entry.source !== formName) return false;
       if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
+      // Two different homes requested for the same travel dates are distinct leads.
+      if (formName === 'koa-stay-inquiry' &&
+          !sameStayLodgingChoice(entry.inquiry?.lodgingPreference, record.inquiry.lodgingPreference)) return false;
       if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
       const createdAt = Date.parse(String(entry.createdAt || ''));
       return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;

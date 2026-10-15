@@ -37,6 +37,21 @@ def check_comparison(page, route, viewport, browser_name):
         card = cards.nth(index)
         require(card.get_by_role("heading", name=title).count() == 1,
                 f"{route}: incorrect home card {index + 1}")
+        require(card.get_attribute("data-lodging-home") == ("three-bedroom" if index == 0 else "two-bedroom"),
+                f"{route}: home selection identifier mismatch")
+        image = card.locator("img[data-koa-focal-src]")
+        require(image.count() == 1 and (image.get_attribute("data-koa-focal-src") or "").startswith("/media/wix/"),
+                f"{route}: photo must be from the original Koa's venue/event archive")
+        require("not verified as this home" in card.locator("figcaption").inner_text().lower(),
+                f"{route}: archive photo must not be misrepresented as the selected house")
+        require(card.locator("li").count() == bedrooms,
+                f"{route}: each bedroom must have its own sleeping details row")
+        require(card.inner_text().count("Bed type to be confirmed") == bedrooms,
+                f"{route}: do not invent unverified individual bed sizes")
+        selection = "three-bedroom" if index == 0 else "two-bedroom"
+        require(card.get_by_role("link", name="Check this home’s availability").get_attribute("href")
+                == f"/stay/?home={selection}#stay-request",
+                f"{route}: home-specific inquiry link is incorrect")
         content = card.inner_text()
         require(re.search(rf"\b{bedrooms}\s+Bedrooms\b", content, re.I),
                 f"{route}: {title} bedroom count missing")
@@ -66,6 +81,27 @@ def check_comparison(page, route, viewport, browser_name):
     section.scroll_into_view_if_needed()
     section.screenshot(path=str(OUTPUT / f"{browser_name}-{viewport}-{route.strip('/')}-comparison.png"),
                        animations="disabled", caret="hide")
+
+
+def check_stay_form(page, viewport, base):
+    form = page.locator('form[name="koa-stay-inquiry"]')
+    require(form.count() == 1 and form.is_visible(), "stay: inquiry form is not visible")
+    choices = form.locator('[name="lodgingPreference"]')
+    require(choices.is_visible() and choices.get_attribute("required") is not None,
+            "stay: required house selection missing")
+    values = choices.locator('option').evaluate_all("(items) => items.map(item => item.value)")
+    require(values == ["", "three-bedroom", "two-bedroom", "both", "either"],
+            f"stay: unexpected lodging choices {values}")
+    require(form.locator('[name="guests"]').get_attribute("max") == "10",
+            "stay: combined ten-person limit not enforced")
+    require(form.locator('[name="sleepingNeeds"]').get_attribute("maxlength") == "1000",
+            "stay: guest sleeping requirements field missing")
+    for home in ("three-bedroom", "two-bedroom", "both", "either"):
+        response = page.goto(base + "/stay/?home=" + home + "#stay-request", wait_until="domcontentloaded")
+        require(response is not None and response.status < 400,
+                "stay: preferred home deep link failed")
+        chosen = page.locator('form[name="koa-stay-inquiry"] [name="lodgingPreference"]')
+        require(chosen.input_value() == home, f"stay: home {home} not preselected")
 
 
 def check_home(page, viewport, browser_name):
@@ -128,6 +164,8 @@ def main():
                             check_home(page, viewport, browser_name)
                         else:
                             check_comparison(page, path, viewport, browser_name)
+                            if path == "/stay/":
+                                check_stay_form(page, viewport, base)
                         page.screenshot(
                             path=str(OUTPUT / f"{browser_name}-{viewport}-{label}-viewport.png"),
                             animations="disabled", caret="hide",

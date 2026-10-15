@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import AccommodationComparison from '../../components/AccommodationComparison.astro';
+import { lodgingPreferences, combinedOvernightCapacity } from '../../data/lodging';
 import { media, koaMarketingMedia } from '../../data/media';
 
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
@@ -45,7 +46,17 @@ const stayDetails = [
 <section class="bg-[var(--koa-sand)] py-20 lg:py-24"><div class="container-shell grid gap-4 lg:grid-cols-3">{[['Wedding weekends','Coordinate a stay with the wedding experience when the selected collection includes cottage access.'],['Direct stays','Request independent stay dates directly through Koa’s rather than beginning on a marketplace.'],['Mountain View base','Use Koa’s as a quiet Mountain View home base while exploring the Hilo/Volcano side of Hawaiʻi Island.']].map(([t,c],i)=><article class="rounded-[1.4rem] bg-[var(--koa-ivory)] p-7"><p class="eyebrow text-[var(--koa-clay)]">0{i+1}</p><h2 class="display mt-8 text-4xl">{t}</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/64">{c}</p></article>)}</div></section>
 <section id="stay-request" class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.72fr_1.28fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Direct stay request</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Tell us when you’d like to stay.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">Rates, occupancy limits, minimum stays and final lodging policies will be confirmed in the direct booking response until the live booking engine is launched.</p></div>
 <form name="koa-stay-inquiry" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="min-w-0 overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-4 shadow-[var(--shadow-soft)] sm:p-7" data-stay-form><input type="hidden" name="form-name" value="koa-stay-inquiry"/>
-          <input type="hidden" name="subject" data-remove-prefix value="New Stay at Koa’s Inquiry" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p><div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required/></label><label class="grid gap-2 text-sm font-semibold">Arrival<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="arrival" required/></label><label class="grid gap-2 text-sm font-semibold">Departure<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="departure" required/></label><label class="grid gap-2 text-sm font-semibold">Number of guests<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" name="guests" required/></label><label class="grid gap-2 text-sm font-semibold">Stay type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="stayType"><option>Independent stay</option><option>Wedding weekend</option><option>Event-related stay</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Anything we should know?<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes"></textarea></label>
+          <input type="hidden" name="subject" data-remove-prefix value="New Stay at Koa’s Inquiry" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p><div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required/></label><label class="grid gap-2 text-sm font-semibold">Arrival<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="arrival" required/></label><label class="grid gap-2 text-sm font-semibold">Departure<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="departure" required/></label><label class="grid gap-2 text-sm font-semibold">Number of overnight guests<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max={combinedOvernightCapacity} name="guests" aria-describedby="stay-capacity-note" required/></label><label class="grid gap-2 text-sm font-semibold">Stay type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="stayType"><option>Independent stay</option><option>Wedding weekend</option><option>Event-related stay</option></select></label>
+          <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Which home(s) should we check?
+            <select class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="lodgingPreference" aria-describedby="stay-capacity-note" required>
+              <option value="" disabled selected>Select a home or choose both</option>
+              {lodgingPreferences.map((item) => <option value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          <p id="stay-capacity-note" class="text-xs leading-5 text-[var(--koa-ink)]/60 sm:col-span-2">Up to {combinedOvernightCapacity} overnight guests across both homes. Availability and each home’s individual sleeping capacity must be confirmed before booking. This request does not hold a reservation.</p>
+          <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Sleeping arrangements you need (optional)
+            <textarea class="min-h-24 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="sleepingNeeds" maxlength="1000" placeholder="For example: bed sizes preferred, number of separate beds needed, or how you would like to divide your group between homes."></textarea>
+          </label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Anything we should know?<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes"></textarea></label>
           {turnstileSiteKey && (
             <div class="sm:col-span-2 rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
               <div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-action="stay_inquiry" data-theme="light" data-size="flexible"></div>
@@ -57,6 +68,11 @@ const stayDetails = [
 {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
 <script is:inline define:vars={{ turnstileSiteKey }}>
   const stayForm = document.querySelector('[data-stay-form]');
+  const requestedHome = new URLSearchParams(window.location.search).get('home');
+  const lodgingField = stayForm?.querySelector('[name="lodgingPreference"]');
+  if (lodgingField && requestedHome && [...lodgingField.options].some((option) => option.value === requestedHome)) {
+    lodgingField.value = requestedHome;
+  }
   stayForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (stayForm.dataset.submitting === '1') return;
@@ -65,6 +81,30 @@ const stayDetails = [
     const errorBox = stayForm.querySelector('[data-submit-error]');
     const data = new FormData(stayForm);
     const turnstileToken = String(data.get('cf-turnstile-response') || '');
+    const arrival = String(data.get('arrival') || '');
+    const departure = String(data.get('departure') || '');
+    const overnightGuests = Number(data.get('guests'));
+    if (!arrival || !departure || departure <= arrival) {
+      if (errorBox) {
+        errorBox.textContent = 'Departure must be after the arrival date.';
+        errorBox.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!Number.isInteger(overnightGuests) || overnightGuests < 1 || overnightGuests > 10) {
+      if (errorBox) {
+        errorBox.textContent = 'Enter 1 to 10 overnight guests. Individual home capacity will be confirmed.';
+        errorBox.classList.remove('hidden');
+      }
+      return;
+    }
+    if (!lodgingField?.value) {
+      if (errorBox) {
+        errorBox.textContent = 'Choose the home or homes you would like us to check.';
+        errorBox.classList.remove('hidden');
+      }
+      return;
+    }
 
     if (turnstileSiteKey && !turnstileToken) {
       if (errorBox) {
@@ -101,6 +141,8 @@ const stayDetails = [
             arrival: data.get('arrival'),
             departure: data.get('departure'),
             stayType: data.get('stayType'),
+            lodgingPreference: data.get('lodgingPreference'),
+            sleepingNeeds: data.get('sleepingNeeds'),
           },
         }),
         keepalive: true,

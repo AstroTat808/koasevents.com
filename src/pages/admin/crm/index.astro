@@ -138,6 +138,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </section>
 
+            <section data-stay-inquiry-summary class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">Stay inquiry</p>
+              <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Requested accommodations</h3>
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <div><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Requested home(s)</p><p data-stay-preference class="mt-1 text-sm font-semibold"></p></div>
+                <div><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Overnight guests / dates</p><p data-stay-summary class="mt-1 text-sm font-semibold"></p></div>
+                <div class="sm:col-span-2"><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Sleeping arrangements requested</p><p data-stay-sleeping class="mt-1 whitespace-pre-wrap break-words text-sm leading-6"></p></div>
+              </div>
+              <p class="mt-4 text-xs text-[var(--koa-ink)]/60">An inquiry does not confirm availability or reserve accommodation.</p>
+            </section>
             <section data-quickbooks-panel class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
               <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -875,6 +885,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
     const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);
     $('[data-detail-payments]').textContent=payments.length?money(paid)+' / '+money(total):'—';
+
+    const stayPanel=$('[data-stay-inquiry-summary]');
+    const isStay=p.source==='koa-stay-inquiry'||p.inquiry?.formName==='koa-stay-inquiry';
+    if(stayPanel) stayPanel.classList.toggle('hidden',!isStay);
+    if(isStay){
+      const homes={'three-bedroom':'Three-bedroom home (3 bed / 2 bath)','two-bedroom':'Two-bedroom home (2 bed / 1 bath)',both:'Both homes',either:'Either home — flexible','not-specified':'Not specified'};
+      $('[data-stay-preference]').textContent=homes[p.inquiry?.lodgingPreference]||'Not specified';
+      $('[data-stay-summary]').textContent=[String(p.inquiry?.guestCount||'—')+' guests',p.inquiry?.arrival||p.customer?.eventDate||'—',p.inquiry?.departure||'—'].join(' · ');
+      $('[data-stay-sleeping]').textContent=p.inquiry?.sleepingNeeds||'Not provided — confirm bedding layout with the guest.';
+    }
 
     const qbo=p.accounting?.quickbooks||{};
     const qboPanel=$('[data-quickbooks-panel]');
