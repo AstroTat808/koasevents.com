@@ -1,0 +1,49 @@
+---
+interface Props {
+  requestHref?: string;
+}
+
+const { requestHref = '/stay/#stay-request' } = Astro.props;
+
+const homes = [
+  { label: 'Home one', title: 'Three-bedroom home', bedrooms: 3, bathrooms: 2 },
+  { label: 'Home two', title: 'Two-bedroom home', bedrooms: 2, bathrooms: 1 },
+];
+---
+<section id="accommodations" class="bg-[var(--koa-ivory)] py-20 lg:py-28" aria-labelledby="accommodations-heading">
+  <div class="container-shell">
+    <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <div class="min-w-0">
+        <p class="eyebrow text-[var(--koa-clay)]">Stay on the property</p>
+        <h2 id="accommodations-heading" class="display mt-5 max-w-3xl text-4xl leading-[1] sm:text-5xl lg:text-6xl">Two homes. Room to stay together.</h2>
+        <p class="mt-5 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">Choose from two homes at Koa’s, offering five bedrooms and three bathrooms in total. The homes accommodate up to 10 overnight guests combined.</p>
+      </div>
+      <div class="w-fit max-w-full rounded-[1.3rem] bg-[var(--koa-forest)] px-6 py-5 text-white">
+        <p class="text-[.65rem] font-black uppercase tracking-[.16em] text-white/70">Combined overnight capacity</p>
+        <p class="display mt-2 text-4xl sm:text-5xl">Up to 10 <span class="text-xl sm:text-2xl">guests</span></p>
+      </div>
+    </div>
+    <div class="mt-10 grid gap-4 md:grid-cols-2">
+      {homes.map((home) => (
+        <article class="min-w-0 rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-6 sm:p-8" aria-label={home.title}>
+          <p class="eyebrow text-[var(--koa-clay)]">{home.label}</p>
+          <h3 class="display mt-4 text-3xl leading-[1.05] sm:text-4xl">{home.title}</h3>
+          <div class="mt-7 grid grid-cols-2 gap-3">
+            <div class="min-w-0 rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="display text-4xl text-[var(--koa-forest)] sm:text-5xl">{home.bedrooms}</p>
+              <p class="mt-2 text-xs font-bold uppercase tracking-[.1em] text-[var(--koa-ink)]/68">Bedrooms</p>
+            </div>
+            <div class="min-w-0 rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="display text-4xl text-[var(--koa-forest)] sm:text-5xl">{home.bathrooms}</p>
+              <p class="mt-2 text-xs font-bold uppercase tracking-[.1em] text-[var(--koa-ink)]/68">Bathrooms</p>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+    <div class="mt-8 flex flex-wrap items-center justify-between gap-5">
+      <p class="max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/65">The 10-person limit applies to overnight stays across both homes, not to event attendance. Lodging is subject to availability and confirmed booking terms.</p>
+      <a href={requestHref} class="link-arrow shrink-0">Request stay availability →</a>
+    </div>
+  </div>
+</section>
