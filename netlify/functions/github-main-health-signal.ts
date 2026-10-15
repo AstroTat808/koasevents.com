@@ -8,9 +8,9 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
-  readNetlifyRecoveryCredentialVerification,
   recordGithubMainSignal,
   recordNetlifyRecoveryCredentialVerification,
+  readNetlifyRecoveryCredentialVerification,
   recordProductionRelease,
   recordProductionResponsiveQuality,
   recordProductionVisualThumbnail,
@@ -700,48 +700,85 @@ export default async (req:Request,context:Context) => {
 
     if(body?.action==='record-netlify-recovery-credential'){
       const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
-      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
-        return Response.json({ok:false,error:'Only Production visual QA may record the Netlify recovery credential verification.'},{status:403,headers:{'Cache-Control':'no-store'}});
+      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')
+          ||cleanText(claims?.ref,100)!==MAIN_REF){
+        return Response.json({ok:false,error:'Only main Production visual QA may record recovery credential verification.'},
+          {status:403,headers:{'Cache-Control':'no-store'}});
       }
       const expectedSha=cleanText(claims?.sha,80);
       const deployedCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
       if(deployedCommit&&deployedCommit!==expectedSha){
-        return Response.json({ok:false,error:'Production is not serving the requesting GitHub commit.',expected:expectedSha,deployed:deployedCommit},{status:409,headers:{'Cache-Control':'no-store'}});
+        return Response.json({ok:false,error:'Production is not serving the requesting GitHub commit.'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
       }
       const expectedSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      const actualServingId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
       const providedSiteId=cleanText(body?.siteId,120);
       const siteIdMatches=Boolean(body?.siteIdMatches&&expectedSiteId&&providedSiteId===expectedSiteId);
+      const publishedId=cleanText(body?.publishedDeployId,120);
+      const publishedCommit=cleanText(body?.publishedDeployCommit,80);
+      const publishedState=cleanText(body?.publishedDeployState,40).toLowerCase();
+      const verifiedPublished=Boolean(
+        body?.publishedDeployVerified===true&&actualServingId&&publishedId===actualServingId
+        &&/^[a-f0-9]{40}$/i.test(expectedSha)&&publishedCommit===expectedSha
+        &&cleanText(body?.publishedDeployContext,40)==='production'
+        &&['ready','current'].includes(publishedState)
+        &&Number(body?.deployDetailHttpStatus)===200
+      );
+      const authenticated=Boolean(
+        body?.configured===true&&body?.usable===true&&siteIdMatches
+        &&Number(body?.siteHttpStatus)===200&&Number(body?.deployListHttpStatus)===200
+      );
+      // Never persist weak or stale metadata, even if the token itself worked.
+      if(!authenticated||!verifiedPublished){
+        return Response.json({ok:false,recorded:false,error:'Exact published production identity was not verified.'},
+          {status:422,headers:{'Cache-Control':'no-store'}});
+      }
       const verification=await recordNetlifyRecoveryCredentialVerification(context,{
         checkedAt:body?.checkedAt,
-        configured:Boolean(body?.configured),
-        usable:Boolean(body?.usable),
+        configured:true,usable:true,
         siteId:providedSiteId,
         siteName:body?.siteName,
-        siteIdMatches,
-        siteHttpStatus:Number(body?.siteHttpStatus||0),
-        deployListHttpStatus:Number(body?.deployListHttpStatus||0),
+        siteIdMatches:true,
+        siteHttpStatus:200,
+        deployListHttpStatus:200,
+        deployDetailHttpStatus:200,
         commit:expectedSha,
         runId:cleanText(claims?.run_id||claims?.run_number,80),
+        publishedDeployId:publishedId,
+        publishedDeployCommit:publishedCommit,
+        publishedDeployState:publishedState,
+        publishedDeployContext:'production',
+        publishedDeployVerified:true,
       });
-      const ok=Boolean(
-        verification.configured&&verification.usable&&verification.siteIdMatches
-        &&verification.siteHttpStatus===200&&verification.deployListHttpStatus===200
+      // Complete a real read-after-write before marking an OIDC publish successful.
+      const readback=await readNetlifyRecoveryCredentialVerification(context);
+      const readbackVerified=Boolean(
+        readback?.publishedDeployVerified===true
+        &&readback?.commit===expectedSha
+        &&readback?.publishedDeployId===actualServingId
+        &&readback?.runId===verification.runId
+        &&readback?.checkedAt===verification.checkedAt
       );
       return Response.json({
-        ok,recorded:true,source:'github-actions-oidc',
+        ok:readbackVerified,recorded:readbackVerified,readbackVerified,
+        source:'github-actions-oidc',
         verification:{
           checkedAt:verification.checkedAt,
           configured:verification.configured,
           usable:verification.usable,
           siteId:verification.siteId,
-          siteName:verification.siteName,
           siteIdMatches:verification.siteIdMatches,
           siteHttpStatus:verification.siteHttpStatus,
           deployListHttpStatus:verification.deployListHttpStatus,
+          deployDetailHttpStatus:verification.deployDetailHttpStatus,
+          publishedDeployVerified:verification.publishedDeployVerified,
+          publishedDeployId:verification.publishedDeployId,
+          publishedDeployCommit:verification.publishedDeployCommit,
           commit:verification.commit,
           runId:verification.runId,
         },
-      },{status:ok?200:422,headers:{'Cache-Control':'no-store'}});
+      },{status:readbackVerified?200:503,headers:{'Cache-Control':'no-store'}});
     }
 
     if(body?.action==='record-responsive-visual-quality'){

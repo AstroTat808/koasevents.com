@@ -605,6 +605,117 @@ assert(
 
 
 
+const { verifyPublishedRecoveryProof, signedPublishedCredentialMatches } = await import(
+  new URL('../netlify/functions/_shared/netlify-published-identity.mjs', import.meta.url)
+);
+const goodCommit='a'.repeat(40);
+const goodSiteId='synthetic-site';
+const goodDeployId='synthetic-deploy';
+const goodSite={id:goodSiteId,published_deploy:{id:goodDeployId,state:'ready',context:'production',commit_ref:goodCommit}};
+const goodDeploy={id:goodDeployId,site_id:goodSiteId,context:'production',state:'ready',commit_ref:goodCommit};
+const validProof=verifyPublishedRecoveryProof({site:goodSite,deploy:goodDeploy,siteId:goodSiteId,expectedSha:goodCommit});
+assert(validProof.verified===true&&validProof.commit===goodCommit&&validProof.deployId===goodDeployId,
+  'Exact current published Netlify deployment must be matched to its verified GitHub SHA.');
+const proofNegatives=[
+ {site:null},
+ {site:{...goodSite,id:'wrong-site'}},
+ {site:{...goodSite,published_deploy:null}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,id:'wrong-deploy'}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,commit_ref:'b'.repeat(40)}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,state:'building'}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,context:'deploy-preview'}}},
+ {deploy:null},
+ {deploy:{...goodDeploy,id:'wrong-deploy'}},
+ {deploy:{...goodDeploy,site_id:'wrong-site'}},
+ {deploy:{...goodDeploy,context:'deploy-preview'}},
+ {deploy:{...goodDeploy,state:'error'}},
+ {deploy:{...goodDeploy,commit_ref:'not-a-SHA'}},
+ {deploy:{...goodDeploy,commit_ref:'b'.repeat(40)}},
+ {expectedSha:'b'.repeat(40)},
+ {expectedSha:''},
+];
+for(const overrides of proofNegatives){
+  const result=verifyPublishedRecoveryProof({
+    site:overrides.site===undefined?goodSite:overrides.site,
+    deploy:overrides.deploy===undefined?goodDeploy:overrides.deploy,
+    siteId:goodSiteId,
+    expectedSha:overrides.expectedSha===undefined?goodCommit:overrides.expectedSha,
+  });
+  assert(result.verified===false&&result.commit==='',
+    'Wrong, incomplete, unready or stale signed provider identity must fail closed.');
+}
+const record={
+  source:'github-actions-read-only',commit:goodCommit,
+  publishedDeployVerified:true,publishedDeployCommit:goodCommit,
+  publishedDeployId:goodDeployId,publishedDeployContext:'production',
+  publishedDeployState:'ready',deployDetailHttpStatus:200,
+};
+assert(signedPublishedCredentialMatches({verification:record,servingDeployId:goodDeployId}),
+  'Current serving deploy must match the OIDC-verified published Netlify identity.');
+for(const override of [
+  {servingDeployId:'wrong-deploy'},{servingDeployId:''},
+  {verification:{...record,publishedDeployVerified:false}},
+  {verification:{...record,publishedDeployCommit:'b'.repeat(40)}},
+  {verification:{...record,commit:''}},
+  {verification:{...record,publishedDeployContext:'deploy-preview'}},
+  {verification:{...record,publishedDeployState:'building'}},
+  {verification:{...record,deployDetailHttpStatus:503}},
+  {verification:{...record,source:'untrusted'}},
+]){
+  assert(!signedPublishedCredentialMatches({
+    verification:override.verification||record,
+    servingDeployId:override.servingDeployId===undefined?goodDeployId:override.servingDeployId,
+  }), 'Missing, moved or untrusted OIDC proof must never clear the credential check.');
+}
+assert(
+  systemHealth.includes('recoveryCredentialDiagnostic({')&&systemHealth.includes('diagnosticCode:diagnosis.code')
+  &&!systemHealth.includes("token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500)")
+  &&systemHealth.includes('productionCommit,servingDeployId,expectedSiteId')
+  &&healthSignal.includes('readNetlifyRecoveryCredentialVerification(context)')
+  &&healthSignal.includes('readbackVerified')
+  &&recoveryCredentialCheck.includes('verifyPublishedRecoveryProof({')
+  &&recoveryCredentialPublish.includes('verification?.publishedDeployId!==report?.publishedDeployId'),
+  'The GitHub-owned credential must stay in CI while signed current-published identity and readback remain mandatory.');
+const preliminaryCredentialStep=visualWorkflow.indexOf('run: node scripts/netlify_recovery_credential_check.mjs --access-only');
+const strictCredentialStep=visualWorkflow.indexOf('run: node scripts/netlify_recovery_credential_check.mjs\n',preliminaryCredentialStep+1);
+assert(
+  preliminaryCredentialStep>=0
+  &&preliminaryCredentialStep<visualWorkflow.indexOf('- name: Build production site')
+  &&strictCredentialStep>visualWorkflow.indexOf('- name: Wait for exact Netlify production SHA')
+  &&recoveryCredentialCheck.includes("const accessOnly=process.argv.includes('--access-only')")
+  &&recoveryCredentialCheck.includes('if(accessOnly){')
+  &&recoveryCredentialCheck.includes('report.publishedDeployVerified'),
+  'Pre-deploy auth access must never demand future published SHA, while post-deploy verification must still fail closed on exact-SHA proof.',
+);
+
+const {recoveryCredentialDiagnostic}=await import(new URL('../netlify/functions/_shared/netlify-published-identity.mjs',import.meta.url));
+const diagBase={
+  verification:{...record,configured:true,usable:true,siteId:'synthetic-site',siteIdMatches:true,
+    siteHttpStatus:200,deployListHttpStatus:200,checkedAt:'2026-10-15T18:00:00.000Z'},
+  productionCommit:'',servingDeployId:goodDeployId,expectedSiteId:'synthetic-site',
+  now:Date.parse('2026-10-15T18:02:00.000Z'),
+};
+assert(recoveryCredentialDiagnostic(diagBase).code==='KOA_RECOVERY_OK','Valid signed deploy proof must pass.');
+const codeFixtures=[
+  [{verification:null},'KOA_RECOVERY_EVIDENCE_MISSING'],
+  [{verification:{...diagBase.verification,configured:false}},'KOA_RECOVERY_TOKEN_UNCONFIGURED'],
+  [{verification:{...diagBase.verification,siteId:'other'}},'KOA_RECOVERY_SITE_MISMATCH'],
+  [{verification:{...diagBase.verification,usable:false}},'KOA_RECOVERY_CREDENTIAL_UNUSABLE'],
+  [{verification:{...diagBase.verification,checkedAt:'2026-10-01T00:00:00Z'}},'KOA_RECOVERY_EVIDENCE_STALE'],
+  [{productionCommit:'c'.repeat(40)},'KOA_RECOVERY_RUNTIME_SHA_MISMATCH'],
+  [{verification:{...diagBase.verification,publishedDeployVerified:false}},'KOA_RECOVERY_PUBLISHED_PROOF_MISSING'],
+  [{servingDeployId:'wrong-deploy'},'KOA_RECOVERY_PUBLISHED_IDENTITY_MISMATCH'],
+];
+for(const [overrides,expectedCode] of codeFixtures){
+  const response=recoveryCredentialDiagnostic({...diagBase,...overrides});
+  assert(response.code===expectedCode,'Privacy-safe recovery diagnostic must identify its exact failure class.');
+  assert(response.ok===false,'A failed recovery credential must never be classified as healthy.');
+}
+assert(recoveryCredentialDiagnostic({...diagBase,productionCommit:goodCommit}).code==='KOA_RECOVERY_OK','The matching runtime SHA must remain authoritative.');
+
+console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
+
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
 
 
