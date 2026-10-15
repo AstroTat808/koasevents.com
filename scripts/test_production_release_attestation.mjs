@@ -106,7 +106,7 @@ assert(workflow.includes('Persist certified release attestation history')
 
 const persistStep=workflow.indexOf('      - name: Persist certified release attestation history');
 const shellStart=workflow.indexOf('        run: |\n',persistStep);
-const shellEnd=workflow.indexOf('\n  qa-summary:',shellStart);
+const shellEnd=workflow.indexOf('\n      - name: Verify actual certified PDF and JSON serializer bytes',shellStart);
 assert(persistStep>=0&&shellStart>persistStep&&shellEnd>shellStart,
   'Release history persistence shell step was not found.');
 const rawShell=workflow.slice(shellStart+'        run: |\n'.length,shellEnd);
@@ -118,6 +118,19 @@ assert(persistShell.includes('trap fail_history ERR')
     && persistShell.includes('record-production-release-attestation')
     && persistShell.includes('koa-release-history-failure-status.json'),
   'Release-history persistence must preserve fail-closed status publication and durable recorder enforcement.');
+const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes',shellEnd);
+const bytesShellStart=workflow.indexOf('        run: |\\n',bytesStep);
+const bytesShellEnd=workflow.indexOf('\\n  qa-summary:',bytesShellStart);
+assert(bytesStep>shellEnd&&bytesShellStart>bytesStep&&bytesShellEnd>bytesShellStart,
+  'Certified PDF/JSON byte-proof shell step was not found.');
+const bytesShell=workflow.slice(bytesShellStart+'        run: |\\n'.length,bytesShellEnd)
+  .split('\\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\\n');
+const bytesSyntax=spawnSync('bash',['-n'],{input:bytesShell,encoding:'utf8'});
+assert(bytesSyntax.status===0,
+  'Certified export-byte fail-closed shell must pass bash -n: '+String(bytesSyntax.stderr||'').slice(0,350));
+assert(bytesShell.includes('trap fail_export_proof ERR')
+  &&bytesShell.includes('node scripts/verify_live_certified_export_bytes.mjs'),
+  'PDF/JSON byte-proof failure must immediately revoke a green production release status.');
 assert(server.includes("body?.action==='record-production-release-attestation'"),
   'The OIDC control plane must expose exact-release attestation persistence.');
 assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|null')
