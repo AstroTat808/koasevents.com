@@ -3,6 +3,7 @@
 // It deliberately performs no deploy, build, restore, environment, or site mutation.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { verifyPublishedRecoveryProof } from '../netlify/functions/_shared/netlify-published-identity.mjs';
 
 const token=String(process.env.NETLIFY_AUTH_TOKEN||'').trim();
 const siteId=String(process.env.NETLIFY_SITE_ID||'').trim();
@@ -18,6 +19,12 @@ const report={
   siteIdMatches:false,
   siteHttpStatus:0,
   deployListHttpStatus:0,
+  deployDetailHttpStatus:0,
+  publishedDeployId:'',
+  publishedDeployCommit:'',
+  publishedDeployState:'',
+  publishedDeployContext:'',
+  publishedDeployVerified:false,
   source:'github-actions-read-only',
 };
 
@@ -65,7 +72,28 @@ async function main(){
     report.deployListHttpStatus=deployResult.response.status;
     const deployListReadable=deployResult.response.ok&&Array.isArray(deployResult.body);
 
-    report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches&&deployListReadable);
+    // The GitHub Actions credential alone performs all provider requests.
+    // A deploy list is NOT evidence of which SHA is currently published.
+    const publishedId=String(siteResult.body?.published_deploy?.id||'').trim();
+    if(siteResult.response.ok&&report.siteIdMatches&&deployListReadable&&publishedId){
+      const exact=await getJson('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(publishedId));
+      report.deployDetailHttpStatus=exact.response.status;
+      if(exact.response.ok){
+        const proof=verifyPublishedRecoveryProof({
+          site:siteResult.body,deploy:exact.body,siteId,
+          expectedSha:String(process.env.GITHUB_SHA||'').trim(),
+        });
+        if(proof.verified){
+          report.publishedDeployId=proof.deployId;
+          report.publishedDeployCommit=proof.commit;
+          report.publishedDeployState=proof.state;
+          report.publishedDeployContext=proof.context;
+          report.publishedDeployVerified=true;
+        }
+      }
+    }
+    report.usable=Boolean(siteResult.response.ok&&report.siteIdMatches
+      &&deployListReadable&&report.publishedDeployVerified);
     report.status=report.usable?'passed':'failed';
     await writeReport();
 

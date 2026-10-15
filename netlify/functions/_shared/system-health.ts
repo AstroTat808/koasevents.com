@@ -15,7 +15,7 @@ import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
-import { resolvePublishedDeployCommit } from './netlify-published-identity.mjs';
+import { signedPublishedCredentialMatches } from './netlify-published-identity.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -3103,6 +3103,12 @@ export type NetlifyRecoveryCredentialVerification = {
   deployListHttpStatus:number;
   commit:string;
   runId:string;
+  publishedDeployId:string;
+  publishedDeployCommit:string;
+  publishedDeployState:string;
+  publishedDeployContext:string;
+  publishedDeployVerified:boolean;
+  deployDetailHttpStatus:number;
   source:'github-actions-read-only';
 };
 
@@ -3196,6 +3202,12 @@ export async function recordNetlifyRecoveryCredentialVerification(context:Contex
     deployListHttpStatus:Math.max(0,Math.floor(Number(input?.deployListHttpStatus||0))),
     commit:clean(input?.commit,80),
     runId:clean(input?.runId,80),
+    publishedDeployId:clean(input?.publishedDeployId,120),
+    publishedDeployCommit:clean(input?.publishedDeployCommit,80),
+    publishedDeployState:clean(input?.publishedDeployState,40),
+    publishedDeployContext:clean(input?.publishedDeployContext,40),
+    publishedDeployVerified:input?.publishedDeployVerified===true,
+    deployDetailHttpStatus:Number(input?.deployDetailHttpStatus)===200?200:0,
     source:'github-actions-read-only',
   };
   await healthStore(context).setJSON(NETLIFY_RECOVERY_CREDENTIAL_VERIFICATION_KEY,record);
@@ -3325,21 +3337,15 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
     };
   }
   const checkedMs=Date.parse(verification.checkedAt);
-  const fresh=Number.isFinite(checkedMs)&&Date.now()-checkedMs<=36*60*60*1000;
-  let authoritativeCommit=productionCommit;
-  let identitySource=productionCommit?'netlify-runtime':'unverified';
-  if(!authoritativeCommit){
-    const resolved=await resolvePublishedDeployCommit({
-      siteId:expectedSiteId,
-      servingDeployId,
-      token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500),
-    });
-    if(resolved.verified){
-      authoritativeCommit=resolved.commit;
-      identitySource=resolved.source;
-    }
-  }
-  const commitMatches=Boolean(authoritativeCommit&&verification.commit===authoritativeCommit);
+  const ageMs=Date.now()-checkedMs;
+  const fresh=Number.isFinite(checkedMs)&&ageMs>=-2*60*1000&&ageMs<=36*60*60*1000;
+  const signedPublishedMatches=signedPublishedCredentialMatches({verification,servingDeployId});
+  // Runtime SHA, when present, remains authoritative and can never be bypassed.
+  // If absent, require the exact signed GitHub OIDC+Netlify published deploy proof.
+  const commitMatches=productionCommit
+    ? Boolean(verification.commit===productionCommit)
+    : signedPublishedMatches;
+  const identitySource=productionCommit?'netlify-runtime':signedPublishedMatches?'oidc-published-deploy':'unverified';
   const siteMatches=Boolean(verification.siteIdMatches&&verification.siteId===expectedSiteId);
   const authenticated=Boolean(
     verification.configured&&verification.usable&&siteMatches

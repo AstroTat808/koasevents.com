@@ -605,64 +605,77 @@ assert(
 
 
 
-const { resolvePublishedDeployCommit } = await import(
+const { verifyPublishedRecoveryProof, signedPublishedCredentialMatches } = await import(
   new URL('../netlify/functions/_shared/netlify-published-identity.mjs', import.meta.url)
 );
 const goodCommit='a'.repeat(40);
 const goodSiteId='synthetic-site';
 const goodDeployId='synthetic-deploy';
-const goodSite={
-  id:goodSiteId,
-  published_deploy:{id:goodDeployId,state:'ready',commit_ref:goodCommit},
-};
-const goodDeploy={
-  id:goodDeployId,site_id:goodSiteId,context:'production',
-  state:'ready',commit_ref:goodCommit,
-};
-async function publishedProof(options={}){
-  const calls=[];
-  const request=async (url,init)=>{
-    calls.push({url,method:init.method});
-    if(options.networkError)throw new Error('synthetic provider unavailable');
-    if(options.httpError)return {ok:false,status:503};
-    const value=url.includes('/sites/')?(options.site||goodSite):(options.deploy||goodDeploy);
-    return {ok:true,json:async()=>value};
-  };
-  const resolved=await resolvePublishedDeployCommit({
-    siteId:options.siteId===undefined?goodSiteId:options.siteId,
-    servingDeployId:options.servingDeployId===undefined?goodDeployId:options.servingDeployId,
-    token:options.token===undefined?'synthetic-token':options.token,
-    fetchImpl:request,
+const goodSite={id:goodSiteId,published_deploy:{id:goodDeployId,state:'ready',context:'production',commit_ref:goodCommit}};
+const goodDeploy={id:goodDeployId,site_id:goodSiteId,context:'production',state:'ready',commit_ref:goodCommit};
+const validProof=verifyPublishedRecoveryProof({site:goodSite,deploy:goodDeploy,siteId:goodSiteId,expectedSha:goodCommit});
+assert(validProof.verified===true&&validProof.commit===goodCommit&&validProof.deployId===goodDeployId,
+  'Exact current published Netlify deployment must be matched to its verified GitHub SHA.');
+const proofNegatives=[
+ {site:null},
+ {site:{...goodSite,id:'wrong-site'}},
+ {site:{...goodSite,published_deploy:null}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,id:'wrong-deploy'}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,commit_ref:'b'.repeat(40)}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,state:'building'}}},
+ {site:{...goodSite,published_deploy:{...goodSite.published_deploy,context:'deploy-preview'}}},
+ {deploy:null},
+ {deploy:{...goodDeploy,id:'wrong-deploy'}},
+ {deploy:{...goodDeploy,site_id:'wrong-site'}},
+ {deploy:{...goodDeploy,context:'deploy-preview'}},
+ {deploy:{...goodDeploy,state:'error'}},
+ {deploy:{...goodDeploy,commit_ref:'not-a-SHA'}},
+ {deploy:{...goodDeploy,commit_ref:'b'.repeat(40)}},
+ {expectedSha:'b'.repeat(40)},
+ {expectedSha:''},
+];
+for(const overrides of proofNegatives){
+  const result=verifyPublishedRecoveryProof({
+    site:overrides.site===undefined?goodSite:overrides.site,
+    deploy:overrides.deploy===undefined?goodDeploy:overrides.deploy,
+    siteId:goodSiteId,
+    expectedSha:overrides.expectedSha===undefined?goodCommit:overrides.expectedSha,
   });
-  assert(calls.every(row=>row.method==='GET' && row.url.startsWith('https://api.netlify.com/api/v1/')),
-    'Recovery identity must only perform read-only Netlify metadata checks.');
-  return {resolved,calls};
+  assert(result.verified===false&&result.commit==='',
+    'Wrong, incomplete, unready or stale signed provider identity must fail closed.');
 }
-const validProof=await publishedProof();
-assert(validProof.resolved.verified && validProof.resolved.commit===goodCommit
-  && validProof.resolved.source==='netlify-published-deploy' && validProof.calls.length===2,
-  'Current published production deploy must resolve only to its own 40-character SHA.');
-for(const options of [
-  {siteId:''},{servingDeployId:''},{token:''},
-  {site:{...goodSite,id:'wrong-site'}},
-  {site:{...goodSite,published_deploy:{id:'different-deploy'}}},
-  {site:{...goodSite,published_deploy:null}},
-  {site:{...goodSite,published_deploy:{...goodSite.published_deploy,commit_ref:'b'.repeat(40)}}},
-  {deploy:{...goodDeploy,id:'different-deploy'}},
-  {deploy:{...goodDeploy,site_id:'another-site'}},
-  {deploy:{...goodDeploy,context:'deploy-preview'}},
-  {deploy:{...goodDeploy,state:'building'}},
-  {deploy:{...goodDeploy,commit_ref:'invalid'}},
-  {httpError:true},{networkError:true},
+const record={
+  source:'github-actions-read-only',commit:goodCommit,
+  publishedDeployVerified:true,publishedDeployCommit:goodCommit,
+  publishedDeployId:goodDeployId,publishedDeployContext:'production',
+  publishedDeployState:'ready',deployDetailHttpStatus:200,
+};
+assert(signedPublishedCredentialMatches({verification:record,servingDeployId:goodDeployId}),
+  'Current serving deploy must match the OIDC-verified published Netlify identity.');
+for(const override of [
+  {servingDeployId:'wrong-deploy'},{servingDeployId:''},
+  {verification:{...record,publishedDeployVerified:false}},
+  {verification:{...record,publishedDeployCommit:'b'.repeat(40)}},
+  {verification:{...record,commit:''}},
+  {verification:{...record,publishedDeployContext:'deploy-preview'}},
+  {verification:{...record,publishedDeployState:'building'}},
+  {verification:{...record,deployDetailHttpStatus:503}},
+  {verification:{...record,source:'untrusted'}},
 ]){
-  const proof=await publishedProof(options);
-  assert(proof.resolved.verified===false && proof.resolved.commit==='',
-    'Missing, moved, nonproduction, unready, malformed or unavailable deploy evidence must fail closed.');
+  assert(!signedPublishedCredentialMatches({
+    verification:override.verification||record,
+    servingDeployId:override.servingDeployId===undefined?goodDeployId:override.servingDeployId,
+  }), 'Missing, moved or untrusted OIDC proof must never clear the credential check.');
 }
-assert(systemHealth.includes('verification.commit===authoritativeCommit')
-  && systemHealth.includes('resolvePublishedDeployCommit({')
-  && systemHealth.includes("identity source '+identitySource"),
-  'System Health must require matching trusted release SHA, never a missing-runtime-commit shortcut.');
-console.log('Netlify published production commit fallback: 15 synthetic valid/fail-closed scenarios passed.');
+assert(
+  systemHealth.includes('signedPublishedCredentialMatches({verification,servingDeployId})')
+  &&!systemHealth.includes("token:clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500)")
+  &&systemHealth.includes('verification.commit===productionCommit')
+  &&healthSignal.includes('readNetlifyRecoveryCredentialVerification(context)')
+  &&healthSignal.includes('readbackVerified')
+  &&recoveryCredentialCheck.includes('verifyPublishedRecoveryProof({')
+  &&recoveryCredentialPublish.includes('verification?.publishedDeployId!==report?.publishedDeployId'),
+  'The GitHub-owned credential must stay in CI while signed current-published identity and readback remain mandatory.');
+console.log('Netlify recovery OIDC published-deploy identity: 26 synthetic positive/fail-closed checks passed.');
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
