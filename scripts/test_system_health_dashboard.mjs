@@ -617,7 +617,7 @@ assert(
     && health.includes("prepareMobileCollapsible(section);")
     && health.includes("toggleButton.setAttribute('aria-label',(collapsed?'Expand ':'Collapse ')+title)")
     && health.includes("button.setAttribute('aria-controls',bodyIds.join(' '))")
-    && health.includes("const startCollapsed=isHealthSectionRememberedClosed(section)")
+    && health.includes("const startCollapsed=!isHealthSectionRememberedOpen(section)")
     && health.includes("sessionStorage.setItem(healthCollapsedSessionKey"),
   'System Health must keep the summary visible and expose accessible, session-persistent collapsible diagnostic panels at all viewport widths.',
 );
