@@ -22,7 +22,7 @@ try{
   const result=await response.json().catch(()=>null);
   if(response.status!==200||result?.ok!==true||result.sha!==sha
     ||result.pdfValidated!==true||result.jsonValidated!==true
-    ||result.caseCount!==36||!(/^[a-f0-9]{24}$/.test(String(result.deployId||'')))
+    ||result.caseCount!==36||result.durableReadback!==true||!(/^[a-f0-9]{24}$/.test(String(result.deployId||'')))
     ||!(/^[0-9]{4,20}$/.test(String(result.runId||'')))
     ||result.code!=='EXPORT_ATTESTATION_PDF_JSON_VERIFIED')
     throw Error('Exact release serialized bytes not verified');
