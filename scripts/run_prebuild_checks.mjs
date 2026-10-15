@@ -7,6 +7,7 @@ const checks=[
   ['build-safety','Build safety','npm',['run','build:safety']],
   ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],
+  ['browser-session-release-contract','Session lifecycle release contract','node',['scripts/release_certification.mjs','--self-test']],
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
   ['theme-regression','Theme regression','npm',['run','test:theme']],

@@ -402,8 +402,11 @@ const seoSchema = {
           const response = await originalFetch(...args);
           const requestUrl = sameOriginApiUrl(args[0]);
 
-          if (requestUrl && response.status === 401) {
-            redirectToLogin();
+          // Only the canonical session endpoint can declare authentication expired.
+          // Feature endpoints can return 401 for endpoint-specific reasons.
+          if (requestUrl?.pathname === '/api/admin/session' && response.status === 401) {
+            // The typed session helper performs one supported Identity refresh
+            // before deciding whether the browser must return to sign-in.
             return response;
           }
 

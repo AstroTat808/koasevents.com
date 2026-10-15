@@ -618,6 +618,86 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section id="session-health" class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]" aria-labelledby="session-health-title">
+          <p class="eyebrow text-[var(--koa-clay)]">Authentication diagnostics</p>
+          <h2 id="session-health-title" class="display mt-2 text-3xl">Session Health</h2>
+          <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/60">Tracked access tokens, expiration, and trusted browsers. These records cannot prove whether a browser that has been closed still has a valid refresh credential.</p>
+          <p data-session-health-summary role="status" class="mt-4 text-sm">Loading session details…</p>
+          <p data-session-health-refresh class="mt-2 text-xs text-[var(--koa-ink)]/60"></p>
+          <div data-session-health-list class="mt-4 grid gap-3 md:grid-cols-2"></div>
+        </section>
+        <script is:inline>
+          (() => {
+            const section=document.getElementById('session-health');
+            if(!section)return;
+            const summary=section.querySelector('[data-session-health-summary]');
+            const refresh=section.querySelector('[data-session-health-refresh]');
+            const list=section.querySelector('[data-session-health-list]');
+            const when=(value)=>{if(!value)return 'Not recorded';const date=new Date(value);return Number.isFinite(date.getTime())?date.toLocaleString():'Not recorded';};
+            const line=(parent,label,value)=>{
+              const p=document.createElement('p');p.className='mt-1 text-xs leading-5 text-[var(--koa-ink)]/65';
+              const strong=document.createElement('strong');strong.textContent=label+': ';p.append(strong,document.createTextNode(String(value)));parent.append(p);
+            };
+            async function loadSessionHealth(){
+              try {
+                const response=await fetch('/api/account/security',{cache:'no-store',headers:{Accept:'application/json'}});
+                if(!response.ok)throw Error('Session diagnostics unavailable ('+response.status+').');
+                const data=await response.json();
+                const health=data.sessionHealth||{};
+                const sessions=Array.isArray(health.sessions)?health.sessions:[];
+                summary.textContent=(Number(health.activeCount)||0)+' active app session bindings · '+(Number(health.trustedCount)||0)+' trusted browsers';
+                refresh.textContent='Latest client-reported Identity refresh: '+when(health.lastRefreshAt)+'. Recorded refresh reports: '+(Number(health.refreshEventCount)||0)+'. These are authenticated browser reports, not independent proof of credential rotation.';
+                list.replaceChildren();
+                if(!sessions.length){line(list,'Tracked sessions','No sessions have been recorded yet');return;}
+                for(const session of sessions){
+                  const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+                  const title=document.createElement('h3');title.className='text-sm font-semibold text-[var(--koa-forest)]';
+                  title.textContent=String(session.device||'Browser')+(session.current?' · This browser':'');
+                  card.append(title);
+                  line(card,'Status',session.revokedAt?'Revoked':session.active?'App session active; Identity status checked separately':'App binding expired');
+                  line(card,'Trusted',session.trusted?'Yes':'No');
+                  line(card,'Last seen',when(session.lastSeenAt));
+                  line(card,'Last recorded Identity JWT expiry',when(session.expiresAt));
+                  line(card,'App session binding expiry',when(session.boundUntil));
+                  line(card,'Expiration reason',String(session.reason||'unknown').replaceAll('_',' '));
+                  if(session.current){
+                    const signout=document.querySelector('[data-workspace-account-logout]');
+                    if(signout instanceof HTMLButtonElement){
+                      const button=document.createElement('button');
+                      button.type='button';
+                      button.className='mt-3 rounded-full border border-red-300 px-3 py-2 text-xs font-semibold text-red-800';
+                      button.textContent='Sign out of this browser';
+                      button.addEventListener('click',()=>signout.click());
+                      card.append(button);
+                    }
+                  } else if(session.active && session.handle){
+                    const revoke=document.createElement('button');
+                    revoke.type='button';
+                    revoke.className='mt-3 rounded-full border border-red-300 px-3 py-2 text-xs font-semibold text-red-800';
+                    revoke.textContent='Revoke tracked session';
+                    revoke.addEventListener('click',async()=>{
+                      if(!window.confirm('End this browser session? The device will need to sign in again.'))return;
+                      revoke.disabled=true;
+                      try{
+                        const result=await fetch('/api/account/security',{
+                          method:'POST',credentials:'same-origin',
+                          headers:{'Content-Type':'application/json'},
+                          body:JSON.stringify({action:'revoke-session',handle:session.handle}),
+                        });
+                        if(!result.ok)throw Error('Unable to revoke session ('+result.status+').');
+                        await loadSessionHealth();
+                      }catch(error){revoke.disabled=false;summary.textContent=error instanceof Error?error.message:'Unable to revoke session.';}
+                    });
+                    card.append(revoke);
+                  }
+                  list.append(card);
+                }
+              }catch(error){summary.textContent=error instanceof Error?error.message:'Session diagnostics unavailable.';refresh.textContent='';list.replaceChildren();}
+            }
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadSessionHealth,{once:true});
+            else loadSessionHealth();
+          })();
+        </script>
         <section id="credential-health" class="scroll-mt-24 rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
