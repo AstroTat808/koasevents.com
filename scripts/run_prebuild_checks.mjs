@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 const FAILURE_FILE='/tmp/koa-build-failure.json';
 const checks=[
   ['build-safety','Build safety','npm',['run','build:safety']],
+  ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
