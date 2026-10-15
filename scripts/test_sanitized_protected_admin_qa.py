@@ -38,6 +38,7 @@ assert safe["failures"] == [
 out = json.dumps(safe)
 assert private not in out and "bodyText" not in out and "/private/" not in out
 assert module.fixed_category("Page.wait_for_selector: Timeout 8000ms") == "ADMIN_QA_TIMEOUT"
+assert module.fixed_category("Admin startup timed out before a visible authorized or denied state.") == "ADMIN_QA_TIMEOUT"
 assert module.summarize({"failures": []})["ok"] is True
 assert module.summarize({"bad": 1})["code"] == "ADMIN_QA_REPORT_MALFORMED"
 print("PASS | Admin browser failure diagnostics are static-route-only, redacted and deterministic.")
