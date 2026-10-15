@@ -676,6 +676,6 @@ assert(
   &&recoveryCredentialCheck.includes('verifyPublishedRecoveryProof({')
   &&recoveryCredentialPublish.includes('verification?.publishedDeployId!==report?.publishedDeployId'),
   'The GitHub-owned credential must stay in CI while signed current-published identity and readback remain mandatory.');
-console.log('Netlify recovery OIDC published-deploy identity: 26 synthetic positive/fail-closed checks passed.');
+console.log('Netlify recovery OIDC published-deploy identity: 27 synthetic positive/fail-closed checks passed.');
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
