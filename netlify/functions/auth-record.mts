@@ -141,7 +141,13 @@ export default async(req:Request,context:Context)=>{
       reasons:risk.reasons,
       trustedDevice:risk.trustedDevice,
       alert:{sent:alert.sent,suppressed:alert.suppressed,reason:alert.reason||''},
-      session,
+      // Never return the raw HttpOnly device handle or session fingerprints.
+      session:session?{
+        device:session.device,
+        expiresAt:session.expiresAt,
+        rememberedUntil:session.rememberedUntil||'',
+        revoked:Boolean(session.revokedAt),
+      }:null,
     });
     if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
     response.headers.append('Set-Cookie',REMEMBER_SESSION_COOKIE+'='+(body.remember===true?'1':'')+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+(body.remember===true?REMEMBER_SESSION_MAX_AGE_SECONDS:0));

@@ -11,6 +11,7 @@ const refresh=read('netlify/functions/session-refresh.mts');
 const adminHealth=read('netlify/functions/admin-session-health.mts');
 const systemHealth=read('src/pages/admin/health/index.astro');
 const record=read('netlify/functions/auth-record.mts');
+assert.doesNotMatch(record,/^\s+session,\s*$/m,'login response must not expose raw managed session row');
 const remembered=read('src/lib/remembered-session.ts');
 const staff=read('src/components/StaffUtilityNav.astro');
 
