@@ -3,6 +3,7 @@ import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tena
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
+import { normalizeLodgingPreference, sameStayLodgingChoice, validateStayInquiry } from './_shared/lodging-inquiry.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
   analyzeInquirySecurity,
@@ -590,24 +591,11 @@ export default async (req: Request, context: Context) => {
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
-  // Lodging preferences are recorded as requests, not inventory holds or reservations.
-  // Do not silently truncate oversize party counts, invalid date ranges, or unknown units.
+  // Validate but never claim that a requested home is held or available.
   if (formName === 'koa-stay-inquiry') {
-    const preference = cleanText(payload.inquiry?.lodgingPreference, 40) || 'not-specified';
-    if (!['three-bedroom', 'two-bedroom', 'both', 'either', 'not-specified'].includes(preference)) {
-      return json(req, { error: 'Choose a valid lodging option.' }, 400);
-    }
-    const partySize = Number(payload.inquiry?.guestCount);
-    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 10) {
-      return json(req, { error: 'Overnight guests must be between 1 and 10.' }, 400);
-    }
-    const arrival = cleanText(payload.inquiry?.arrival, 40);
-    const departure = cleanText(payload.inquiry?.departure, 40);
-    const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
-      && !Number.isNaN(Date.parse(value))
-      && new Date(value).toISOString().slice(0, 10) === value;
-    if (!isDate(arrival) || !isDate(departure) || departure <= arrival) {
-      return json(req, { error: 'A valid departure date after arrival is required.' }, 400);
+    const stayValidation = validateStayInquiry(payload.inquiry);
+    if (!stayValidation.ok) {
+      return json(req, { error: stayValidation.error }, 400);
     }
   }
   const store = salesStoreFor(context, req);
@@ -686,7 +674,7 @@ export default async (req: Request, context: Context) => {
       departure: cleanText(payload.inquiry?.departure, 40),
       stayType: cleanText(payload.inquiry?.stayType, 120),
       lodgingPreference: formName === 'koa-stay-inquiry'
-        ? (cleanText(payload.inquiry?.lodgingPreference, 40) || 'not-specified') : '',
+        ? (normalizeLodgingPreference(payload.inquiry?.lodgingPreference) || 'not-specified') : '',
       sleepingNeeds: formName === 'koa-stay-inquiry'
         ? cleanText(payload.inquiry?.sleepingNeeds, 1000) : '',
       planningFrom: cleanText(payload.inquiry?.planningFrom, 160),
@@ -837,7 +825,7 @@ export default async (req: Request, context: Context) => {
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
       // Two different homes requested for the same travel dates are distinct leads.
       if (formName === 'koa-stay-inquiry' &&
-          String(entry.inquiry?.lodgingPreference || 'not-specified') !== record.inquiry.lodgingPreference) return false;
+          !sameStayLodgingChoice(entry.inquiry?.lodgingPreference, record.inquiry.lodgingPreference)) return false;
       if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
       const createdAt = Date.parse(String(entry.createdAt || ''));
       return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;
