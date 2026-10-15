@@ -1442,6 +1442,36 @@ def health_mobile_mode(browser_name,health_payload_path):
        return {sections:sections.length,initialClosed,criticalInitiallyOpen,manuallyOpened,manuallyClosed,criticalForcedOpen,recoveredCollapsed};
      }""")
 
+    # PR-only certified Release History interaction check. This uses the
+    # sanitized local fixture and never captures live authenticated release data.
+    release_history_evidence=None
+    if urlparse(BASE).hostname in {"127.0.0.1","localhost"} and viewport_name in {"phone","desktop"}:
+     release_history_evidence=page.evaluate("""async () => {
+       const row=document.querySelector('[data-release-entry]');
+       const dialog=document.querySelector('[data-release-dialog]');
+       const detail=document.querySelector('[data-release-detail]');
+       if(!(row instanceof HTMLElement)||!(dialog instanceof HTMLDialogElement)||!detail){
+         return {ok:false,reason:'Certified Release History fixture or dialog was not found'};
+       }
+       row.click();
+       await new Promise((resolve)=>requestAnimationFrame(resolve));
+       const text=String(detail.textContent||'');
+       const images=[...detail.querySelectorAll('img')];
+       const requirements={
+         certificationTimestamp:text.includes('Certification timestamp'),
+         themeEvidence:text.includes('Theme QA evidence')&&text.includes('70 routes · 287 cases · 0 failures'),
+         responsiveEvidence:text.includes('Responsive QA evidence')&&text.includes('7 viewports · 490 cases · 0 critical'),
+         commit:text.includes('preview-commit-abcdef1234567890'),
+         deploy:text.includes('preview-deploy-123'),
+         screenshots:images.length>=4,
+       };
+       const ok=dialog.matches(':modal')&&Object.values(requirements).every(Boolean);
+       if(dialog.open)dialog.close();
+       return {ok,requirements,imageCount:images.length};
+     }""")
+     if not release_history_evidence.get("ok"):
+      detail=(detail+"; " if detail else "")+"Certified Release History dialog did not show complete Theme QA, responsive QA, screenshot, commit/deploy, and certification evidence"
+
     # PR-only synthetic screenshot and geometry check: never capture live
     # authenticated production explanation content in public CI artifacts.
     explanation_dialog_geometry=None
@@ -1769,6 +1799,8 @@ def health_mobile_mode(browser_name,health_payload_path):
      page.wait_for_timeout(100)
      page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
 
+    if release_history_evidence is not None:
+     metrics["releaseHistoryEvidence"]=release_history_evidence
     if explanation_dialog_geometry is not None:
      metrics["explanationDialog"]=explanation_dialog_geometry
     if page_errors:
