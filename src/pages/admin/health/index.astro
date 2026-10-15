@@ -1902,8 +1902,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         [/^(qbo|quickbooks|accounting|invoice|tax|payment)/,'accounting','HEALTH_ACCOUNTING_FAILED','Review accounting reconciliation in its protected subsystem; never copy client amounts into CI.'],
         [/^(turnstile|bot|captcha)/,'security','HEALTH_SECURITY_FAILED','Check server-side Turnstile verification and the relevant security monitor.'],
         [/^(auth|identity|session|credential|oauth)/,'identity','HEALTH_IDENTITY_FAILED','Check credential validity, access scope, and session refresh health.'],
-        [/^(visual|theme|responsive|browser|screenshot)/,'visual-qa','HEALTH_VISUAL_QA_FAILED','Review Chromium and WebKit evidence for the exact deploy and viewport.'],
-        [/^(mail|email|resend|office365|calendar)/,'integration','HEALTH_INTEGRATION_FAILED','Verify the affected integration and permissions, then rerun only its check.'],
+        [/^(dark-mode|visual|theme|responsive|browser|screenshot)/,'visual-qa','HEALTH_VISUAL_QA_FAILED','Review Chromium and WebKit evidence for the exact deploy and viewport.'],
+        [/^(mail|email|resend|office365|calendar|signwell|synthetic)/,'integration','HEALTH_INTEGRATION_FAILED','Verify the affected integration and permissions, then rerun only its check.'],
       ];
       const found=rules.find(([pattern])=>pattern.test(id));
       return {id,category:found?.[1]||'other',errorCode:found?.[2]||'HEALTH_CHECK_FAILED',
