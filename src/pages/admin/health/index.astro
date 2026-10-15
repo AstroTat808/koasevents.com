@@ -1060,6 +1060,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-health-detail-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close">×</button>
             </div>
             <div class="mt-6 grid gap-4">
+              <details data-health-safe-diagnostics class="hidden rounded-xl border border-[var(--koa-line)] p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-[var(--koa-forest)]">Safe diagnostic code and troubleshooting</summary>
+                <p data-health-safe-code class="mt-3 break-all font-mono text-xs text-[var(--koa-forest)]"></p>
+                <p data-health-safe-help class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/70"></p>
+                <p class="mt-2 text-xs text-[var(--koa-ink)]/50">These codes are inferred from approved check identifiers; customer records and raw provider errors are excluded.</p>
+              </details>
               <section class="rounded-xl bg-[var(--koa-sand)] p-4">
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Error</p>
                 <p data-health-detail-error class="mt-2 text-sm leading-6 text-[var(--koa-forest)]"></p>
@@ -1869,10 +1875,37 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return {cause,fix};
     }
 
+    function safeHealthDiagnostic(row){
+      const id=typeof row?.id==='string'?row.id:'';
+      if(!/^[a-z][a-z0-9-]{0,63}$/.test(id))return null;
+      const rules=[
+        [/^(netlify|deploy|release|production|github|build|recovery)/,'deployment','HEALTH_DEPLOYMENT_FAILED','Verify the exact production SHA and Netlify deploy; inspect release certification before retrying.'],
+        [/^(qbo|quickbooks|accounting|invoice|tax|payment)/,'accounting','HEALTH_ACCOUNTING_FAILED','Review accounting reconciliation in its protected subsystem; never copy client amounts into CI.'],
+        [/^(turnstile|bot|captcha)/,'security','HEALTH_SECURITY_FAILED','Check server-side Turnstile verification and the relevant security monitor.'],
+        [/^(auth|identity|session|credential|oauth)/,'identity','HEALTH_IDENTITY_FAILED','Check credential validity, access scope, and session refresh health.'],
+        [/^(visual|theme|responsive|browser|screenshot)/,'visual-qa','HEALTH_VISUAL_QA_FAILED','Review Chromium and WebKit evidence for the exact deploy and viewport.'],
+        [/^(mail|email|resend|office365|calendar)/,'integration','HEALTH_INTEGRATION_FAILED','Verify the affected integration and permissions, then rerun only its check.'],
+      ];
+      const found=rules.find(([pattern])=>pattern.test(id));
+      return {id,category:found?.[1]||'other',errorCode:found?.[2]||'HEALTH_CHECK_FAILED',
+        help:found?.[3]||'Inspect the affected protected subsystem and rerun the check after corrective action.'};
+    }
+
     function openHealthDetail(row){
       if(!row)return;
       const severity=normalizedSeverity(row);
       const explanation=explainHealthIssue(row);
+      const safePanel=document.querySelector('[data-health-safe-diagnostics]');
+      const safeCode=document.querySelector('[data-health-safe-code]');
+      const safeHelp=document.querySelector('[data-health-safe-help]');
+      const safe=(severity==='critical'||severity==='warning')?safeHealthDiagnostic(row):null;
+      if(safePanel instanceof HTMLDetailsElement){
+        safePanel.classList.toggle('hidden',!safe);
+        safePanel.open=false;
+      }
+      if(safeCode)safeCode.textContent=safe?safe.category+' · '+safe.errorCode+' · '+safe.id:'';
+      if(safeHelp)safeHelp.textContent=safe?.help||'';
+
       healthDetailSeverity.textContent=severity==='critical'?'Critical issue':severity==='warning'?'Warning':severity==='info'?'Information':'Healthy';
       healthDetailSeverity.className='eyebrow '+(severity==='critical'?'text-red-800':severity==='warning'?'text-amber-800':severity==='info'?'text-sky-800':'text-emerald-800');
       healthDetailTitle.textContent=String(row.name||'Health check');
