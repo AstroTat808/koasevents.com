@@ -3146,6 +3146,22 @@ export type ProductionProtectedAdminQa = {
   code:string|null;
 };
 
+export type ProductionCertifiedExportSecurity = {
+  status:'passed'|'failed';
+  checkedAt:string;
+  commit:string;
+  deployId:string;
+  runId:string;
+  expected:number;
+  denied:number;
+  formats:('pdf'|'json')[];
+  cases?:{id:string;format:'pdf'|'json';outcome:'denied'}[];
+  byteVerified?:boolean;
+  byteVerifiedAt?:string;
+  byteVerifiedRunId?:string;
+  source:'github-actions-oidc';
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -3162,6 +3178,7 @@ export type ProductionRelease = {
   responsiveQuality?:ProductionResponsiveQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   releaseAttestation?:ProductionReleaseAttestation|null;
+  certifiedExportSecurity?:ProductionCertifiedExportSecurity|null;
   protectedAdminQa?:ProductionProtectedAdminQa|null;
   authorName:string;
   authorLogin:string;
@@ -3875,6 +3892,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     responsiveQuality:input?.responsiveQuality||previous?.responsiveQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     releaseAttestation:input?.releaseAttestation||previous?.releaseAttestation||null,
+    certifiedExportSecurity:input?.certifiedExportSecurity||previous?.certifiedExportSecurity||null,
     protectedAdminQa:input?.protectedAdminQa||previous?.protectedAdminQa||null,
     authorName,
     authorLogin,

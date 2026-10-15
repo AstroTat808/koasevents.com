@@ -429,6 +429,9 @@ jobs:
           PY
           rm -f "$verification_file"
           test "$http_status" = "200"
+      - name: Verify live uncertified PDF and JSON exports are rejected
+        if: github.event_name == 'push'
+        run: node scripts/verify_live_certified_export_rejections.mjs
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
@@ -1196,6 +1199,22 @@ jobs:
             "verifiedAt":att.get("verifiedAt"),
           },separators=(",",":")))
           PY
+          trap - ERR
+      - name: Verify actual certified PDF and JSON serializer bytes
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail_export_proof() {
+            trap - ERR
+            python -c 'import json,os; x={"state":"failure","context":"System Health production release gate","description":"Certified PDF/JSON byte-level security evidence verification failed.","target_url":"https://github.com/{}/actions/runs/{}".format(os.environ["GITHUB_REPOSITORY"],os.environ["GITHUB_RUN_ID"])};open("/tmp/koa-export-byte-failure-status.json","w").write(json.dumps(x,separators=(",",":")))'
+            curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "Content-Type: application/json" --data-binary @/tmp/koa-export-byte-failure-status.json "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null || true
+            exit 1
+          }
+          trap fail_export_proof ERR
+          node scripts/verify_live_certified_export_bytes.mjs
           trap - ERR
 
   qa-summary:
