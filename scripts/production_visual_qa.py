@@ -1642,6 +1642,15 @@ def health_mobile_mode(browser_name,health_payload_path):
      expected_screenshots=len(visual_quality.get("screenshots") or [])
      card=page.locator("[data-theme-qa-card]")
      toggle=page.locator("[data-theme-qa-toggle]")
+     # Universal Health accordion keeps this entire card collapsed initially.
+     # Exercise the real user path before checking nested route details and
+     # lazy-loaded protected screenshot evidence.
+     if card.get_attribute("data-mobile-collapsed")=="true":
+      card.locator("[data-mobile-collapse-toggle]").click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-card]')?.dataset.mobileCollapsed === 'false'",
+       timeout=5000,
+      )
      if expected_routes:
       toggle.click()
       page.wait_for_function(
@@ -1649,6 +1658,11 @@ def health_mobile_mode(browser_name,health_payload_path):
        timeout=5000,
       )
      if expected_screenshots:
+      # Native loading=lazy only fetches images after their section is open
+      # and the actual thumbnail moves into the viewport.
+      thumbnails=page.locator("[data-theme-qa-screenshots] img")
+      for index in range(expected_screenshots):
+       thumbnails.nth(index).scroll_into_view_if_needed(timeout=5000)
       page.wait_for_function(
        "(count) => [...document.querySelectorAll('[data-theme-qa-screenshots] img')].filter((img)=>img.complete&&img.naturalWidth>0).length === count",
        arg=expected_screenshots,

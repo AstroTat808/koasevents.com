@@ -13,6 +13,7 @@ const checks=[
   ['health-dashboard-regression','System Health dashboard regression','npm',['run','test:health-dashboard']],
   ['health-collapse-runtime','System Health collapse runtime regression','node',['scripts/test_system_health_collapse_runtime.mjs']],
   ['health-collapse-release-contract','System Health collapse release contract','node',['scripts/test_system_health_collapse_release_contract.mjs']],
+  ['release-export-regression','Certified release PDF/JSON export regression','node',['scripts/test_release_attestation_export.mjs']],
   ['private-release-evidence','Private signed release evidence regression','node',['scripts/private_release_evidence.mjs','--self-test']],
   ['turnstile-history-regression','Turnstile append-only history regression','npm',['run','test:turnstile-history']],
   ['synthetic-health-regression','Synthetic health regression','npm',['run','test:synthetic-health']],
