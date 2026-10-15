@@ -107,6 +107,13 @@ await scenario('service outage is not an automatic logout',path=>path==='/api/ad
   await window.fetch('/api/admin/calendar');
   assert.equal(redirects.length,0);
 });
+await scenario('Identity refresh outage cannot force logout',path=>
+  path==='/api/auth/session-refresh'?json(503,'refresh_unavailable'):
+  json(401,'unauthenticated'),async(window,calls,redirects)=>{
+  await window.fetch('/api/admin/calendar');
+  assert.equal(calls.filter(x=>x.path==='/api/auth/session-refresh').length,1);
+  assert.equal(redirects.length,0);
+});
 await scenario('403 permission denial does not log the user out',()=>json(403,'forbidden'),async(window,calls,redirects)=>{
   const res=await window.fetch('/api/admin/calendar');
   assert.equal(res.status,403);

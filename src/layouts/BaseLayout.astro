@@ -437,6 +437,10 @@ const seoSchema = {
                 keepRememberedIdentityCookies();
                 session = await probe();
                 if (session.ok) return {active:true,refreshed:true};
+              } else if (refresh.status !== 401) {
+                // An unavailable Identity refresh service, 403 CSRF failure, or
+                // deployment problem is not proof of expired credentials.
+                return {active:null,refreshed:false};
               }
               const code = await readAuthCode(session);
               if (session.status === 401 && ['unauthenticated','session_revoked'].includes(code))
