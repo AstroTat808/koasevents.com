@@ -23,6 +23,7 @@ if(!url||!secret||!/^[a-f0-9]{40}$/i.test(sha||'')){
     const result=await response.json().catch(()=>null);
     if(response.status!==200||result?.ok!==true||result.sha!==sha||
       !/^[a-f0-9]{24}$/i.test(String(result?.deployId||''))||
+      result.readbackVerified!==true||!/^\d+$/.test(String(result.runId||''))||
       result.denied!==36||result.expected!==36||
       JSON.stringify(result.formats)!==JSON.stringify(['json','pdf'])){
       throw Error('production identity or 36/36 negative tests did not match');
