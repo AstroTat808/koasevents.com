@@ -1036,10 +1036,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Protected interfaces</p><h2 class="display mt-2 text-4xl">Pages + APIs</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly checks use non-destructive page-shell probes and protected endpoint reachability checks. Record-specific integrations use zero-write synthetic probes; manual and post-deploy runs test them live, while hourly runs reuse a live result for up to six hours to limit Netlify credit usage.</p></div>
-            <label class="flex w-fit cursor-pointer items-center gap-3 rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">
-              <input data-failures-only type="checkbox" class="h-4 w-4" />
-              Show failures only
-            </label>
+            <div class="flex flex-wrap items-center gap-3">
+              <label class="flex items-center gap-2 text-xs font-semibold text-[var(--koa-forest)]" for="health-severity-filter">
+                Severity
+                <select data-health-severity-filter id="health-severity-filter" aria-label="Filter System Health checks by severity" class="rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2 text-sm text-[var(--koa-forest)]">
+                  <option value="">All severities</option>
+                  <option value="critical">Critical</option>
+                  <option value="warning">Warning</option>
+                  <option value="info">Info</option>
+                  <option value="healthy">Healthy</option>
+                </select>
+              </label>
+              <label class="flex w-fit cursor-pointer items-center gap-3 rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">
+                <input data-failures-only type="checkbox" class="h-4 w-4" />
+                Show failures only
+              </label>
+            </div>
           </div>
           <div data-health-active-filter class="mt-4 hidden items-center justify-between gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3">
             <strong data-health-active-filter-label class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Showing: All checks</strong>
@@ -1062,7 +1074,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="mt-6 grid gap-4">
               <details data-health-safe-diagnostics class="hidden rounded-xl border border-[var(--koa-line)] p-4">
                 <summary class="cursor-pointer text-sm font-semibold text-[var(--koa-forest)]">Safe diagnostic code and troubleshooting</summary>
-                <p data-health-safe-code class="mt-3 break-all font-mono text-xs text-[var(--koa-forest)]"></p>
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <p data-health-safe-code class="min-w-0 flex-1 break-all font-mono text-xs text-[var(--koa-forest)]"></p>
+                  <button data-health-safe-copy-code type="button" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koa-clay)]">Copy code</button>
+                </div>
+                <p data-health-safe-copy-status role="status" aria-live="polite" class="mt-2 text-xs text-[var(--koa-forest)]"></p>
                 <p data-health-safe-help class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/70"></p>
                 <p class="mt-2 text-xs text-[var(--koa-ink)]/50">These codes are inferred from approved check identifiers; customer records and raw provider errors are excluded.</p>
               </details>
@@ -1269,6 +1285,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthRunWarningDialog=document.querySelector('[data-health-run-warning-dialog]');
     const healthRunWarningList=document.querySelector('[data-health-run-warning-list]');
     const results=document.querySelector('[data-results]');
+    const healthSeverityFilter=document.querySelector('[data-health-severity-filter]');
+    const healthSafeCopyCode=document.querySelector('[data-health-safe-copy-code]');
+    const healthSafeCopyStatus=document.querySelector('[data-health-safe-copy-status]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
     const failedDeployGroups=document.querySelector('[data-failed-deploy-groups]');
@@ -1905,6 +1924,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       if(safeCode)safeCode.textContent=safe?safe.category+' · '+safe.errorCode+' · '+safe.id:'';
       if(safeHelp)safeHelp.textContent=safe?.help||'';
+      if(healthSafeCopyCode instanceof HTMLButtonElement){
+        healthSafeCopyCode.dataset.diagnosticCode=safe?.errorCode||'';
+        healthSafeCopyCode.disabled=!safe;
+      }
+      if(healthSafeCopyStatus)healthSafeCopyStatus.textContent='';
 
       healthDetailSeverity.textContent=severity==='critical'?'Critical issue':severity==='warning'?'Warning':severity==='info'?'Information':'Healthy';
       healthDetailSeverity.className='eyebrow '+(severity==='critical'?'text-red-800':severity==='warning'?'text-amber-800':severity==='info'?'text-sky-800':'text-emerald-800');
@@ -2050,7 +2074,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function activeHealthFilterLabelFor(count){
       const suffix=count+' check'+(count===1?'':'s');
       if(activeSeverity){
-        const label=activeSeverity==='critical'?'Critical':activeSeverity==='warning'?'Warning':'Info';
+        const label=({critical:'Critical',warning:'Warning',info:'Info',healthy:'Healthy'})[activeSeverity]||'All';
         return 'Showing: '+label+' · '+suffix;
       }
       if(activeRootCause)return 'Showing: '+activeRootCause+' · '+suffix;
@@ -2169,6 +2193,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderHealthChecks(){
+      if(healthSeverityFilter instanceof HTMLSelectElement&&healthSeverityFilter.value!==activeSeverity){
+        healthSeverityFilter.value=activeSeverity;
+      }
       results.innerHTML='';
       const onlyFailures=Boolean(failuresOnly?.checked);
       const rows=latestHealthChecks.filter((row)=>{
@@ -2209,6 +2236,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthChecks();
     });
     activeHealthFilterClear?.addEventListener('click',clearHealthFilters);
+    healthSeverityFilter?.addEventListener('change',()=>{
+      const value=String(healthSeverityFilter.value||'');
+      activeSeverity=['critical','warning','info','healthy'].includes(value)?value:'';
+      activeRootCause='';
+      if(failuresOnly)failuresOnly.checked=false;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+    });
+    healthSafeCopyCode?.addEventListener('click',async()=>{
+      const code=String(healthSafeCopyCode.dataset.diagnosticCode||'');
+      if(!/^HEALTH_[A-Z_]+$/.test(code))return;
+      let copied=false;
+      if(navigator.clipboard?.writeText){
+        try{await navigator.clipboard.writeText(code);copied=true;}catch{}
+      }
+      if(!copied){
+        // iOS/Safari fallback for contexts without Clipboard API permission.
+        const temp=document.createElement('textarea');
+        temp.value=code;temp.readOnly=true;
+        temp.style.position='fixed';temp.style.top='0';temp.style.opacity='0';
+        document.body.appendChild(temp);temp.focus();temp.select();
+        try{copied=document.execCommand('copy');}catch{}
+        temp.remove();
+      }
+      if(healthSafeCopyStatus)healthSafeCopyStatus.textContent=copied
+        ? 'Diagnostic code copied.'
+        : 'Copy unavailable. Select the code above to copy it manually.';
+    });
     failuresOnly?.addEventListener('change',()=>{
       activeSeverity='';
       if(failuresOnly.checked)activeRootCause='';
