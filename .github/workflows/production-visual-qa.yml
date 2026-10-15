@@ -689,16 +689,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          trap 'rm -rf /tmp/admin-chromium.private.log visual-results/admin-chromium' EXIT
-          if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1; then
-            echo 'Protected admin browser QA passed; private browser output withheld.'
-          else
-            result=$?
-            # Emit only static route labels and fixed error codes from private QA.
-            python scripts/sanitize_protected_admin_qa.py --report visual-results/admin-chromium/report.json --qa-exit "$result" || true
-            echo '::error::Protected admin browser QA failed. See the privacy-safe diagnostic codes above.'
-            exit "$result"
+          trap 'rm -rf /tmp/admin-chromium.private.log /tmp/koa-admin-qa.safe.json visual-results/admin-chromium' EXIT
+          qa_code=0
+          python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1 || qa_code=$?
+          sanitized_code=0
+          python scripts/sanitize_protected_admin_qa.py --report visual-results/admin-chromium/report.json --qa-exit "$qa_code" --safe-output /tmp/koa-admin-qa.safe.json || sanitized_code=$?
+          # Persist only allowlisted route IDs, codes and counts using the
+          # workflow's short-lived GitHub OIDC identity; never upload reports.
+          node scripts/publish_protected_admin_release_evidence.mjs /tmp/koa-admin-qa.safe.json
+          if [ "$qa_code" -ne 0 ] || [ "$sanitized_code" -ne 0 ]; then
+            echo '::error::Protected admin QA failed; see sanitized category codes above.'
+            exit 1
           fi
+          echo 'Protected admin browser QA and durable signed evidence passed.'
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
