@@ -22,6 +22,7 @@ const ui=read('../src/pages/admin/health/index.astro');
 const workflow=read('../.github/workflows/production-visual-qa.yml');
 const exportModule=read('../netlify/functions/_shared/release-attestation-export.mjs');
 const liveTest=read('./verify_live_certified_export_rejections.mjs');
+const certifiedBytes=read('./verify_live_certified_export_bytes.mjs');
 for(const needle of [
   'certifiedExportSecurity:input?.certifiedExportSecurity||previous?.certifiedExportSecurity||null',
   "store.setJSON('deployments/releases/by-id/'+deployId,record)",
@@ -31,6 +32,8 @@ for(const needle of [
   'recordProductionRelease(context,{',
   'const readbackVerified=Boolean(',
   'signedPublishedProof',
+  "if(body?.action==='verify-certified-export-artifact-bytes')",
+  'pdfText.includes(\'SIGNED RESULT: 36 / 36\')',
   "source:'github-actions-oidc' as const",
 ])assert(signal.includes(needle),'Signed production-write/readback gate changed.');
 assert(dashboard.includes('certifiedExportSecurity')&&ui.includes('data-export-security-total')
@@ -40,6 +43,11 @@ assert(exportModule.includes('verifiedCertifiedExportSecurity(row)')
   &&exportModule.includes('heading(\'PDF / JSON export security')
   &&exportModule.includes('certifiedExportSecurity,'),
   'PDF and JSON certified exports must include the same exact signed 36-case manifest.');
+assert(workflow.includes('Verify actual certified PDF and JSON serializer bytes')
+  &&workflow.includes('node scripts/verify_live_certified_export_bytes.mjs')
+  &&certifiedBytes.includes("verify-certified-export-artifact-bytes")
+  &&certifiedBytes.includes('result.caseCount!==36'),
+  'The persisted certified release must be validated by the actual deployed PDF and JSON serializers.');
 assert(workflow.includes('Verify live uncertified PDF and JSON exports are rejected')
   &&liveTest.includes('result.readbackVerified!==true')
   &&liveTest.includes("for(const format of ['pdf','json'])"),
