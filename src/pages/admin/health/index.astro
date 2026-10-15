@@ -2237,6 +2237,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
     activeHealthFilterClear?.addEventListener('click',clearHealthFilters);
     healthSeverityFilter?.addEventListener('change',()=>{
+      if(!(healthSeverityFilter instanceof HTMLSelectElement))return;
       const value=String(healthSeverityFilter.value||'');
       activeSeverity=['critical','warning','info','healthy'].includes(value)?value:'';
       activeRootCause='';
@@ -2245,6 +2246,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthChecks();
     });
     healthSafeCopyCode?.addEventListener('click',async()=>{
+      if(!(healthSafeCopyCode instanceof HTMLButtonElement))return;
       const code=String(healthSafeCopyCode.dataset.diagnosticCode||'');
       if(!/^HEALTH_[A-Z_]+$/.test(code))return;
       let copied=false;
