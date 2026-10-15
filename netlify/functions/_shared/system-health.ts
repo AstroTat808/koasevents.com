@@ -3133,6 +3133,7 @@ export type ProductionCertifiedExportSecurity = {
   expected:number;
   denied:number;
   formats:('pdf'|'json')[];
+  cases?:{id:string;format:'pdf'|'json';outcome:'denied'}[];
   source:'github-actions-oidc';
 };
 
