@@ -30,7 +30,7 @@
     "test:health-dashboard": "node scripts/test_system_health_dashboard.mjs",
     "test:turnstile-history": "node scripts/test_turnstile_history.mjs",
     "test:theme": "node scripts/test_theme_system.mjs",
-    "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs",
+    "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs && node scripts/test_release_history_repository.mjs",
     "test:deploy-recovery": "node scripts/test_production_deploy_recovery.mjs",
     "test:build-diagnostics": "node scripts/test_build_failure_diagnostics.mjs",
     "test:calendar-contrast": "python scripts/test_calendar_contrast.py --base-url http://127.0.0.1:4173",

@@ -1033,6 +1033,7 @@ jobs:
           node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
 
       - name: Persist certified release attestation history
+        id: persist-history
         if: success()
         shell: bash
         env:
@@ -1106,6 +1107,14 @@ jobs:
           },separators=(",",":")))
           PY
           trap - ERR
+
+
+      - name: Publish independent release-history persistence status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PERSIST_OUTCOME: ${{ steps.persist-history.outcome }}
+        run: node scripts/publish_release_history_status.mjs
 
   qa-summary:
     name: Visual QA summary

@@ -774,10 +774,17 @@ export default async (req:Request,context:Context) => {
         const recorded:any=await recordProductionRelease(context,{
           deployId,commit:expectedSha,publishedAt,releaseAttestation,
         });
+        // Read the durable store back instead of trusting only the write return object.
+        // This is the independent persistence proof used by the GitHub commit status.
+        const persistedReleases=await readProductionReleases(context,100);
+        const persisted=persistedReleases.find((row:any)=>row?.deployId===deployId&&row?.commit===expectedSha)||null;
         const recordedOk=recorded?.releaseAttestation?.status==='verified'
-          &&recorded?.releaseAttestation?.expectedSha===expectedSha
-          &&recorded?.releaseAttestation?.deployId===deployId
-          &&recorded?.releaseAttestation?.matchingDeployId===true;
+          &&persisted?.releaseAttestation?.status==='verified'
+          &&persisted?.releaseAttestation?.expectedSha===expectedSha
+          &&persisted?.releaseAttestation?.deployId===deployId
+          &&persisted?.releaseAttestation?.liveDeployId===liveDeployId
+          &&persisted?.releaseAttestation?.matchingDeployId===true
+          &&persisted?.releaseAttestation?.productionGateState==='success';
         return Response.json({
           ok:recordedOk,recorded:recordedOk,expectedSha,deployId,liveDeployId,
           releaseAttestation:recorded?.releaseAttestation||releaseAttestation,
