@@ -230,7 +230,7 @@ assert(
     && health.includes('Theme QA evidence')
     && health.includes('Responsive QA evidence')
     && health.includes('Certification timestamp')
-    && health.includes('data-release-entry')
+    && health.includes('button.dataset.releaseEntry=')
     && visualQa.includes('Certified Release History dialog did not show complete Theme QA, responsive QA, screenshot, commit/deploy, and certification evidence'),
   'Certified Release History must persist responsive browser evidence and render exact certification, Theme QA, responsive QA, screenshot, commit, and deploy evidence.',
 );
