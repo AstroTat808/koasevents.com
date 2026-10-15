@@ -2308,6 +2308,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function setMobileCollapsed(section,collapsed,persist=false){
       if(!(section instanceof HTMLElement))return;
+      if(collapsed&&section.dataset.healthSectionStatus==='red')collapsed=false;
       const content=[...section.children].filter((child,index)=>index>0&&!(child instanceof HTMLButtonElement&&child.hasAttribute('data-mobile-collapse-toggle')));
       content.forEach((child)=>child.classList.toggle('koa-mobile-collapsed-content',collapsed));
       section.dataset.mobileCollapsed=collapsed?'true':'false';
@@ -2405,6 +2406,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       badge.textContent='Details';
       section.dataset.healthSectionStatus='neutral';
       header.addEventListener('click',(event)=>{
+        // The shared desktop controller owns desktop header clicks. A second
+        // listener here would immediately reverse its toggle.
+        if(!mobileHealthQuery.matches)return;
         const target=event.target;
         if(target instanceof Element&&target.closest('a,button,input,select,textarea,label,[role="button"]'))return;
         event.stopPropagation();
@@ -2612,7 +2616,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       const allSections=[...document.querySelectorAll('[data-mobile-collapsible]')]
         .filter((section)=>section instanceof HTMLElement);
-      const allGreen=allSections.length>0&&allSections.every((section)=>section.dataset.healthSectionStatus==='green');
+      const trackedSections=allSections.filter((section)=>section.dataset.healthSectionTracked==='true');
+      const allGreen=trackedSections.length>0&&trackedSections.every((section)=>section.dataset.healthSectionStatus==='green');
       const banner=ensureAllSystemsGoodBanner();
       if(banner instanceof HTMLElement){
         banner.classList.toggle('hidden',!mobileHealthQuery.matches||!allGreen);
@@ -2726,6 +2731,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const allPanels=[...app.children].filter((node)=>node instanceof HTMLElement&&recognized.has(node.tagName)&&node!==directSections[0]);
       allPanels.forEach((section,index)=>{
         if(!section.id)section.id='health-section-'+(index+1);
+        if(!section.dataset.mobileOrder)section.dataset.mobileOrder=String(20+index);
         prepareMobileCollapsible(section);
       });
       configureMobileHealthSection(document.querySelector('[data-needs-action]'),'health-needs-action',1,true);
