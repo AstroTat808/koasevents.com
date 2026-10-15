@@ -2941,6 +2941,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const index=latestReleases.indexOf(release);
         const button=document.createElement('button');
         button.type='button';
+        button.dataset.releaseEntry=String(release.deployId||release.commit||index);
         button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
         const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
         const probeAudit=release.syntheticProbeVerification||null;
