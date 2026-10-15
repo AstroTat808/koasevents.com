@@ -2258,7 +2258,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const temp=document.createElement('textarea');
         temp.value=code;temp.readOnly=true;
         temp.style.position='fixed';temp.style.top='0';temp.style.opacity='0';
-        document.body.appendChild(temp);temp.focus();temp.select();
+        // Keep the fallback selection inside the active modal (outside nodes are inert).
+        healthDetailDialog.appendChild(temp);temp.focus();temp.select();
         try{copied=document.execCommand('copy');}catch{}
         temp.remove();
       }
