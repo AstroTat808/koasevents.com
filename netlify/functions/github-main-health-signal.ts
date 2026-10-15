@@ -1165,6 +1165,54 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='verify-certified-export-artifact-bytes'){
+      const sha=cleanText(claims?.sha,80);
+      const workflow=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||'',500);
+      const deployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+      const runtimeCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+      const runId=cleanText(claims?.run_id,80);
+      if(claims?.ref!==MAIN_REF
+        ||!workflow.includes('.github/workflows/production-visual-qa.yml@refs/heads/main')
+        ||(runtimeCommit&&runtimeCommit!==sha)
+        ||!/^[a-f0-9]{24}$/.test(deployId)||!/^[0-9]{4,20}$/.test(runId)){
+        return Response.json({ok:false,code:'EXPORT_ATTESTATION_IDENTITY_MISMATCH'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const releases=await readProductionReleases(context,100);
+        const {buildCertifiedReleaseExport,certifiedReleasePdf}=await import('./_shared/release-attestation-export.mjs');
+        const document=buildCertifiedReleaseExport(releases,{productionCommit:sha,productionDeployId:deployId});
+        const security=document.certifiedExportSecurity||{};
+        const cases=Array.isArray(security.cases)?security.cases:[];
+        const json=JSON.stringify(document);
+        const jsonDoc=JSON.parse(json);
+        const pdf=certifiedReleasePdf(document);
+        const pdfText=new TextDecoder().decode(pdf);
+        const matches=Boolean(document.release?.commit===sha
+          &&document.release?.deployId===deployId
+          &&document.currentProduction?.matchesCertifiedRelease===true
+          &&document.certification?.status==='verified'
+          &&document.certification?.productionGate==='success'
+          &&security.status==='passed'&&security.signedEvidence===true
+          &&security.runId===runId&&security.commit===sha
+          &&security.deployId===deployId&&security.denied===36&&security.expected===36
+          &&cases.length===36&&new Set(cases.map((x:any)=>x.id)).size===36
+          &&jsonDoc.certifiedExportSecurity.cases.length===36
+          &&jsonDoc.certifiedExportSecurity.cases.every((item:any,index:number)=>item.id===cases[index].id)
+          &&pdfText.startsWith('%PDF-1.4\n')
+          &&pdfText.includes('SIGNED RESULT: 36 / 36')
+          &&cases.every((item:any)=>pdfText.includes(item.id))
+          &&pdf.byteLength>1000);
+        return Response.json({
+          ok:matches,code:matches?'EXPORT_ATTESTATION_PDF_JSON_VERIFIED':'EXPORT_ATTESTATION_CONTENT_MISMATCH',
+          sha,deployId,runId,caseCount:matches?36:0,pdfValidated:matches,jsonValidated:matches,
+        },{status:matches?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch{
+        return Response.json({ok:false,code:'EXPORT_ATTESTATION_NOT_CERTIFIED'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-dashboard-refresh'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
