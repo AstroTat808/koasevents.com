@@ -13,6 +13,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         
       </div>
 
+      <div data-session-pending role="status" aria-live="polite" class="mb-5 rounded-[1.4rem] bg-white p-6 text-sm font-semibold text-[var(--koa-forest)] shadow-[var(--shadow-soft)]">Verifying staff access to Sales CRM…</div>
       <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8"><strong class="text-[var(--koa-forest)]">Sales CRM access required.</strong><p class="mt-2 text-sm text-[var(--koa-ink)]/58">You are signed in, but your role does not include Sales CRM access.</p></div>
 
       <div data-admin-ui class="hidden grid gap-8">
@@ -2987,7 +2988,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 
     async function load(query='') {
-      const user=await getAdminSession(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      const user=await getAdminSession();
+      document.querySelector('[data-session-pending]')?.classList.add('hidden');
+      if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       managerAccess=hasManagerAccess(user); applyRoleUi(user);
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
       const [response,qboResponse,catalogResponse]=await Promise.all([
