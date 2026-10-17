@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Validate private signed evidence without returning customer fields or response text.
 import assert from 'node:assert/strict';
+import { sanitizeFailedHealthChecks } from './safe_health_diagnostic_codes.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -95,12 +96,8 @@ export function sanitizeDashboard(data, expectedSha) {
   requireValue(Array.isArray(dashboard.enrichmentWarnings), 'Enrichment warning evidence is missing.');
   // Preserve component identifiers only. Never expose check names, paths,
   // details, upstream payloads, client records or credential metadata in CI.
-  const failedCheckIds=Array.isArray(current.checks)
-    ? [...new Set(current.checks
-        .filter(row=>row?.ok===false||row?.severity==='red')
-        .map(row=>String(row?.id||'').trim())
-        .filter(id=>/^[a-z0-9-]{1,64}$/.test(id)))].slice(0,100)
-    : [];
+  const failedDiagnostics=sanitizeFailedHealthChecks(current.checks,current.failed);
+  const failedCheckIds=failedDiagnostics.map(row=>row.id);
   // Only these internally generated stable recovery codes may escape the
   // private signed production snapshot; provider messages remain withheld.
   const recoveryCodes=new Set([
@@ -120,7 +117,7 @@ export function sanitizeDashboard(data, expectedSha) {
   return {
     ok: true, sha: expectedSha, deployId: data.deployId,
     current: { overall: current.overall, passed: current.passed, failed: current.failed,
-      checkedAt: current.checkedAt, failedCheckIds, recoveryFailureCode, checks: [] },
+      checkedAt: current.checkedAt, failedCheckIds, failedDiagnostics, recoveryFailureCode, checks: [] },
     coverage: {}, criticalIntegrations: {}, rollbackReady: {}, runtime: {}, deployments: {},
     office365: {}, emailHealth: {}, credentialHealth: {}, weeklyExecutiveSummary: {}, accountingHealth: {},
     visualQuality: { status: q.status, checkedAt: q.checkedAt, source: 'production-visual-qa',
@@ -161,6 +158,7 @@ function selfTest() {
       {id:'customer@example.invalid',ok:false,detail:'PRIVATE_CUSTOMER'}]}};
   const failedSafe=sanitizeDashboard(failedFixture,commit);
   assert.deepEqual(failedSafe.current.failedCheckIds,['netlify-recovery-credential']);
+  assert.deepEqual(failedSafe.current.failedDiagnostics,[{id:'netlify-recovery-credential',category:'deployment',errorCode:'HEALTH_DEPLOYMENT_FAILED'}]);
   assert.equal(failedSafe.current.recoveryFailureCode,null);
   const classified=sanitizeDashboard({
     ...failedFixture,current:{...failedFixture.current,checks:[
@@ -220,6 +218,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
         writeFileSync(outputFile, JSON.stringify(safe));
         console.log(JSON.stringify({ ok: true, overall: safe.current.overall, passed: safe.current.passed,
           failed: safe.current.failed, failedCheckIds: safe.current.failedCheckIds,
+          failedDiagnostics: safe.current.failedDiagnostics,
           recoveryFailureCode: safe.current.recoveryFailureCode,
           checkedAt: safe.current.checkedAt, enrichmentWarningCount: safe.enrichmentWarnings.length }));
       } else throw new Error('Unknown private evidence mode.');

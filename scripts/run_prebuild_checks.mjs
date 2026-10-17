@@ -17,6 +17,7 @@ const checks=[
   ['production-export-security-regression','Synthetic production PDF/JSON certification rejection gate','node',['scripts/test_certified_export_security_probe.mjs']],
   ['signed-admin-qa-release-evidence','Signed privacy-safe protected-admin release-history regression','node',['scripts/test_protected_admin_release_evidence.mjs']],
   ['private-release-evidence','Private signed release evidence regression','node',['scripts/private_release_evidence.mjs','--self-test']],
+  ['safe-health-diagnostic-ui','Safe System Health diagnostics and clipboard regression','node',['scripts/test_safe_health_diagnostic_ui.mjs']],
   ['turnstile-history-regression','Turnstile append-only history regression','npm',['run','test:turnstile-history']],
   ['synthetic-health-regression','Synthetic health regression','npm',['run','test:synthetic-health']],
   ['critical-integrations-regression','Critical Integrations regression','npm',['run','test:critical-integrations']],
