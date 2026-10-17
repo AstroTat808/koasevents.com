@@ -373,7 +373,8 @@ export async function getAccessContext(req?:Request, context?:Context) {
     const identityCapabilities = capabilitiesFor(authoritativeUser);
     const security = passwordSecurityFor(authoritativeUser, sessionUser, policy);
     const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
-    if(managedSession?.revoked) security.sessionRevoked = true;
+    // No Request, no Koa binding, or an unknown/revoked binding all fail closed.
+    if(!managedSession?.valid) security.sessionRevoked = true;
 
     const tenantContext = identityRole === 'none' || identityRole === 'deactivated'
       ? null
