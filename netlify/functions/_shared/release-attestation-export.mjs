@@ -1,3 +1,4 @@
+import {normalizeProtectedAdminQa} from './protected-admin-release-evidence.mjs';
 // Privacy-safe, immutable production-release attestation exports.
 // This module is side-effect-free and intentionally has no access to credentials.
 const SHOTS=[
@@ -45,6 +46,26 @@ function verifiedCertifiedExportSecurity(row,{allowPendingByteProof=false}={}){
   return cases.filter(item=>item.format==='pdf').length===18
     &&cases.filter(item=>item.format==='json').length===18;
 }
+const DIAGNOSTIC_CASES=["severity-filter","troubleshooting-accordion","keyboard-access","copy-code","clipboard-fallback","private-field-exclusion"];
+function verifiedAdminEvidence(row){
+  const q=row?.protectedAdminQa;
+  if(!q)return null;
+  try{
+    const report={ok:q.status==='passed',totalFailures:q.failureCount,failures:q.failures};
+    if(q.code!==null&&q.code!==undefined)report.code=q.code;
+    const safe=normalizeProtectedAdminQa(report,{
+      commit:row.commit,deployId:row.deployId,runId:q.runId,checkedAt:q.checkedAt
+    });
+    return q.commit===row.commit&&q.deployId===row.deployId
+      &&q.browser==='chromium'&&q.checkedCount===42
+      &&q.source==='github-actions-oidc'&&safe.status===q.status?safe:null;
+  }catch{return null;}
+}
+function validControlEvidence(q,runId){
+  return Boolean(q&&q.status==='passed'&&q.source==='github-actions-oidc'
+    &&q.runId===runId&&q.webkit==='390x844'&&q.chromium==='1440x900'
+    &&Array.isArray(q.cases)&&JSON.stringify(q.cases)===JSON.stringify(DIAGNOSTIC_CASES));
+}
 function isCertified(row,options={}){
   const a=row?.releaseAttestation||{},v=row?.visualQuality||{},r=row?.responsiveQuality||{};
   if(!sha40.test(String(row?.commit||''))||!deploy24.test(String(row?.deployId||'')))return false;
@@ -63,6 +84,10 @@ function isCertified(row,options={}){
     if(theme.reportMissing||!theme.routes||!theme.cases||theme.failures||theme.failedRoutes
       ||responsive.reportMissing||!responsive.cases||!responsive.viewports||responsive.criticalFailures)return false;
   }
+  const admin=verifiedAdminEvidence(row);
+  if(row?.protectedAdminQa&&(!admin||admin.status!=='passed'||admin.failureCount!==0))return false;
+  if(a.healthControlsQA&&(!validControlEvidence(a.healthControlsQA,a.visualQaRunId)
+    ||!admin||admin.runId!==a.visualQaRunId||admin.status!=='passed'))return false;
   return true;
 }
 export function buildCertifiedReleaseExport(releases,options={}){
@@ -73,6 +98,7 @@ export function buildCertifiedReleaseExport(releases,options={}){
   if(!latest)throw new Error('No complete, independently certified production release is available for export.');
   const a=latest.releaseAttestation,v=latest.visualQuality,r=latest.responsiveQuality;
   const deployId=latest.deployId,commit=latest.commit;
+  const signedAdmin=verifiedAdminEvidence(latest);
   const proof=latest.certifiedExportSecurity&&verifiedCertifiedExportSecurity(latest,{allowPendingByteProof:options.allowPendingByteProof===true})
     ?latest.certifiedExportSecurity:null;
   // Preserve historical releases but never falsely claim they passed this newer gate.
@@ -131,6 +157,16 @@ export function buildCertifiedReleaseExport(releases,options={}){
       chromium:browserResponsive(r.chromium),webkit:browserResponsive(r.webkit),
     },
     certifiedExportSecurity,
+    protectedAdminQA:signedAdmin
+      ?{status:signedAdmin.status,checkedAt:timestamp(signedAdmin.checkedAt),
+        commit,deployId,runId:signedAdmin.runId,browser:'chromium',
+        checkedCount:signedAdmin.checkedCount,failureCount:signedAdmin.failureCount,
+        findings:signedAdmin.failures.map(({route,code})=>({route,code}))}
+      :{status:'not-recorded',failureCount:null,findings:[]},
+    systemHealthControlsQA:validControlEvidence(a.healthControlsQA,a.visualQaRunId)
+      ?{status:'passed',source:'github-actions-oidc',runId:a.visualQaRunId,
+        chromium:'1440x900',webkit:'390x844',checks:[...DIAGNOSTIC_CASES]}
+      :{status:'not-recorded',checks:[]},
     screenshotReferences:screenshots,
     currentProduction:{
       observedCommit:productionCommit||null,
@@ -219,6 +255,22 @@ function pdfPages(document){
   }else{
     push('HISTORICAL: Signed 36-case PDF/JSON export security evidence was not recorded.');
     push('No passing result is claimed for this release.');
+  }
+  heading('Protected admin browser QA');
+  push('Status: '+document.protectedAdminQA.status.toUpperCase());
+  if(document.protectedAdminQA.status!=='not-recorded'){
+    push('Chromium | '+document.protectedAdminQA.checkedCount+' registered checks | '+
+      document.protectedAdminQA.failureCount+' failures | GitHub run '+document.protectedAdminQA.runId);
+    for(const finding of document.protectedAdminQA.findings){
+      push(finding.route+' | '+finding.code);
+    }
+  }
+  heading('System Health diagnostic controls');
+  push('Status: '+document.systemHealthControlsQA.status.toUpperCase());
+  if(document.systemHealthControlsQA.status==='passed'){
+    push('WebKit iPhone 390x844: PASSED | Chromium desktop 1440x900: PASSED');
+    push('GitHub run: '+document.systemHealthControlsQA.runId);
+    push('Checks: '+document.systemHealthControlsQA.checks.join(', '));
   }
   heading('Protected screenshots');
   for(const shot of document.screenshotReferences){
