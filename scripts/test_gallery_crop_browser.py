@@ -68,6 +68,14 @@ def exercise_browser(playwright, browser_name: str, base_url: str, width: int, h
         assert_position(image, 80, 12)  # Placement override wins over global 31 / 67.
         image.scroll_into_view_if_needed(timeout=15000)
         assert image.evaluate("(el) => el.dataset.koaPlacementCropApplied") == PLACEMENT
+        page.wait_for_function(
+            """selector => {
+              const img = document.querySelector(selector);
+              return img && img.complete && img.naturalWidth > 0;
+            }""",
+            arg=SELECTOR,
+            timeout=20000,
+        )
 
         out = Path("visual-results/gallery-crop")
         out.mkdir(parents=True, exist_ok=True)
@@ -98,6 +106,15 @@ def exercise_browser(playwright, browser_name: str, base_url: str, width: int, h
         }""")
         in_frame = page.frame_locator("#koa-crop-browser-fixture").locator(SELECTOR).first
         in_frame.wait_for(timeout=25000)
+        page.wait_for_function(
+            """selector => {
+              const iframe = document.querySelector('#koa-crop-browser-fixture');
+              const img = iframe?.contentDocument?.querySelector(selector);
+              return img?.dataset.koaPlacementCropApplied === 'home__flagship-experience__4-3';
+            }""",
+            arg=SELECTOR,
+            timeout=20000,
+        )
         # Changing the global crop cannot overwrite an independently saved placement crop.
         page.evaluate("""([photo, placement]) => {
           document.querySelector('#koa-crop-browser-fixture').contentWindow.postMessage({
