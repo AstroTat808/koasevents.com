@@ -1,0 +1,54 @@
+---
+import { mediaUsageBySrc } from '../data/mediaUsage';
+
+// Only compiled, public, gallery-managed image placements are audited. Neither
+// customer data nor any authenticated page is loaded in the browser health test.
+const publicPlacements = Object.entries(mediaUsageBySrc).flatMap(([src, usages]) =>
+  usages.filter((usage) =>
+    typeof usage.href === 'string' &&
+    /^\/(?:[a-z0-9_-]+\/)*$/i.test(usage.href) &&
+    !usage.href.startsWith('/admin/') &&
+    Boolean(usage.placementId)
+  ).map((usage) => ({
+    href: usage.href,
+    src,
+    placementId: usage.placementId,
+    occurrence: Number(usage.occurrence || 0),
+    section: usage.section,
+    impact: usage.impact || 'standard',
+  }))
+);
+const routeCount = new Set(publicPlacements.map((item) => item.href)).size;
+const highImpactCount = publicPlacements.filter((item) => item.impact === 'high').length;
+---
+<section data-gallery-crop-health class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="eyebrow text-[var(--koa-clay)]">Gallery crop reliability</p>
+      <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Live crop position audit</h2>
+      <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">
+        Compares saved Gallery Admin crop positions with the images rendered on Koa’s public website
+        at 1440px desktop and 390px iPhone widths. Detects missing placements, ignored crop overrides,
+        mismatched focal points and destructive image-CDN crops.
+      </p>
+    </div>
+    <span data-gallery-crop-status data-state="idle" class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Not checked</span>
+  </div>
+  <div class="mt-5 flex flex-wrap items-center gap-3">
+    <button data-gallery-crop-run type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-white disabled:cursor-wait disabled:opacity-50">Check high-impact pages</button>
+    <button data-gallery-crop-full type="button" class="rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-5 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] disabled:cursor-wait disabled:opacity-50">Check all public pages</button>
+    <span class="text-xs font-semibold text-[var(--koa-ink)]/55">{routeCount} public routes · {highImpactCount} high-impact placements</span>
+  </div>
+  <p data-gallery-crop-summary aria-live="polite" class="mt-4 text-sm font-semibold text-[var(--koa-forest)]">Awaiting browser verification.</p>
+  <p data-gallery-crop-progress class="mt-2 text-xs text-[var(--koa-ink)]/55">The high-impact check runs when System Health opens with authorized access.</p>
+  <p data-gallery-crop-checked-at class="mt-1 text-[.68rem] text-[var(--koa-ink)]/45">No audit has completed in this browser session.</p>
+  <div data-gallery-crop-results class="mt-4" aria-live="polite"></div>
+  <p class="mt-4 border-t border-[var(--koa-line)] pt-3 text-xs leading-5 text-[var(--koa-ink)]/45">
+    This is an independent live-browser content check, not a signed production release attestation.
+    A check that times out or cannot read a public page is inconclusive, never green.
+    Gallery Admin saves trigger an automatic recheck in an open System Health tab.
+  </p>
+  <div data-gallery-crop-frames aria-hidden="true"></div>
+  <script id="koa-gallery-crop-health-placements" type="application/json" set:html={JSON.stringify(publicPlacements)}></script>
+</section>
+<script src="/gallery-crop-health.js" defer></script>
