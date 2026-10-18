@@ -247,7 +247,8 @@ def iframe_crop_test(page, base_url: str, route: str, entries: list[dict], width
     page.wait_for_function(
         """() => {
           const frame = document.querySelector('#koa-placement-qa-frame');
-          return Boolean(frame?.contentWindow?.__koaGalleryFocalPoints instanceof Map);
+          const focal = frame?.contentWindow?.__koaGalleryFocalPoints;
+          return Boolean(focal && typeof focal.get === 'function' && focal.size > 0);
         }""",
         timeout=25000,
     )
