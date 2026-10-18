@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import argparse
 import json
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright
 
@@ -27,14 +29,32 @@ GALLERY = {
 
 
 def assert_full_source_srcset(image) -> None:
-    srcset = image.get_attribute("srcset") or ""
-    assert srcset, "Responsive photo must offer an optimized srcset"
-    for candidate in srcset.split(","):
-        url = candidate.strip().split(" ")[0]
-        query = parse_qs(urlsplit(url).query)
-        assert query.get("url", [""])[0] == PHOTO, "Unexpected source in image CDN request"
-        assert "w" in query, "Missing CDN responsive width"
-        assert "h" not in query, "Server-side crop discards pixels before the saved focal point can work"
+    # The local static server intentionally has no Netlify Image CDN.
+    # ResponsiveImage's fallback removes srcset on a failed request, so inspect
+    # the immutable built HTML rather than racing against the browser's fallback.
+    class SourceImages(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.srcsets = []
+
+        def handle_starttag(self, tag, attrs):
+            attributes = dict(attrs)
+            if tag == "img" and attributes.get("data-koa-focal-src") == PHOTO:
+                self.srcsets.append(attributes.get("srcset") or "")
+
+    with urlopen(image.page.url, timeout=15) as response:
+        html = response.read().decode("utf-8")
+    parser = SourceImages()
+    parser.feed(html)
+    assert parser.srcsets, "Image source not present in built HTML"
+    for srcset in parser.srcsets:
+        assert srcset, "Responsive photo must offer an optimized srcset in built HTML"
+        for candidate in srcset.split(","):
+            url = candidate.strip().split(" ")[0]
+            query = parse_qs(urlsplit(url).query)
+            assert query.get("url", [""])[0] == PHOTO, "Unexpected source in image CDN request"
+            assert "w" in query, "Missing CDN responsive width"
+            assert "h" not in query, "Server-side crop discards pixels before the saved focal point can work"
 
 
 def assert_position(image, x: int, y: int) -> None:
