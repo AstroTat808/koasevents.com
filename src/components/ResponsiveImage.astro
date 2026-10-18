@@ -10,6 +10,7 @@ interface Props {
   fit?: 'cover' | 'contain' | 'fill';
   position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
   quality?: number;
+  // Preserve the full source for browser-side focal positioning on every page.
   preserveSourceCrop?: boolean;
 }
 
@@ -24,7 +25,7 @@ const {
   fit = 'cover',
   position = 'center',
   quality = 84,
-  preserveSourceCrop = false,
+  preserveSourceCrop = true,
 } = Astro.props;
 
 const transform = (targetWidth: number, targetHeight?: number, format = 'webp') => {
