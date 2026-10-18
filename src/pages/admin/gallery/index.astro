@@ -714,7 +714,7 @@ const mediaUsage = mediaUsageBySrc;
       return externalUsagesForItem(item).filter((usage) =>
         usage.impact === 'high' &&
         usage.placementId &&
-        new RegExp('^/(?:[a-z0-9_-]+/)*
+        new RegExp('^/(?:[a-z0-9_-]+/)*$', 'i').test(usage.href || '') &&
         !String(usage.href).startsWith('/admin/')
       );
     }
