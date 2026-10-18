@@ -10,6 +10,8 @@ interface Props {
   fit?: 'cover' | 'contain' | 'fill';
   position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
   quality?: number;
+  // Preserve the full source for browser-side focal positioning on every page.
+  preserveSourceCrop?: boolean;
 }
 
 const {
@@ -23,18 +25,21 @@ const {
   fit = 'cover',
   position = 'center',
   quality = 84,
+  preserveSourceCrop = true,
 } = Astro.props;
 
 const transform = (targetWidth: number, targetHeight?: number, format = 'webp') => {
   const params = new URLSearchParams({
     url: src,
     w: String(Math.max(1, Math.round(targetWidth))),
-    fit,
-    position,
+    fit: preserveSourceCrop ? 'contain' : fit,
+    ...(!preserveSourceCrop ? { position } : {}),
     q: String(Math.max(1, Math.min(100, Math.round(quality)))),
     fm: format,
   });
-  if (targetHeight) params.set('h', String(Math.max(1, Math.round(targetHeight))));
+  // When a gallery focal point controls CSS object-position, keep the complete
+  // source image so CDN pre-cropping cannot discard the requested focal area.
+  if (targetHeight && !preserveSourceCrop) params.set('h', String(Math.max(1, Math.round(targetHeight))));
   return '/.netlify/images?' + params.toString();
 };
 

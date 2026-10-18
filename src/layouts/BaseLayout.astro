@@ -843,6 +843,64 @@ const seoSchema = {
           });
         };
 
+
+        // Gallery Admin embeds the real public page for unsaved, placement-accurate previews.
+        // Same-origin, iframe-only messages change browser presentation, never gallery data.
+        const cropPreviewEnabled = window.parent !== window &&
+          new URLSearchParams(window.location.search).get('koa-gallery-preview') === '1';
+        let savedCropsForPreview = {};
+        let pendingCropPreview = null;
+        let lastPreviewScrollTarget = '';
+
+        const applyPendingCropPreview = () => {
+          if (!cropPreviewEnabled || !pendingCropPreview) return false;
+          const { src: rawSrc, placementId, mode, focalX, focalY } = pendingCropPreview;
+          const src = normalizeAssetPath(rawSrc);
+          const definitions = placementDefinitions
+            .filter((entry) => normalizeAssetPath(entry.src) === src)
+            .sort((a, b) => Number(a.occurrence || 0) - Number(b.occurrence || 0));
+          const elements = placementElementsForSource(src);
+          const target = definitions.find((entry) => entry.placementId === placementId);
+          if (!target) return false;
+
+          const x = clamp(focalX);
+          const y = clamp(focalY);
+          definitions.forEach((entry) => {
+            if (mode === 'placement' && entry.placementId !== placementId) return;
+            if (mode === 'global' && savedCropsForPreview?.[src]?.[entry.placementId]) return;
+            const element = elements[Number(entry.occurrence || 0)];
+            if (!element) return;
+            if (element instanceof HTMLImageElement) element.style.objectPosition = x + '% ' + y + '%';
+            else element.style.backgroundPosition = x + '% ' + y + '%';
+            element.dataset.koaCropPreview = 'unsaved';
+          });
+
+          const focused = elements[Number(target.occurrence || 0)];
+          const scrollKey = src + '|' + placementId;
+          if (focused && lastPreviewScrollTarget !== scrollKey) {
+            (focused.closest('section') || focused).scrollIntoView({ block: 'center', behavior: 'auto' });
+            lastPreviewScrollTarget = scrollKey;
+          }
+          return Boolean(focused);
+        };
+
+        if (cropPreviewEnabled) {
+          window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin || event.source !== window.parent) return;
+            const payload = event.data;
+            if (!payload || payload.type !== 'koa:gallery-crop-preview') return;
+            if (payload.mode !== 'global' && payload.mode !== 'placement') return;
+            if (typeof payload.src !== 'string' || typeof payload.placementId !== 'string') return;
+            pendingCropPreview = payload;
+            const applied = applyPendingCropPreview();
+            window.parent.postMessage({
+              type: 'koa:gallery-preview-applied',
+              placementId: payload.placementId,
+              applied,
+            }, window.location.origin);
+          });
+        }
+
         fetch('/api/gallery', { cache: 'no-store', headers: { Accept: 'application/json' } })
           .then((response) => response.ok ? response.json() : null)
           .then((gallery) => {
@@ -869,6 +927,7 @@ const seoSchema = {
             const placementCrops = gallery.placementCrops && typeof gallery.placementCrops === 'object'
               ? gallery.placementCrops
               : {};
+            savedCropsForPreview = placementCrops;
 
             if (!focalMap.size && !Object.keys(placementCrops).length) return;
             window.__koaGalleryFocalPoints = focalMap;
@@ -879,6 +938,7 @@ const seoSchema = {
             };
             applyFocalPoints(document, focalMap);
             applyPlacementCropOverrides(placementCrops);
+            applyPendingCropPreview();
 
             const observer = new MutationObserver((mutations) => {
               mutations.forEach((mutation) => {
@@ -891,6 +951,7 @@ const seoSchema = {
                 }
               });
               applyPlacementCropOverrides(placementCrops);
+              applyPendingCropPreview();
             });
 
             observer.observe(document.documentElement, {
