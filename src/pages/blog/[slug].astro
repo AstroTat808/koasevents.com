@@ -191,8 +191,8 @@ const articleSchema = {
             aria-label="Open featured image"
           >
             <img
-              src={netlifyImage(post.featuredImage, 1600, 900, 'cover', 'center', 86)}
-              srcset={netlifySrcSet(post.featuredImage, 1600, 900, 'cover', 'center', 86)}
+              src={netlifyImage(post.featuredImage, 1600, undefined, 'contain', 'center', 86)}
+              srcset={netlifySrcSet(post.featuredImage, 1600, undefined, 'contain', 'center', 86)}
               sizes="(min-width:1024px) 80vw,100vw"
               alt={post.title}
               width="1600"
@@ -276,8 +276,8 @@ const articleSchema = {
                     aria-label={`Open gallery image: ${image.alt}`}
                   >
                     <img
-                      src={netlifyImage(image.src, index === 0 ? 1200 : 800, index === 0 ? 675 : 600, 'cover', 'center', 84)}
-                      srcset={netlifySrcSet(image.src, index === 0 ? 1200 : 800, index === 0 ? 675 : 600, 'cover', 'center', 84)}
+                      src={netlifyImage(image.src, index === 0 ? 1200 : 800, undefined, 'contain', 'center', 84)}
+                      srcset={netlifySrcSet(image.src, index === 0 ? 1200 : 800, undefined, 'contain', 'center', 84)}
                       sizes={index === 0 ? "(min-width:1024px) 66vw,100vw" : "(min-width:1024px) 33vw,(min-width:640px) 50vw,100vw"}
                       alt={image.alt}
                       loading="lazy"
@@ -307,7 +307,7 @@ const articleSchema = {
             <div class="mt-8 grid gap-5 md:grid-cols-3">
               {related.map((item) => (
                 <a href={`/blog/${item.slug}/`} class="group overflow-hidden rounded-[1.4rem] border border-[var(--koa-line)] bg-white">
-                  <img src={netlifyImage(item.featuredImage, 800, 500, 'cover', 'center', 84)} srcset={netlifySrcSet(item.featuredImage, 800, 500, 'cover', 'center', 84)} sizes="(min-width:768px) 33vw,100vw" alt="" loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                  <img src={netlifyImage(item.featuredImage, 800, undefined, 'contain', 'center', 84)} srcset={netlifySrcSet(item.featuredImage, 800, undefined, 'contain', 'center', 84)} sizes="(min-width:768px) 33vw,100vw" alt="" loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
                   <div class="p-5">
                     <p class="eyebrow text-[var(--koa-clay)]">{item.category}</p>
                     <h3 class="display mt-3 text-2xl leading-[1.05]">{item.title}</h3>
