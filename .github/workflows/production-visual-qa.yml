@@ -139,6 +139,27 @@ jobs:
             exit 1
           fi
           python scripts/test_image_cdn_fallback.py --base-url http://127.0.0.1:4176
+      - name: Verify saved Gallery crops and live homepage preview in Chromium and WebKit
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4179 --directory dist > /tmp/koa-crop-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4179/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'Local crop preview server failed to start'
+            exit 1
+          fi
+          python scripts/test_gallery_crop_browser.py --base-url http://127.0.0.1:4179
       - name: Verify public accommodations at iPhone and desktop sizes in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
@@ -213,6 +234,7 @@ jobs:
             visual-results/theme-chromium
             visual-results/theme-webkit
             visual-results/accommodations
+            visual-results/gallery-crop
           retention-days: 30
           if-no-files-found: error
       - name: Create local System Health QA snapshot
