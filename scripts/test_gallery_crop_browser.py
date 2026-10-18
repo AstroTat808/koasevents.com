@@ -159,10 +159,11 @@ def exercise_browser(playwright, browser_name: str, base_url: str, width: int, h
         # The editor itself must expose the same two viewport presets and an iframe.
         response = page.goto(base_url.rstrip("/") + "/admin/gallery/", wait_until="domcontentloaded")
         assert response and response.status == 200, "Gallery Admin build unavailable"
-        assert page.locator("[data-home-crop-preview]").count() == 1
-        assert page.locator('[data-home-preview-mode="desktop"]').count() == 1
-        assert page.locator('[data-home-preview-mode="mobile"]').count() == 1
-        assert page.locator("[data-home-preview-frame]").count() == 1
+        assert page.locator("[data-live-crop-preview]").count() == 1
+        assert page.locator('[data-live-preview-mode="desktop"]').count() == 1
+        assert page.locator('[data-live-preview-mode="mobile"]').count() == 1
+        assert page.locator("[data-live-preview-frame]").count() == 1
+        assert page.locator("[data-live-preview-placement]").count() == 1
         print(f"PASS | {browser_name} {width}x{height} | global + placement + live iframe + editor markup")
     finally:
         context.close()

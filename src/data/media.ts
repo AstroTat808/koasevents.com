@@ -343,14 +343,14 @@ export function netlifyImage(
 export function netlifySrcSet(
   source: string,
   width: number,
-  height: number,
+  height?: number,
   fit: 'cover' | 'contain' | 'fill' = 'cover',
   position: 'center' | 'top' | 'bottom' | 'left' | 'right' = 'center',
   quality = 82,
 ) {
-  const ratio = height / width;
+  const ratio = height == null ? null : height / width;
   const widths = [480, 768, 1024, 1440, 1800].filter((item) => item <= Math.max(width, 1800));
   return widths
-    .map((item) => netlifyImage(source, item, Math.round(item * ratio), fit, position, quality) + ' ' + item + 'w')
+    .map((item) => netlifyImage(source, item, ratio == null ? undefined : Math.round(item * ratio), fit, position, quality) + ' ' + item + 'w')
     .join(', ');
 }

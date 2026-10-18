@@ -152,25 +152,31 @@ const mediaUsage = mediaUsageBySrc;
       </section>
 
 
-      <section data-home-crop-preview hidden class="mt-6 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 sm:p-5">
+
+      <section data-live-crop-preview hidden class="mt-6 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 sm:p-5">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p class="eyebrow text-[var(--koa-clay)]">Homepage · live preview</p>
+            <p class="eyebrow text-[var(--koa-clay)]">Live website placement preview</p>
             <h3 class="display mt-2 text-2xl">See the actual page before saving</h3>
             <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/60">
-              A real homepage is shown at its true desktop or iPhone viewport width. Drag the focal point above to
-              see unsaved edits here. Other placements keep their saved overrides.
+              Preview Home, Weddings, Venue, Stay, or any other high-impact placement at its real viewport size.
+              Unsaved focal changes apply only inside this preview; existing individual overrides are preserved.
             </p>
           </div>
-          <a href="/" target="_blank" rel="noopener noreferrer" class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open homepage ↗</a>
+          <a data-live-preview-open href="/" target="_blank" rel="noopener noreferrer" class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open selected page ↗</a>
         </div>
-        <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Homepage preview viewport">
-          <button type="button" data-home-preview-mode="desktop" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white">Desktop · 1440px</button>
-          <button type="button" data-home-preview-mode="mobile" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em]">iPhone · 390px</button>
+        <div class="mt-4 grid gap-2 sm:max-w-xl">
+          <label for="koa-live-crop-placement" class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Website placement</label>
+          <select id="koa-live-crop-placement" data-live-preview-placement class="w-full rounded-xl border border-[var(--koa-line)] bg-white px-3 py-3 text-sm text-[var(--koa-ink)]"></select>
+          <p data-live-preview-context class="text-xs leading-5 text-[var(--koa-ink)]/55"></p>
         </div>
-        <p data-home-preview-status role="status" aria-live="polite" class="my-3 text-xs font-semibold text-[var(--koa-ink)]/60">Loading homepage preview…</p>
-        <div data-home-preview-shell class="relative w-full overflow-hidden rounded-[1rem] border border-[var(--koa-line)] bg-white" style="min-height: 220px">
-          <iframe data-home-preview-frame title="Actual homepage showing unpublished gallery crop changes"
+        <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Live website preview viewport">
+          <button type="button" data-live-preview-mode="desktop" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white">Desktop · 1440px</button>
+          <button type="button" data-live-preview-mode="mobile" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em]">iPhone · 390px</button>
+        </div>
+        <p data-live-preview-status role="status" aria-live="polite" class="my-3 text-xs font-semibold text-[var(--koa-ink)]/60">Loading page preview…</p>
+        <div data-live-preview-shell class="relative w-full overflow-hidden rounded-[1rem] border border-[var(--koa-line)] bg-white" style="min-height: 220px">
+          <iframe data-live-preview-frame title="Actual website page showing unpublished Gallery Admin crop changes"
             class="absolute top-0 border-0" loading="lazy" referrerpolicy="same-origin"></iframe>
         </div>
       </section>
@@ -226,11 +232,15 @@ const mediaUsage = mediaUsageBySrc;
     const placementOverrideOptions = document.querySelector('[data-placement-override-options]');
     const cropUseGlobalButton = document.querySelector('[data-crop-use-global]');
     const previewShell = document.querySelector('[data-preview-shell]');
-    const homePreviewSection = document.querySelector('[data-home-crop-preview]');
-    const homePreviewShell = document.querySelector('[data-home-preview-shell]');
-    const homePreviewFrame = document.querySelector('[data-home-preview-frame]');
-    const homePreviewStatus = document.querySelector('[data-home-preview-status]');
-    let homePreviewViewport = 'desktop';
+    const livePreviewSection = document.querySelector('[data-live-crop-preview]');
+    const livePreviewShell = document.querySelector('[data-live-preview-shell]');
+    const livePreviewFrame = document.querySelector('[data-live-preview-frame]');
+    const livePreviewStatus = document.querySelector('[data-live-preview-status]');
+    const livePreviewSelect = document.querySelector('[data-live-preview-placement]');
+    const livePreviewContext = document.querySelector('[data-live-preview-context]');
+    const livePreviewOpen = document.querySelector('[data-live-preview-open]');
+    let livePreviewViewport = 'desktop';
+    let livePreviewPlacementId = '';
     const usagePreviews = document.querySelector('[data-usage-previews]');
     const usagePreviewCount = document.querySelector('[data-usage-preview-count]');
     const cropImpact = document.querySelector('[data-crop-impact]');
@@ -620,6 +630,7 @@ const mediaUsage = mediaUsageBySrc;
     }
 
     function openCrop(item) {
+      livePreviewPlacementId = '';
       cropSession = {
         mode:'global',
         item,
@@ -639,10 +650,11 @@ const mediaUsage = mediaUsageBySrc;
       setCropPoint(cropSession.x, cropSession.y);
       setPreviewMode('desktop');
       cropDialog?.showModal();
-      showHomePreview();
+      showLivePreview();
     }
 
     function startPlacementOverride(item, usage) {
+      livePreviewPlacementId = usage.placementId;
       const saved = placementCropFor(item, usage);
       cropSession = {
         mode:'placement',
@@ -659,7 +671,7 @@ const mediaUsage = mediaUsageBySrc;
       renderUsagePreviews(item);
       updateCropImpact(item);
       setCropPoint(cropSession.x, cropSession.y);
-      showHomePreview();
+      showLivePreview();
     }
 
     function setCropPoint(x, y) {
@@ -680,14 +692,14 @@ const mediaUsage = mediaUsageBySrc;
         const effective = effectiveCropForUsage(cropSession.item, usage);
         image.style.objectPosition = effective.x + '% ' + effective.y + '%';
       });
-      syncHomePreview();
+      syncLivePreview();
     }
 
     function setPreviewMode(mode) {
       const mobile = mode === 'mobile';
       previewShell.style.maxWidth = mobile ? '390px' : '760px';
       cropFrame.style.height = mobile ? '520px' : '430px';
-      setHomePreviewViewport(mode);
+      setLivePreviewViewport(mode);
       document.querySelectorAll('[data-preview-mode]').forEach((button) => {
         const active = button.dataset.previewMode === mode;
         button.className = active
@@ -697,31 +709,43 @@ const mediaUsage = mediaUsageBySrc;
     }
 
 
-    function selectedHomeUsage() {
-      if (!cropSession?.item) return null;
-      if (cropSession.mode === 'placement') {
-        return cropSession.usage?.href === '/' ? cropSession.usage : null;
-      }
-      const usages = externalUsagesForItem(cropSession.item).filter((usage) => usage.href === '/' && usage.placementId);
-      return usages.find((usage) => !placementCropFor(cropSession.item, usage)) || usages[0] || null;
+
+    function highImpactUsagesFor(item) {
+      return externalUsagesForItem(item).filter((usage) =>
+        usage.impact === 'high' &&
+        usage.placementId &&
+        new RegExp('^/(?:[a-z0-9_-]+/)*$', 'i').test(usage.href || '') &&
+        !String(usage.href).startsWith('/admin/')
+      );
     }
 
-    function setHomePreviewViewport(mode) {
-      homePreviewViewport = mode === 'mobile' ? 'mobile' : 'desktop';
-      if (!homePreviewShell || !homePreviewFrame || homePreviewSection?.hidden) return;
-      const width = homePreviewViewport === 'mobile' ? 390 : 1440;
-      const height = homePreviewViewport === 'mobile' ? 844 : 900;
-      const available = Math.max(1, homePreviewShell.clientWidth);
-      // Scaling changes visual size only; media queries still evaluate at the real viewport width.
+    function selectedLiveUsage() {
+      if (!cropSession?.item) return null;
+      const usages = highImpactUsagesFor(cropSession.item);
+      if (cropSession.mode === 'placement') {
+        return usages.find((usage) => usage.placementId === cropSession.usage?.placementId) || null;
+      }
+      return usages.find((usage) => usage.placementId === livePreviewPlacementId) ||
+        usages.find((usage) => !placementCropFor(cropSession.item, usage)) ||
+        usages[0] || null;
+    }
+
+    function setLivePreviewViewport(mode) {
+      livePreviewViewport = mode === 'mobile' ? 'mobile' : 'desktop';
+      if (!livePreviewShell || !livePreviewFrame || livePreviewSection?.hidden) return;
+      const width = livePreviewViewport === 'mobile' ? 390 : 1440;
+      const height = livePreviewViewport === 'mobile' ? 844 : 900;
+      const available = Math.max(1, livePreviewShell.clientWidth);
+      // Scale the entire real page without altering its breakpoint/media-query width.
       const scale = Math.min(1, available / width, 620 / height);
-      homePreviewShell.style.height = Math.ceil(height * scale) + 'px';
-      homePreviewFrame.style.width = width + 'px';
-      homePreviewFrame.style.height = height + 'px';
-      homePreviewFrame.style.left = Math.max(0, (available - width * scale) / 2) + 'px';
-      homePreviewFrame.style.transformOrigin = 'top left';
-      homePreviewFrame.style.transform = 'scale(' + scale + ')';
-      document.querySelectorAll('[data-home-preview-mode]').forEach((button) => {
-        const active = button.dataset.homePreviewMode === homePreviewViewport;
+      livePreviewShell.style.height = Math.ceil(height * scale) + 'px';
+      livePreviewFrame.style.width = width + 'px';
+      livePreviewFrame.style.height = height + 'px';
+      livePreviewFrame.style.left = Math.max(0, (available - width * scale) / 2) + 'px';
+      livePreviewFrame.style.transformOrigin = 'top left';
+      livePreviewFrame.style.transform = 'scale(' + scale + ')';
+      document.querySelectorAll('[data-live-preview-mode]').forEach((button) => {
+        const active = button.dataset.livePreviewMode === livePreviewViewport;
         button.setAttribute('aria-pressed', String(active));
         button.className = active
           ? 'rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white'
@@ -729,10 +753,10 @@ const mediaUsage = mediaUsageBySrc;
       });
     }
 
-    function syncHomePreview() {
-      const usage = selectedHomeUsage();
-      if (!usage || homePreviewSection?.hidden || !homePreviewFrame?.contentWindow) return;
-      homePreviewFrame.contentWindow.postMessage({
+    function syncLivePreview() {
+      const usage = selectedLiveUsage();
+      if (!usage || livePreviewSection?.hidden || !livePreviewFrame?.contentWindow) return;
+      livePreviewFrame.contentWindow.postMessage({
         type: 'koa:gallery-crop-preview',
         mode: cropSession.mode,
         src: cropSession.item.src,
@@ -742,17 +766,52 @@ const mediaUsage = mediaUsageBySrc;
       }, window.location.origin);
     }
 
-    function showHomePreview() {
-      if (!homePreviewSection || !homePreviewFrame) return;
-      const usage = selectedHomeUsage();
-      homePreviewSection.hidden = !usage;
-      if (!usage) return;
-      if (homePreviewFrame.getAttribute('src') !== '/?koa-gallery-preview=1') {
-        if (homePreviewStatus) homePreviewStatus.textContent = 'Loading the real homepage. Changes remain unpublished.';
-        homePreviewFrame.setAttribute('src', '/?koa-gallery-preview=1');
+    function showLivePreview() {
+      if (!livePreviewSection || !livePreviewFrame || !cropSession?.item) return;
+      const usages = highImpactUsagesFor(cropSession.item);
+      livePreviewSection.hidden = usages.length === 0;
+      if (!usages.length) {
+        livePreviewFrame.setAttribute('src', 'about:blank');
+        return;
       }
-      setHomePreviewViewport(homePreviewViewport);
-      syncHomePreview();
+
+      const usage = selectedLiveUsage();
+      if (!usage) return;
+      livePreviewPlacementId = usage.placementId;
+      if (livePreviewSelect) {
+        livePreviewSelect.replaceChildren();
+        usages.forEach((itemUsage) => {
+          const option = document.createElement('option');
+          option.value = itemUsage.placementId;
+          option.textContent = itemUsage.page + ' · ' + itemUsage.section +
+            (placementCropFor(cropSession.item, itemUsage) ? ' (saved override)' : ' (global crop)');
+          option.selected = itemUsage.placementId === livePreviewPlacementId;
+          livePreviewSelect.append(option);
+        });
+        livePreviewSelect.disabled = cropSession.mode === 'placement';
+      }
+
+      const hasOverride = Boolean(placementCropFor(cropSession.item, usage));
+      if (livePreviewContext) {
+        livePreviewContext.textContent = cropSession.mode === 'placement'
+          ? 'Your unsaved changes affect this placement only.'
+          : hasOverride
+            ? 'This placement has its own saved override, so changing the global crop will not reposition it.'
+            : 'This placement uses the global crop and will reflect your unpublished adjustments.';
+      }
+
+      // Only load paths from the compiled public-page placement manifest.
+      const path = new URL(usage.href, window.location.origin);
+      if (path.origin !== window.location.origin || path.pathname.startsWith('/admin/')) return;
+      path.searchParams.set('koa-gallery-preview', '1');
+      if (livePreviewOpen) livePreviewOpen.href = path.pathname;
+      const targetUrl = path.pathname + path.search;
+      if (livePreviewFrame.getAttribute('src') !== targetUrl) {
+        if (livePreviewStatus) livePreviewStatus.textContent = 'Loading ' + usage.page + ' preview. Changes are unpublished.';
+        livePreviewFrame.setAttribute('src', targetUrl);
+      }
+      setLivePreviewViewport(livePreviewViewport);
+      syncLivePreview();
     }
 
     function galleryKeys(grid) {
@@ -1331,17 +1390,23 @@ const mediaUsage = mediaUsageBySrc;
     }));
 
     document.querySelectorAll('[data-preview-mode]').forEach((button) => button.addEventListener('click', () => setPreviewMode(button.dataset.previewMode)));
-    document.querySelectorAll('[data-home-preview-mode]').forEach((button) => button.addEventListener('click', () => setPreviewMode(button.dataset.homePreviewMode)));
-    window.addEventListener('resize', () => setHomePreviewViewport(homePreviewViewport));
-    homePreviewFrame?.addEventListener('load', () => {
-      if (cropSession && !homePreviewSection?.hidden) syncHomePreview();
+    document.querySelectorAll('[data-live-preview-mode]').forEach((button) => button.addEventListener('click', () => setPreviewMode(button.dataset.livePreviewMode)));
+    livePreviewSelect?.addEventListener('change', () => {
+      if (cropSession?.mode !== 'global') return;
+      livePreviewPlacementId = livePreviewSelect.value;
+      showLivePreview();
+    });
+    window.addEventListener('resize', () => setLivePreviewViewport(livePreviewViewport));
+    livePreviewFrame?.addEventListener('load', () => {
+      if (cropSession && !livePreviewSection?.hidden) syncLivePreview();
     });
     window.addEventListener('message', (event) => {
-      if (event.origin !== window.location.origin || event.source !== homePreviewFrame?.contentWindow) return;
+      if (event.origin !== window.location.origin || event.source !== livePreviewFrame?.contentWindow) return;
       if (event.data?.type !== 'koa:gallery-preview-applied' || !cropSession) return;
-      if (homePreviewStatus) homePreviewStatus.textContent = event.data.applied
-        ? 'Showing your unpublished crop on the actual homepage.'
-        : 'This image placement was not found in the preview.';
+      if (event.data.placementId !== selectedLiveUsage()?.placementId) return;
+      if (livePreviewStatus) livePreviewStatus.textContent = event.data.applied
+        ? 'Showing the unpublished crop on the actual ' + selectedLiveUsage().page + ' page.'
+        : 'This image placement was not found on its assigned page. Check the placement mapping.';
     });
     document.querySelector('[data-crop-close]')?.addEventListener('click', () => cropDialog?.close());
     document.querySelector('[data-crop-cancel]')?.addEventListener('click', () => cropDialog?.close());
@@ -1413,8 +1478,9 @@ const mediaUsage = mediaUsageBySrc;
 
     cropDialog?.addEventListener('close', () => {
       cropSession = null;
-      if (homePreviewSection) homePreviewSection.hidden = true;
-      if (homePreviewFrame) homePreviewFrame.setAttribute('src', 'about:blank');
+      livePreviewPlacementId = '';
+      if (livePreviewSection) livePreviewSection.hidden = true;
+      if (livePreviewFrame) livePreviewFrame.setAttribute('src', 'about:blank');
       if (cropImpact) cropImpact.hidden = true;
       if (cropImpactCopy) cropImpactCopy.textContent = '';
       if (cropSaveButton) {
