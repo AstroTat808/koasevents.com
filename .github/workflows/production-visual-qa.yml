@@ -139,7 +139,7 @@ jobs:
             exit 1
           fi
           python scripts/test_image_cdn_fallback.py --base-url http://127.0.0.1:4176
-      - name: Verify saved Gallery crops and live homepage preview in Chromium and WebKit
+      - name: Verify every public Gallery crop and high-impact live previews in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
