@@ -1411,6 +1411,11 @@ const mediaUsage = mediaUsageBySrc;
     document.querySelector('[data-crop-close]')?.addEventListener('click', () => cropDialog?.close());
     document.querySelector('[data-crop-cancel]')?.addEventListener('click', () => cropDialog?.close());
     document.querySelector('[data-crop-reset]')?.addEventListener('click', () => setCropPoint(50, 50));
+    const signalCropHealthRecheck = () => {
+      // No image paths or private Gallery data are stored in this notification.
+      try { localStorage.setItem('koa-gallery-crop-changed', String(Date.now())); } catch {}
+      window.dispatchEvent(new Event('koa:gallery-crop-saved'));
+    };
     cropSaveButton?.addEventListener('click', async () => {
       if (!cropSession) return;
       const item = cropSession.item;
@@ -1433,6 +1438,7 @@ const mediaUsage = mediaUsageBySrc;
         } else {
           await post({ action:'update-curated', src:item.src, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
         }
+        signalCropHealthRecheck();
         cropDialog?.close();
         cropSession = null;
         await load();
@@ -1452,6 +1458,7 @@ const mediaUsage = mediaUsageBySrc;
           src:cropSession.item.src,
           placementId:cropSession.usage.placementId,
         });
+        signalCropHealthRecheck();
         cropDialog?.close();
         cropSession = null;
         await load();

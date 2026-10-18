@@ -929,7 +929,10 @@ const seoSchema = {
               : {};
             savedCropsForPreview = placementCrops;
 
-            if (!focalMap.size && !Object.keys(placementCrops).length) return;
+            if (!focalMap.size && !Object.keys(placementCrops).length) {
+              window.__koaGalleryCropHydrated = true;
+              return;
+            }
             window.__koaGalleryFocalPoints = focalMap;
             window.__koaGalleryPlacementCrops = placementCrops;
             window.__koaApplyGalleryFocalPoints = (root = document) => {
@@ -939,6 +942,9 @@ const seoSchema = {
             applyFocalPoints(document, focalMap);
             applyPlacementCropOverrides(placementCrops);
             applyPendingCropPreview();
+            // Readiness is set only after the public gallery payload was processed.
+            // System Health waits for this before comparing rendered crop positions.
+            window.__koaGalleryCropHydrated = true;
 
             const observer = new MutationObserver((mutations) => {
               mutations.forEach((mutation) => {
