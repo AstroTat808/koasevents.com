@@ -878,7 +878,7 @@ const seoSchema = {
           const focused = elements[Number(target.occurrence || 0)];
           const scrollKey = src + '|' + placementId;
           if (focused && lastPreviewScrollTarget !== scrollKey) {
-            (focused.closest('section') || focused).scrollIntoView({ block: 'center', behavior: 'instant' });
+            (focused.closest('section') || focused).scrollIntoView({ block: 'center', behavior: 'auto' });
             lastPreviewScrollTarget = scrollKey;
           }
           return Boolean(focused);
