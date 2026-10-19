@@ -25,7 +25,7 @@ assert.match(page, /<Footer \/>/);
 assert.match(page, /<h1 /);
 assert.match(page, /href="#packages"/);
 assert.match(page, /href=\{'\/inquire\/\?service=photo-booth&package='/);
-assert.match(page, /'\/inquire\/\?service=photo-booth'/);
+assert.match(page, /href="\/inquire\/\?service=photo-booth"/);
 assert.match(page, /<details class="mirror-faq/);
 assert.match(page, /shadow-/);
 assert.doesNotMatch(page, /schema\.org\/InStock/);
