@@ -60,7 +60,7 @@ const questions = [
           <p class="mt-4 max-w-xl text-sm leading-7 text-white/60">Available for weddings, birthdays, graduations, corporate events and private parties—at Koa’s or your own Hawaiʻi Island venue.</p>
           <div class="mt-9 flex flex-wrap gap-3">
             <a href="#packages" class="inline-flex min-h-12 items-center rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)] transition hover:bg-[var(--koa-sand)]">Explore packages <span class="ml-2" aria-hidden="true">↓</span></a>
-            <a href="/inquire/?service=photo-booth" class="inline-flex min-h-12 items-center rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:border-white hover:bg-white/10">Check your date</a>
+            <a href="/photo-booth/inquire/" class="inline-flex min-h-12 items-center rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:border-white hover:bg-white/10">Check your date</a>
           </div>
           <div class="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-white/15 pt-6 text-[.66rem] font-bold uppercase tracking-[.13em] text-white/66">
             <span>6-foot interactive mirror</span><span>Fully attended</span><span>Island-wide rentals</span>
@@ -156,7 +156,7 @@ const questions = [
                 {pkg.highlights.map((detail) => <li class="flex gap-3"><span aria-hidden="true" class={pkg.id === 'signature' ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-clay)]'}>✓</span><span>{detail}</span></li>)}
               </ul>
               <a
-                href={'/inquire/?service=photo-booth&package=' + encodeURIComponent(pkg.id)}
+                href={'/photo-booth/inquire/?package=' + encodeURIComponent(pkg.id)}
                 class:list={[
                   'mt-9 inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-center text-xs font-black uppercase tracking-[.12em] transition lg:mt-auto lg:translate-y-0',
                   pkg.id === 'signature' ? 'bg-white text-[var(--koa-forest)] hover:bg-[var(--koa-sand)]' : 'bg-[var(--koa-forest)] text-white hover:bg-[var(--koa-ink)]',
@@ -196,7 +196,7 @@ const questions = [
         </div>
         <div class="mt-10 flex flex-col items-start gap-5 border-t border-[var(--koa-line)] pt-8 sm:flex-row sm:items-center sm:justify-between">
           <p class="max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/65">Already booking Koa’s venue or Mobile Bar? Tell us when you inquire and ask about a combined-service quote. Qualifying Signature Wedding clients may already have a photo booth included.</p>
-          <a href="/inquire/?service=photo-booth" class="link-arrow shrink-0 text-[var(--koa-forest)]">Ask about a bundle →</a>
+          <a href="/photo-booth/inquire/" class="link-arrow shrink-0 text-[var(--koa-forest)]">Ask about a bundle →</a>
         </div>
       </div>
     </section>
@@ -222,7 +222,7 @@ const questions = [
       <div class="container-shell grid gap-8 lg:grid-cols-[1fr_.7fr] lg:items-end">
         <div><p class="eyebrow text-[var(--koa-clay)]">Let's make memories</p><h2 class="display mt-5 text-5xl leading-[.98] sm:text-6xl">Good company. Great photos. Your kind of event.</h2><p class="mt-6 max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/65">Share your date, venue and the rental package you have in mind. We’ll follow up with availability and a clear proposal.</p></div>
         <div class="flex flex-wrap items-center gap-4 lg:justify-end">
-          <a href="/inquire/?service=photo-booth" class="inline-flex min-h-12 items-center rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check Mirror X availability</a>
+          <a href="/photo-booth/inquire/" class="inline-flex min-h-12 items-center rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check Mirror X availability</a>
           <a href="mailto:aloha@koasevents.com?subject=Mirror%20X%20Photo%20Booth%20Rental" class="link-arrow text-[var(--koa-forest)]">Email our team →</a>
         </div>
       </div>
