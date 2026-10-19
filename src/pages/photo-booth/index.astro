@@ -3,12 +3,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import ResponsiveImage from '../../components/ResponsiveImage.astro';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { photoBoothPackages, photoBoothStandardFeatures, photoBoothEnhancements } from '../../data/photoBooth';
+import { mirrorXPhotos } from '../../data/mirrorXPhotos';
 
-const boothImage = {
-  src: '/media/koa/mirror-photo-booth.webp',
-  alt: 'Mirror-style photo booth set up as a guest photo experience',
-};
+// Only reference photo assets that are present in the checked-out PR build.
+// The page remains usable while image binaries are being transferred.
+const availableMirrorXPhotos = mirrorXPhotos.filter((photo) =>
+  existsSync(join(process.cwd(), 'public', photo.src.replace(/^\/+/, '')))
+);
+const boothImage = availableMirrorXPhotos[0] ?? null;
+const extraMomentPhotos = availableMirrorXPhotos.slice(1);
 const moments = [
   { number: '01', title: 'Step up', text: 'A full-length mirror becomes an elegant invitation to play.' },
   { number: '02', title: 'Tap + pose', text: 'Follow prompts on the touch-enabled mirror and make the moment yours.' },
@@ -102,7 +108,15 @@ const questions = [
     <section class="py-24 lg:py-36">
       <div class="container-shell grid items-center gap-14 lg:grid-cols-[.92fr_1.08fr] lg:gap-24">
         <div class="overflow-hidden rounded-[1.7rem] bg-[var(--koa-sand)] shadow-[var(--shadow-soft)]">
-          <ResponsiveImage {...boothImage} width={1000} height={1100} sizes="(min-width: 1024px) 45vw, 100vw" class="h-[27rem] w-full object-cover sm:h-[36rem] lg:h-[39rem]" />
+          {boothImage ? (
+            <ResponsiveImage {...boothImage} width={1000} height={1100} sizes="(min-width: 1024px) 45vw, 100vw" class="h-[27rem] w-full object-cover sm:h-[36rem] lg:h-[39rem]" />
+          ) : (
+            <div class="flex h-[27rem] w-full flex-col items-center justify-center px-8 text-center sm:h-[36rem] lg:h-[39rem]">
+              <p class="eyebrow text-[var(--koa-clay)]">An experience, not just a picture</p>
+              <p class="display mt-8 max-w-sm text-5xl leading-tight text-[var(--koa-text-strong)] sm:text-6xl">Step up. Tap. Smile.</p>
+              <p class="mt-6 max-w-xs text-sm leading-7 text-[var(--koa-ink)]/65">Interactive prompts, personal messages and photos your guests can take home.</p>
+            </div>
+          )}
         </div>
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">More than a photo station</p>
@@ -113,6 +127,28 @@ const questions = [
         </div>
       </div>
     </section>
+
+    {extraMomentPhotos.length > 0 && (
+      <section class="bg-[var(--koa-ivory)] pb-24 lg:pb-32" aria-labelledby="mirror-x-photo-moments">
+        <div class="container-shell">
+          <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Behind the mirror</p>
+              <h2 id="mirror-x-photo-moments" class="display mt-4 text-4xl text-[var(--koa-text-strong)] sm:text-5xl">Every guest makes it their own.</h2>
+            </div>
+            <a href="/gallery/#gallery-enhancements" class="link-arrow text-[var(--koa-forest)]">Explore the gallery →</a>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            {extraMomentPhotos.map((photo) => (
+              <figure class="overflow-hidden rounded-[1.5rem] bg-[var(--koa-sand)] shadow-[var(--shadow-soft)]">
+                <ResponsiveImage {...photo} width={photo.width} height={photo.height} sizes="(min-width:640px) 50vw, 100vw" class="h-[26rem] w-full object-cover sm:h-[32rem]" />
+                <figcaption class="px-5 py-4 text-xs leading-6 text-[var(--koa-ink)]/70">{photo.alt}</figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
 
     <section id="how-it-works" class="bg-[var(--koa-sand)] py-24 lg:py-32">
       <div class="container-shell">
