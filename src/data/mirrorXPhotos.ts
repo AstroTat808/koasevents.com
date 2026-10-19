@@ -7,16 +7,16 @@
  */
 export const mirrorXPhotos = [
   {
-    src: '/media/koa/mirror-x-guest-experience.webp',
-    alt: 'Guest tapping the full-length interactive Mirror X photo booth at a garden celebration',
-    width: 1280,
-    height: 854,
-  },
-  {
     src: '/media/koa/mirror-x-interactive-signature.webp',
-    alt: 'Guest using the Mirror X touch-screen drawing feature beside her reflection',
+    alt: 'Mirror X example: a guest signs her photo on the full-length interactive touchscreen',
     width: 762,
     height: 952,
+  },
+  {
+    src: '/media/koa/mirror-x-guest-experience.webp',
+    alt: 'Mirror X example: a guest taps the photo booth screen during a garden celebration',
+    width: 1280,
+    height: 854,
   },
   {
     src: '/media/koa/mirror-x-wedding-portrait.webp',
