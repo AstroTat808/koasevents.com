@@ -158,6 +158,290 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               </label>
             </div>
 
+
+            <div data-photo-booth-fields class="hidden grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mirror X event location
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="photoBoothEventLocation" placeholder="Venue name, town, or address — or Koa’s Events" />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mirror X rental package
+                <select name="photoBoothPackage" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]">
+                  <option value="">Not sure yet — help me choose</option>
+                  {photoBoothPackages.map((pkg) => (
+                    <option value={pkg.id} selected={requestedService === 'photo-booth' && requestedPackage === pkg.id}>
+                      {pkg.name} · {pkg.hours} hours · from {'
+              <label class="grid gap-2 text-sm font-semibold">Venue package interest
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="venuePackage">
+                  <option value="">Not sure yet</option>
+                  <option value="gardenia" selected={requestedPackage === 'gardenia'}>Gardenia</option>
+                  <option value="orchid" selected={requestedPackage === 'orchid'}>Orchid</option>
+                  <option value="hibiscus" selected={requestedPackage === 'hibiscus'}>Hibiscus</option>
+                  <option value="plumeria" selected={requestedPackage === 'plumeria'}>Plumeria</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Would you like a venue tour?
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="venueTour">
+                  <option value="">Choose one</option>
+                  <option>Yes</option>
+                  <option>Maybe / tell me more</option>
+                  <option>Not yet</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="grid gap-2 text-sm font-semibold">What matters most for this event?
+              <textarea class="min-h-32 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="priorities" placeholder="Tell us about the experience you want, must-haves, timing, or questions."></textarea>
+            </label>
+
+            <label class="grid gap-2 text-sm font-semibold">How did you hear about Koa’s?
+              <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="source">
+                <option value="">Choose one</option>
+                <option>Google</option>
+                <option>Instagram</option>
+                <option>Facebook</option>
+                <option>Wedding planner / vendor</option>
+                <option>Venue referral</option>
+                <option>Friend / family referral</option>
+                <option>Past Koa’s event</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            {turnstileSiteKey && (
+              <div class="rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+                <div
+                  class="cf-turnstile"
+                  data-sitekey={turnstileSiteKey}
+                  data-action="event_inquiry"
+                  data-theme="light"
+                  data-size="flexible"
+                ></div>
+              </div>
+            )}
+
+            <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert" data-submit-error></p>
+
+            <button class="mt-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white transition hover:bg-[var(--koa-ink)] disabled:cursor-not-allowed disabled:opacity-60" type="submit">
+              Send event details
+            </button>
+
+            <p class="text-center text-sm leading-6 text-[var(--koa-ink)]/56">Submitting this form is an inquiry, not a reservation. Your date is not secured until the applicable agreement and deposit are completed.</p>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  <script is:inline define:vars={{ requestedService, requestedPackage, requestedGuests, turnstileSiteKey }}>
+    const form = document.querySelector('[data-inquiry-form]');
+    const venueFields = document.querySelector('[data-venue-fields]');
+    const mobileFields = document.querySelector('[data-mobile-fields]');
+    const photoBoothFields = document.querySelector('[data-photo-booth-fields]');
+    const photoBoothAddon = form?.querySelector('[data-booth-addon]');
+    const photoBoothAddonWrap = form?.querySelector('[data-booth-addon-wrap]');
+    const carriedPlan = document.querySelector('[data-carried-plan]');
+    const carriedPlanTitle = document.querySelector('[data-carried-plan-title]');
+    const carriedPlanCopy = document.querySelector('[data-carried-plan-copy]');
+    const selectedItemsInput = form?.querySelector('[data-selected-catalog-items]');
+    const autoBreakdownInput = form?.querySelector('[data-auto-rental-breakdown]');
+    const manualAddOnsInput = form?.querySelector('[data-manual-add-ons]');
+    const estimateInput = form?.querySelector('[data-estimated-furniture-total]');
+    const stateInput = form?.querySelector('[data-catalog-selection-state]');
+
+    function updateConditionalFields() {
+      const selected = form?.querySelector('input[name="service"]:checked')?.value || requestedService;
+      const venueOn = selected === 'venue' || selected === 'both';
+      const mobileOn = selected === 'mobile-bar' || selected === 'both';
+      const standalonePhotoBooth = selected === 'photo-booth';
+      const photoBoothOn = standalonePhotoBooth || Boolean(photoBoothAddon?.checked);
+      photoBoothAddonWrap?.classList.toggle('hidden', standalonePhotoBooth);
+      if (photoBoothAddon) photoBoothAddon.disabled = standalonePhotoBooth;
+      const guestField = form?.querySelector('[name="guestCount"]');
+      if (guestField) guestField.max = venueOn ? '100' : '1000';
+      const boothLocation = form?.querySelector('[name="photoBoothEventLocation"]');
+      if (boothLocation) boothLocation.required = standalonePhotoBooth;
+      photoBoothFields?.classList.toggle('hidden', !photoBoothOn);
+      photoBoothFields?.querySelectorAll('input,select,textarea').forEach((field) => { field.disabled = !photoBoothOn; });
+
+      venueFields?.classList.toggle('hidden', !venueOn);
+      mobileFields?.classList.toggle('hidden', !mobileOn);
+
+      venueFields?.querySelectorAll('input,select,textarea').forEach((field) => {
+        field.disabled = !venueOn;
+      });
+      mobileFields?.querySelectorAll('input,select,textarea').forEach((field) => {
+        field.disabled = !mobileOn;
+      });
+    }
+
+    photoBoothAddon?.addEventListener('change', updateConditionalFields);
+    form?.querySelectorAll('input[name="service"]').forEach((input) => {
+      input.addEventListener('change', updateConditionalFields);
+    });
+
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
+
+    if (saved && requestedService !== 'photo-booth') {
+      const packageMap = { 'signature-wedding': 'plumeria' };
+      const savedPackage = packageMap[saved.startingPoint] || saved.startingPoint || '';
+      const guestField = form?.querySelector('[name="guestCount"]');
+      const venuePackage = form?.querySelector('[name="venuePackage"]');
+      const venueRadio = form?.querySelector('input[name="service"][value="venue"]');
+
+      if (guestField && !requestedGuests && saved.guestCount) guestField.value = String(saved.guestCount);
+      if (venuePackage && !requestedPackage && savedPackage && savedPackage !== 'ala-carte') venuePackage.value = savedPackage;
+      if (!requestedService && savedPackage && savedPackage !== 'ala-carte' && venueRadio) venueRadio.checked = true;
+
+      const auto = (saved.selected || []).filter((entry) => entry.auto);
+      const manual = (saved.selected || []).filter((entry) => !entry.auto);
+      const all = [...auto, ...manual];
+      const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
+      const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: USD ' + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
+      const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
+
+      if (selectedItemsInput) selectedItemsInput.value = allText;
+      if (autoBreakdownInput) autoBreakdownInput.value = autoText;
+      if (manualAddOnsInput) manualAddOnsInput.value = manualText;
+      if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
+      if (stateInput) stateInput.value = JSON.stringify(saved);
+
+      carriedPlan?.classList.remove('hidden');
+      if (carriedPlanTitle) carriedPlanTitle.textContent = (savedPackage && savedPackage !== 'ala-carte' ? savedPackage : 'Saved event plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
+      if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + '. Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
+    }
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
+
+      const submitButton = form.querySelector('button[type="submit"]');
+      const errorBox = form.querySelector('[data-submit-error]');
+      const data = new FormData(form);
+      const turnstileToken = String(data.get('cf-turnstile-response') || '');
+
+      if (turnstileSiteKey && !turnstileToken) {
+        if (errorBox) {
+          errorBox.textContent = 'Complete the security check before sending your inquiry.';
+          errorBox.classList.remove('hidden');
+        }
+        return;
+      }
+
+      const rawPackage = String(data.get('venuePackage') || '');
+      const packageId = String(data.get('service') || '') === 'photo-booth'
+        ? String(data.get('photoBoothPackage') || '')
+        : (rawPackage === 'plumeria' ? 'signature-wedding' : rawPackage);
+      const quoteId = new URLSearchParams(window.location.search).get('quote') || '';
+
+      form.dataset.submitting = '1';
+      if (submitButton) submitButton.disabled = true;
+      if (errorBox) errorBox.classList.add('hidden');
+
+      try {
+        const response = await fetch('/api/crm/inquiries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
+          body: JSON.stringify({
+            formName: 'koa-event-inquiry',
+            quoteId,
+            packageId,
+            honeypot: data.get('bot-field'),
+            turnstileToken,
+            customer: {
+              name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
+              email: data.get('email'),
+              phone: data.get('phone'),
+              eventDate: data.get('eventDate'),
+              notes: data.get('priorities'),
+            },
+            inquiry: {
+              service: data.get('service'),
+              eventType: data.get('eventType'),
+              guestCount: data.get('guestCount'),
+              budget: data.get('budget'),
+              venuePackage: packageId,
+              mobileBarPackage: data.get('mobileBarPackage'),
+              photoBoothRequested: data.get('service') === 'photo-booth' || data.get('includePhotoBooth') === 'yes',
+              photoBoothPackage: data.get('photoBoothPackage'),
+              photoBoothEventLocation: data.get('photoBoothEventLocation'),
+              photoBoothExtras: data.getAll('photoBoothExtra'),
+              eventLocation: data.get('eventLocation') || data.get('photoBoothEventLocation'),
+              barStyle: data.get('barStyle'),
+              venueTour: data.get('venueTour'),
+              priorities: data.get('priorities'),
+              source: data.get('source'),
+              selectedCatalogItems: data.get('selectedCatalogItems'),
+              automaticRentalBreakdown: data.get('automaticRentalBreakdown'),
+              manualAddOns: data.get('manualAddOns'),
+              catalogSelectionState: data.get('catalogSelectionState'),
+            },
+          }),
+          keepalive: true,
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error(payload?.error || 'We could not verify this submission. Please try again.');
+        }
+        if (turnstileSiteKey && !payload?.turnstileProof) {
+          throw new Error('Security verification could not be completed. Please try again.');
+        }
+
+        if (payload?.turnstileProof) {
+          let proofInput = form.querySelector('[name="koa-turnstile-proof"]');
+          if (!proofInput) {
+            proofInput = document.createElement('input');
+            proofInput.type = 'hidden';
+            proofInput.name = 'koa-turnstile-proof';
+            form.appendChild(proofInput);
+          }
+          proofInput.value = payload.turnstileProof;
+        }
+
+        form.dataset.crmCaptured = '1';
+        form.querySelector('[name="cf-turnstile-response"]')?.remove();
+
+        if (payload?.notificationConfigured || payload?.deduplicated) {
+          window.location.assign('/thank-you/');
+          return;
+        }
+
+        form.submit();
+      } catch (error) {
+        form.dataset.submitting = '0';
+        if (submitButton) submitButton.disabled = false;
+        if (errorBox) {
+          errorBox.textContent = error instanceof Error ? error.message : 'We could not send your inquiry. Please try again.';
+          errorBox.classList.remove('hidden');
+        }
+        if (window.turnstile?.reset) window.turnstile.reset();
+      }
+    });
+
+    updateConditionalFields();
+  </script>
+</BaseLayout>
+ + pkg.price.toLocaleString('en-US')}
+                    </option>
+                  ))}
+                  <option value="custom">Custom event / duration</option>
+                </select>
+              </label>
+              <fieldset class="sm:col-span-2">
+                <legend class="text-sm font-semibold">Optional enhancements</legend>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                  {photoBoothEnhancements.map((extra) => (
+                    <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm">
+                      <input type="checkbox" name="photoBoothExtra" value={extra.name} />
+                      <span>{extra.name} · {extra.price}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
             <div data-venue-fields class="hidden grid gap-5 sm:grid-cols-2">
               <label class="grid gap-2 text-sm font-semibold">Venue package interest
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="venuePackage">
