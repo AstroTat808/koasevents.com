@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+import { photoBoothPackages, photoBoothEnhancements } from '../../data/photoBooth';
 
 const requestedService = Astro.url.searchParams.get('service') || '';
 const requestedPackage = Astro.url.searchParams.get('package') || '';
@@ -80,7 +81,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
                 </label>
               </div>
               <label data-booth-addon-wrap class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/50 px-4 py-3 text-sm leading-6">
-                <input class="mt-1" type="checkbox" name="includePhotoBooth" value="yes" data-booth-addon />
+                <input class="mt-1" type="checkbox" name="includePhotoBooth" value="yes" data-booth-addon checked={Astro.url.searchParams.get("photoBooth") === "1"} />
                 <span><strong>Add the Mirror X Photo Booth</strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/60">Add the mirror to a venue or Mobile Bar booking. We will check package inclusions before quoting.</span></span>
               </label>
             </fieldset>
@@ -165,19 +166,23 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mirror X rental package
                 <select name="photoBoothPackage" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]">
                   <option value="">Not sure yet — help me choose</option>
-                  <option value="moment" selected={requestedService === 'photo-booth' && requestedPackage === 'moment'}>The Moment · 2 hours · from $795</option>
-                  <option value="signature" selected={requestedService === 'photo-booth' && requestedPackage === 'signature'}>The Signature · 3 hours · from $1,095</option>
-                  <option value="celebration" selected={requestedService === 'photo-booth' && requestedPackage === 'celebration'}>The Celebration · 4 hours · from $1,395</option>
+                  {photoBoothPackages.map((pkg) => (
+                    <option value={pkg.id} selected={requestedService === 'photo-booth' && requestedPackage === pkg.id}>
+                      {pkg.name} · {pkg.hours} hours · from {'$' + pkg.price.toLocaleString('en-US')}
+                    </option>
+                  ))}
                   <option value="custom">Custom duration / tailored event</option>
                 </select>
               </label>
               <fieldset class="sm:col-span-2">
                 <legend class="text-sm font-semibold">Optional enhancements</legend>
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="LED backdrop" />LED backdrop · from $175</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Keepsake guestbook" />Keepsake guestbook · from $125</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Custom branded experience" />Custom branding · from $150</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Additional service hour" />Additional service hour · $275</label>
+                  {photoBoothEnhancements.map((extra) => (
+                    <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm">
+                      <input type="checkbox" name="photoBoothExtra" value={extra.name} />
+                      <span>{extra.name} · {extra.price}</span>
+                    </label>
+                  ))}
                 </div>
               </fieldset>
             </div>
