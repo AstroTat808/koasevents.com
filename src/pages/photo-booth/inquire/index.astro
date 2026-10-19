@@ -4,7 +4,6 @@ import Header from '../../../components/Header.astro';
 import Footer from '../../../components/Footer.astro';
 import { photoBoothPackages, photoBoothEnhancements } from '../../../data/photoBooth';
 
-const selectedPackage = Astro.url.searchParams.get('package') || '';
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
 ---
 
@@ -70,7 +69,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
             <select name="photoBoothPackage" required class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]">
               <option value="">Select a package</option>
               {photoBoothPackages.map((pkg) => (
-                <option value={pkg.id} selected={selectedPackage === pkg.id}>{pkg.name} · {pkg.hours} hours · from {'$' + pkg.price.toLocaleString('en-US')}</option>
+                <option value={pkg.id} >{pkg.name} · {pkg.hours} hours · from {'$' + pkg.price.toLocaleString('en-US')}</option>
               ))}
               <option value="custom">Custom package / help me choose</option>
             </select>
@@ -105,6 +104,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
   {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
   <script is:inline define:vars={{ turnstileSiteKey }}>
     const form = document.querySelector('[data-mirror-inquiry]');
+    // Astro serves this route as static HTML, so the package query string must be
+    // read in the visitor's browser rather than during the build.
+    const requestedPackage = new URLSearchParams(window.location.search).get('package');
+    const packageSelect = form?.querySelector('select[name="photoBoothPackage"]');
+    if (packageSelect instanceof HTMLSelectElement && requestedPackage) {
+      const requestedOption = Array.from(packageSelect.options).find((option) => option.value === requestedPackage);
+      if (requestedOption) packageSelect.value = requestedPackage;
+    }
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (form.dataset.submitting === '1') return;
