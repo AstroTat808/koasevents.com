@@ -10,7 +10,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
 ---
 <BaseLayout
   title="Check Big Island Event Venue Availability | Koa’s Events"
-  description="Request Koa’s Events venue, Mobile Bar, Mirror X photo booth, or combined rentals throughout Hawaiʻi Island."
+  description="Start planning your Koa’s Events venue rental, mobile bar service, or combined event experience on Hawaiʻi Island."
   canonical="https://www.koasevents.com/inquire/"
 >
   <Header overlay={false} />
@@ -20,14 +20,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
         <aside>
           <p class="eyebrow text-[var(--koa-clay)]">Check availability</p>
           <h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Tell us what you’re gathering for.</h1>
-          <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">Choose a venue, Mobile Bar, Mirror X photo booth, or combined experience. We’ll tailor the quote to the services you actually need.</p>
+          <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">Start with the essentials. The form changes based on whether you need the venue, Mobile Bar, or both, so you only answer questions that matter to your event.</p>
 
           <div class="mt-10 rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-6">
             <p class="eyebrow text-[var(--koa-clay)]">What happens next</p>
             <ol class="mt-5 grid gap-4 text-sm leading-6 text-[var(--koa-ink)]/68">
               <li><strong class="text-[var(--koa-ink)]">1.</strong> We review your date, guest count, location and service needs.</li>
               <li><strong class="text-[var(--koa-ink)]">2.</strong> We follow up with availability and the right package or custom path.</li>
-              <li><strong class="text-[var(--koa-ink)]">3.</strong> Venue clients can move toward a tour; Mobile Bar and Mirror X clients move toward a tailored quote.</li>
+              <li><strong class="text-[var(--koa-ink)]">3.</strong> Venue clients can move toward a tour; Mobile Bar clients move toward a tailored quote.</li>
             </ol>
           </div>
         </aside>
@@ -61,7 +61,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
             </div>
             <fieldset>
               <legend class="eyebrow text-[var(--koa-clay)]">What are you booking?</legend>
-              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
                 <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
                   <input class="mr-2" type="radio" name="service" value="venue" checked={requestedService === 'venue'} required />
                   <span class="text-sm font-bold">Venue</span>
@@ -72,17 +72,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
                 </label>
                 <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
                   <input class="mr-2" type="radio" name="service" value="both" checked={requestedService === 'both'} required />
-                  <span class="text-sm font-bold">Venue + Mobile Bar</span>
-                </label>
-                <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
-                  <input class="mr-2" type="radio" name="service" value="photo-booth" checked={requestedService === 'photo-booth'} required />
-                  <span class="text-sm font-bold">Mirror X Photo Booth</span>
+                  <span class="text-sm font-bold">Both</span>
                 </label>
               </div>
-              <label data-booth-addon-wrap class="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/50 px-4 py-3 text-sm leading-6">
-                <input class="mt-1" type="checkbox" name="includePhotoBooth" value="yes" data-booth-addon />
-                <span><strong>Add the Mirror X Photo Booth</strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/60">Add the mirror to a venue or Mobile Bar booking. We will check package inclusions before quoting.</span></span>
-              </label>
             </fieldset>
 
             <div class="grid gap-5 sm:grid-cols-2">
@@ -105,7 +97,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
                 <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="date" name="eventDate" required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Guest count
-                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" max={requestedService === 'photo-booth' || requestedService === 'mobile-bar' ? 1000 : 100} name="guestCount" value={requestedGuests} required />
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Event type
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="eventType" required>
@@ -123,7 +115,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               <label class="grid gap-2 text-sm font-semibold">Budget range
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="budget">
                   <option value="">Choose one</option>
-                  <option>Under $1,500</option>
                   <option>$1,500–$3,000</option>
                   <option>$3,000–$8,000</option>
                   <option>$8,000–$15,000</option>
@@ -155,31 +146,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
                   <option>Zero-proof / non-alcoholic</option>
                 </select>
               </label>
-            </div>
-
-
-            <div data-photo-booth-fields class="hidden grid gap-5 sm:grid-cols-2">
-              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mirror X event location
-                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="photoBoothEventLocation" placeholder="Venue name, town, or address — or Koa’s Events" />
-              </label>
-              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mirror X rental package
-                <select name="photoBoothPackage" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]">
-                  <option value="">Not sure yet — help me choose</option>
-                  <option value="moment" selected={requestedService === 'photo-booth' && requestedPackage === 'moment'}>The Moment · 2 hours · from $795</option>
-                  <option value="signature" selected={requestedService === 'photo-booth' && requestedPackage === 'signature'}>The Signature · 3 hours · from $1,095</option>
-                  <option value="celebration" selected={requestedService === 'photo-booth' && requestedPackage === 'celebration'}>The Celebration · 4 hours · from $1,395</option>
-                  <option value="custom">Custom duration / tailored event</option>
-                </select>
-              </label>
-              <fieldset class="sm:col-span-2">
-                <legend class="text-sm font-semibold">Optional enhancements</legend>
-                <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="LED backdrop" />LED backdrop · from $175</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Keepsake guestbook" />Keepsake guestbook · from $125</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Custom branded experience" />Custom branding · from $150</label>
-                  <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm"><input type="checkbox" name="photoBoothExtra" value="Additional service hour" />Additional service hour · $275</label>
-                </div>
-              </fieldset>
             </div>
 
             <div data-venue-fields class="hidden grid gap-5 sm:grid-cols-2">
@@ -252,9 +218,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
     const form = document.querySelector('[data-inquiry-form]');
     const venueFields = document.querySelector('[data-venue-fields]');
     const mobileFields = document.querySelector('[data-mobile-fields]');
-    const photoBoothFields = document.querySelector('[data-photo-booth-fields]');
-    const photoBoothAddon = form?.querySelector('[data-booth-addon]');
-    const photoBoothAddonWrap = form?.querySelector('[data-booth-addon-wrap]');
     const carriedPlan = document.querySelector('[data-carried-plan]');
     const carriedPlanTitle = document.querySelector('[data-carried-plan-title]');
     const carriedPlanCopy = document.querySelector('[data-carried-plan-copy]');
@@ -268,16 +231,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
       const selected = form?.querySelector('input[name="service"]:checked')?.value || requestedService;
       const venueOn = selected === 'venue' || selected === 'both';
       const mobileOn = selected === 'mobile-bar' || selected === 'both';
-      const standalonePhotoBooth = selected === 'photo-booth';
-      const photoBoothOn = standalonePhotoBooth || Boolean(photoBoothAddon?.checked);
-      photoBoothAddonWrap?.classList.toggle('hidden', standalonePhotoBooth);
-      if (photoBoothAddon) photoBoothAddon.disabled = standalonePhotoBooth;
-      const guestField = form?.querySelector('[name="guestCount"]');
-      if (guestField) guestField.max = venueOn ? '100' : '1000';
-      const boothLocation = form?.querySelector('[name="photoBoothEventLocation"]');
-      if (boothLocation) boothLocation.required = standalonePhotoBooth;
-      photoBoothFields?.classList.toggle('hidden', !photoBoothOn);
-      photoBoothFields?.querySelectorAll('input,select,textarea').forEach((field) => { field.disabled = !photoBoothOn; });
 
       venueFields?.classList.toggle('hidden', !venueOn);
       mobileFields?.classList.toggle('hidden', !mobileOn);
@@ -290,7 +243,6 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
       });
     }
 
-    photoBoothAddon?.addEventListener('change', updateConditionalFields);
     form?.querySelectorAll('input[name="service"]').forEach((input) => {
       input.addEventListener('change', updateConditionalFields);
     });
@@ -298,7 +250,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
 
-    if (saved && requestedService !== 'photo-booth') {
+    if (saved) {
       const packageMap = { 'signature-wedding': 'plumeria' };
       const savedPackage = packageMap[saved.startingPoint] || saved.startingPoint || '';
       const guestField = form?.querySelector('[name="guestCount"]');
@@ -376,11 +328,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               budget: data.get('budget'),
               venuePackage: packageId,
               mobileBarPackage: data.get('mobileBarPackage'),
-              photoBoothRequested: data.get('service') === 'photo-booth' || data.get('includePhotoBooth') === 'yes',
-              photoBoothPackage: data.get('photoBoothPackage'),
-              photoBoothEventLocation: data.get('photoBoothEventLocation'),
-              photoBoothExtras: data.getAll('photoBoothExtra'),
-              eventLocation: data.get('eventLocation') || data.get('photoBoothEventLocation'),
+              eventLocation: data.get('eventLocation'),
               barStyle: data.get('barStyle'),
               venueTour: data.get('venueTour'),
               priorities: data.get('priorities'),
