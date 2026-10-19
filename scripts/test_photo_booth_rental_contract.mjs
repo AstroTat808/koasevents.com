@@ -22,6 +22,25 @@ const homepage = read('src/pages/index.astro');
 const rentalCatalogPage = read('src/pages/catalog/index.astro');
 
 assert.equal(exists('public/media/koa/mirror-photo-booth.webp'), true, 'Booth image must exist');
+
+const mirrorManifest = read('src/data/mirrorXPhotos.ts');
+const mirrorGallery = read('src/pages/gallery/index.astro');
+const mirrorPaths = [...mirrorManifest.matchAll(/src: '(\/media\/koa\/mirror-x-[^']+\.webp)'/g)].map((match) => match[1]);
+assert.equal(mirrorPaths.length, 3, 'Mirror X image manifest must list three selected photos');
+assert.equal(new Set(mirrorPaths).size, 3, 'Mirror X photo assets may not repeat');
+assert.ok(!mirrorPaths.includes('/media/koa/mirror-photo-booth.webp'), 'New Mirror X photos must differ from the hero');
+assert.match(page, /const boothImage = availableMirrorXPhotos\[0\] \?\? null/);
+assert.match(page, /const extraMomentPhotos = availableMirrorXPhotos\.slice\(1\)/);
+assert.match(mirrorGallery, /const mirrorXGalleryPhotos = mirrorXPhotos/);
+assert.match(mirrorGallery, /!knownSources\.has\(photo\.src\)/);
+assert.match(mirrorGallery, /category: 'Enhancements'/);
+const committedMirrorPaths = mirrorPaths.filter((src) => exists('public' + src));
+assert.ok(committedMirrorPaths.length === 0 || committedMirrorPaths.length === mirrorPaths.length,
+  'Upload the full three-photo Mirror X pack together; partial uploads must fail QA');
+if (committedMirrorPaths.length === 0) {
+  console.warn('Mirror X image pack is pending: PR #297 must not merge before all three photos land.');
+}
+
 assert.match(page, /Foto Master Mirror X/);
 assert.match(page, /<Header overlay=\{false\}/);
 assert.match(page, /<Footer \/>/);
