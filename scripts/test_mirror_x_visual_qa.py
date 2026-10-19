@@ -78,8 +78,14 @@ def landing(page, viewport: str) -> None:
         menu = page.locator(".site-menu-trigger")
         require(menu.is_visible(), "iPhone navigation trigger missing")
         menu.click()
-        require(page.locator('header .site-menu-panel a[href="/photo-booth/"]').is_visible(),
+        require(page.locator('header .site-menu-panel a[href="/photo-booth/"]:visible').count() >= 1,
                 "Mirror X link is not visible in iPhone navigation")
+    else:
+        more = page.locator('nav[aria-label="Primary navigation"] details')
+        require(more.is_visible(), "Desktop More navigation missing")
+        more.locator("summary").click()
+        require(page.locator('nav[aria-label="Primary navigation"] a[href="/photo-booth/"]').is_visible(),
+                "Mirror X link is not visible in desktop navigation")
 
 
 def inquiry(page) -> None:
