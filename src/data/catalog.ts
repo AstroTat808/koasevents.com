@@ -1,3 +1,5 @@
+import { photoBoothPackages } from './photoBooth';
+
 export type CatalogCategory =
   | 'packages'
   | 'furniture'
@@ -262,10 +264,41 @@ export const catalogItems: CatalogItem[] = [
   {
     id: 'photo-booth',
     category: 'production',
-    name: 'Photo Booth',
-    description: 'Guest photo experience available within the Signature Wedding Experience and for select custom events.',
-    priceType: 'quote',
-    priceLabel: 'Custom quote',
+    name: 'Foto Master Mirror X Photo Booth',
+    description: 'Interactive six-foot mirror photo booth for weddings, parties and corporate events. Stand-alone staffed rental available throughout Hawaiʻi Island; qualifying Signature Wedding collections may include booth service.',
+    priceType: 'starting',
+    priceLabel: 'From 
+    badges: [{ kind: 'favorite', label: 'Customer Favorite' }, { kind: 'deal', label: 'Add-On Savings' }, { kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
+    options: ['2-, 3- or 4-hour rental packages', 'Custom photo print design', 'Optional LED backdrop'],
+    bundleEligible: true,
+    specs: [
+      { label: 'Promotion', value: 'Preferred bundle pricing when added to an eligible event package' },
+      { label: 'Style', value: 'Foto Master Mirror X interactive mirror; backdrop upgrade optional' },
+      { label: 'Packages', value: photoBoothPackages.map((pkg) => pkg.hours + ' hours from 
+    ],
+    keywords: ['photos', 'mirror', 'guest', 'led backdrop'],
+  },
+  {
+ + photoBoothPackages[0].price.toLocaleString('en-US') + ' / 2 hours',
+    badges: [{ kind: 'favorite', label: 'Customer Favorite' }, { kind: 'deal', label: 'Add-On Savings' }, { kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
+    options: ['Mirrored photo booth', 'LED backdrop'],
+    bundleEligible: true,
+    specs: [
+      { label: 'Promotion', value: 'Preferred bundle pricing when added to an eligible event package' },
+      { label: 'Style', value: 'Mirrored booth + LED backdrop' },
+    ],
+    keywords: ['photos', 'mirror', 'guest', 'led backdrop'],
+  },
+  {
+ + pkg.price.toLocaleString('en-US')).join(' · ') },
+      { label: 'Full details', value: 'See /photo-booth/ for packages, features and FAQ' },
+    ],
+    keywords: ['photos', 'mirror', 'guest', 'led backdrop'],
+  },
+  {
+ + photoBoothPackages[0].price.toLocaleString('en-US') + ' / 2 hours',
     badges: [{ kind: 'favorite', label: 'Customer Favorite' }, { kind: 'deal', label: 'Add-On Savings' }, { kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
     options: ['Mirrored photo booth', 'LED backdrop'],
