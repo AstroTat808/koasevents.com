@@ -827,6 +827,12 @@ export default async (req: Request, context: Context) => {
       if (!entry || entry.source !== formName) return false;
       if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
+      // Treat separate venue, bar and photo booth requests as distinct sales leads.
+      if (formName === 'koa-event-inquiry') {
+        if (String(entry.inquiry?.service || '') !== String(record.inquiry.service || '')) return false;
+        if (Boolean(entry.inquiry?.photoBoothRequested) !== Boolean(record.inquiry.photoBoothRequested)) return false;
+        if (String(entry.inquiry?.photoBoothPackage || '') !== String(record.inquiry.photoBoothPackage || '')) return false;
+      }
       // Two different homes requested for the same travel dates are distinct leads.
       if (formName === 'koa-stay-inquiry' &&
           !sameStayLodgingChoice(entry.inquiry?.lodgingPreference, record.inquiry.lodgingPreference)) return false;
