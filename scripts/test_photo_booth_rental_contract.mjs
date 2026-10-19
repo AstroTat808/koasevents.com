@@ -52,6 +52,8 @@ assert.match(crm, /photoBoothRequested: Boolean\(payload\.inquiry\?\.photoBoothR
 assert.match(crm, /photoBoothPackage: cleanText\(payload\.inquiry\?\.photoBoothPackage, 80\)/);
 assert.match(crm, /photoBoothEventLocation: cleanText\(payload\.inquiry\?\.photoBoothEventLocation, 320\)/);
 assert.match(crm, /photoBoothExtras: cleanStringList\(payload\.inquiry\?\.photoBoothExtras, 10, 160\)/);
+assert.match(crm, /String\(entry\.inquiry\?\.service \|\| ''\) !== String\(record\.inquiry\.service \|\| ''\)/);
+assert.match(crm, /Boolean\(entry\.inquiry\?\.photoBoothRequested\) !== Boolean\(record\.inquiry\.photoBoothRequested\)/);
 
 assert.match(catalog, /name: 'Foto Master Mirror X Photo Booth'/);
 assert.match(catalog, /photoBoothPackages\[0\]\.price/);
