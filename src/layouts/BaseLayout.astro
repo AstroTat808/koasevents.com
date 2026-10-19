@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import '../styles/admin-calendar-contrast.css';
 import { businessRules } from '../data/businessRules';
+import { photoBoothPackages } from '../data/photoBooth';
 import { mediaUsageBySrc } from '../data/mediaUsage';
 import StaffUtilityNav from '../components/StaffUtilityNav.astro';
 
@@ -69,6 +70,7 @@ const breadcrumbLabelMap: Record<string, string> = {
   packages: 'Wedding Venue Packages',
   faq: 'FAQ',
   'mobile-bar': 'Mobile Bar',
+  'photo-booth': 'Mirror X Photo Booth',
   'private-events': 'Private Events',
   'corporate-events': 'Corporate Events',
   stay: 'Stay',
@@ -137,6 +139,11 @@ const serviceDefinitions: Record<string, { name: string; serviceType: string; de
     serviceType: 'Mobile bar and bartending service',
     description: 'Professional dry-bar and bartender service for weddings, private events and corporate gatherings across Hawaiʻi Island.',
   },
+  '/photo-booth/': {
+    name: "Koa's Mirror X Photo Booth Rental",
+    serviceType: 'Interactive photo booth rental',
+    description: 'Attended Foto Master Mirror X photo booth service for weddings, celebrations and corporate events throughout Hawaiʻi Island.',
+  },
   '/private-events/': {
     name: "Koa's Private Event Services",
     serviceType: 'Private event venue and mobile bar service',
@@ -186,7 +193,16 @@ const serviceOffers =
             priceCurrency: 'USD',
             url: new URL('/mobile-bar/#packages', siteUrl).href,
           }))
-        : undefined;
+        : canonicalPath === '/photo-booth/'
+          ? photoBoothPackages.map((pkg) => ({
+              '@type': 'Offer',
+              name: pkg.name,
+              price: String(pkg.price),
+              priceCurrency: 'USD',
+              url: new URL('/photo-booth/#packages', siteUrl).href,
+              availability: 'https://schema.org/InStock',
+            }))
+          : undefined;
 
 const serviceSchema = serviceDefinition
   ? {
