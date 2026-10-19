@@ -1,4 +1,4 @@
-import { photoBoothPackages } from './photoBooth';
+import { photoBoothPackages } from './photoBooth.ts';
 
 export type CatalogCategory =
   | 'packages'
