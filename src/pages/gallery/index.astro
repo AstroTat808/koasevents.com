@@ -4,15 +4,26 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { galleryMedia, koaMarketingGallery, koaMarketingMedia } from '../../data/media';
+import { mirrorXPhotos } from '../../data/mirrorXPhotos';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const categories = ['Venue','Ceremony','Reception','Mobile Bar','Enhancements','Hospitality','Stay'];
 const featuredImage = koaMarketingMedia.pavilionSunsetWide;
-const primaryGalleryImages = koaMarketingGallery.filter((image) => image.src !== featuredImage.src);
+// Include the supplied Mirror X photos in Enhancements once the image files
+// have landed in the repository. Missing binaries never produce broken images.
+const knownSources = new Set(koaMarketingGallery.map((photo) => photo.src));
+const mirrorXGalleryPhotos = mirrorXPhotos
+  .filter((photo) => !knownSources.has(photo.src))
+  .filter((photo) => existsSync(join(process.cwd(), 'public', photo.src.replace(/^\/+/, ''))))
+  .map((photo) => ({ ...photo, category: 'Enhancements' }));
+const curatedGallery = [...koaMarketingGallery, ...mirrorXGalleryPhotos];
+const primaryGalleryImages = curatedGallery.filter((image) => image.src !== featuredImage.src);
 const grouped = categories.map((category) => ({
   category,
   images: primaryGalleryImages.filter((image) => image.category === category),
 }));
-const styledImages = koaMarketingGallery.map(({ category, ...image }) => image);
+const styledImages = curatedGallery.map(({ category, ...image }) => image);
 const allGalleryImages = [...styledImages, ...galleryMedia];
 ---
 <BaseLayout
@@ -56,7 +67,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
               </div>
               <div data-gallery-category-grid={group.category} class="-mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
                 {group.images.map((image, categoryIndex) => {
-                  const globalIndex = koaMarketingGallery.indexOf(image);
+                  const globalIndex = curatedGallery.indexOf(image);
                   const editorialClass =
                     categoryIndex === 0 ? 'sm:col-span-2 lg:col-span-8 lg:row-span-3' :
                     categoryIndex === 1 ? 'lg:col-span-4 lg:row-span-2' :
