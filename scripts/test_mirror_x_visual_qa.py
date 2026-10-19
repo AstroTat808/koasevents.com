@@ -18,7 +18,10 @@ THEMES = ("light", "dark")
 BROWSERS = ("chromium", "webkit")
 PACKAGES = (("moment", "The Moment", "$795"), ("signature", "The Signature", "$1,095"),
             ("celebration", "The Celebration", "$1,395"))
-ROUTES = (("landing", "/photo-booth/"), ("inquiry", "/photo-booth/inquire/?package=signature"))
+ROUTES = (("landing", "/photo-booth/"), ("gallery", "/gallery/"),
+          ("inquiry", "/photo-booth/inquire/?package=signature"))
+PHOTO_FILENAMES = ("mirror-x-interactive-signature.webp", "mirror-x-guest-experience.webp",
+                   "mirror-x-wedding-portrait.webp")
 
 
 def require(condition: bool, message: str) -> None:
@@ -47,6 +50,60 @@ def layout(page, expected: str, route: str) -> None:
     require(page.locator("footer").count() == 1, route + " footer missing")
 
 
+def preload_mirror_images(page, route: str) -> None:
+    """Load only public, curated Mirror X images before each screenshot."""
+    selector = 'main img[data-koa-focal-src^="/media/koa/mirror-x-"]'
+    images = page.locator(selector)
+    require(images.count() == len(PHOTO_FILENAMES),
+            route + " must display exactly three distinct Mirror X photographs")
+    sources = images.evaluate_all(
+        "(imgs) => imgs.map(img => img.dataset.koaFocalSrc)"
+    )
+    expected = {'/media/koa/' + file for file in PHOTO_FILENAMES}
+    require(set(sources) == expected and len(sources) == len(set(sources)),
+            route + " has missing or duplicated Mirror X image sources: " + str(sources))
+    for index, src in enumerate(sources):
+        photo = images.nth(index)
+        photo.scroll_into_view_if_needed()
+        page.wait_for_function(
+            """(source) => {
+                const image = [...document.querySelectorAll('main img[data-koa-focal-src]')]
+                  .find(el => el.dataset.koaFocalSrc === source);
+                return !!image && image.complete && image.naturalWidth > 0;
+            }""",
+            arg=src, timeout=15000
+        )
+        require(photo.is_visible(), route + " image is not visible: " + src)
+    page.evaluate("window.scrollTo(0, 0)")
+
+
+def gallery(page) -> None:
+    section = page.locator('[data-gallery-section="Enhancements"]')
+    require(section.count() == 1 and section.is_visible(),
+            "Enhancements gallery category is missing")
+    buttons = section.locator('button[data-gallery-src]')
+    sources = buttons.evaluate_all(
+        "(items) => items.map(item => item.dataset.gallerySrc)"
+    )
+    require(len(sources) == len(set(sources)),
+            "Enhancements gallery displays duplicate image sources")
+    for filename in PHOTO_FILENAMES:
+        require(sources.count('/media/koa/' + filename) == 1,
+                "Missing or duplicated gallery asset: " + filename)
+    require(buttons.count() >= 6, "Gallery omitted existing enhancements")
+    first = section.locator('button[data-gallery-src$="mirror-x-interactive-signature.webp"]')
+    require(first.count() == 1, "Mirror X signature gallery image is missing")
+    first.click()
+    modal = page.locator('#gallery-lightbox')
+    require(modal.evaluate("(el) => el.open") is True,
+            "Gallery lightbox did not open")
+    require("Mirror X" in modal.locator('[data-lightbox-image]').get_attribute('alt'),
+            "Gallery lightbox displayed the wrong photograph")
+    modal.locator('[data-close]').click()
+    require(modal.evaluate("(el) => !el.open") is True,
+            "Gallery lightbox did not close")
+
+
 def landing(page, viewport: str) -> None:
     require("A mirror. A moment." in page.locator("main h1").inner_text(),
             "Mirror X headline is missing")
@@ -54,6 +111,11 @@ def landing(page, viewport: str) -> None:
             "Check availability CTA is missing")
     hero_img = page.locator("main figure img").first
     require(hero_img.count() == 1, "Hero equipment image is missing")
+    hero_src = hero_img.get_attribute("src")
+    require(hero_src not in {'/media/koa/' + file for file in PHOTO_FILENAMES},
+            "Mirror X hero repeats a detail photograph")
+    require(page.locator('main img[src="' + hero_src + '"]').count() == 1,
+            "Mirror X hero photograph is duplicated on the rental page")
     hero_img.scroll_into_view_if_needed()
     page.wait_for_function(
         "() => {const x=document.querySelector('main figure img');"
@@ -149,12 +211,17 @@ def main() -> int:
                                 require(response is not None and response.status < 400,
                                         "Page HTTP status was not successful")
                                 layout(page, theme, route_name)
-                                # Capture the unmodified page before interaction or test clicks.
+                                if route_name in ("landing", "gallery"):
+                                    preload_mirror_images(page, route_name)
+                                # Capture public page after all Mirror X photos load,
+                                # before navigation and lightbox test interactions.
                                 page.screenshot(path=screenshot, type="jpeg", quality=74,
                                                 full_page=True, animations="disabled",
                                                 caret="hide", timeout=30000)
                                 if route_name == "landing":
                                     landing(page, viewport)
+                                elif route_name == "gallery":
+                                    gallery(page)
                                 else:
                                     inquiry(page)
                             except Exception as exc:
