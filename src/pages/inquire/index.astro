@@ -240,6 +240,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
     const form = document.querySelector('[data-inquiry-form]');
     const venueFields = document.querySelector('[data-venue-fields]');
     const mobileFields = document.querySelector('[data-mobile-fields]');
+    const photoBoothFields = document.querySelector('[data-photo-booth-fields]');
+    const photoBoothAddon = form?.querySelector('[data-booth-addon]');
+    const photoBoothAddonWrap = form?.querySelector('[data-booth-addon-wrap]');
     const carriedPlan = document.querySelector('[data-carried-plan]');
     const carriedPlanTitle = document.querySelector('[data-carried-plan-title]');
     const carriedPlanCopy = document.querySelector('[data-carried-plan-copy]');
@@ -253,6 +256,16 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
       const selected = form?.querySelector('input[name="service"]:checked')?.value || requestedService;
       const venueOn = selected === 'venue' || selected === 'both';
       const mobileOn = selected === 'mobile-bar' || selected === 'both';
+      const photoBoothOn = selected === 'photo-booth' || Boolean(photoBoothAddon?.checked);
+      const standalonePhotoBooth = selected === 'photo-booth';
+      photoBoothAddonWrap?.classList.toggle('hidden', standalonePhotoBooth);
+      if (photoBoothAddon) photoBoothAddon.disabled = standalonePhotoBooth;
+      const guestField = form?.querySelector('[name="guestCount"]');
+      if (guestField) guestField.max = venueOn ? '100' : '1000';
+      const boothLocation = form?.querySelector('[name="photoBoothEventLocation"]');
+      if (boothLocation) boothLocation.required = standalonePhotoBooth;
+      photoBoothFields?.classList.toggle('hidden', !photoBoothOn);
+      photoBoothFields?.querySelectorAll('input,select,textarea').forEach((field) => { field.disabled = !photoBoothOn; });
 
       venueFields?.classList.toggle('hidden', !venueOn);
       mobileFields?.classList.toggle('hidden', !mobileOn);
@@ -265,6 +278,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
       });
     }
 
+    photoBoothAddon?.addEventListener('change', updateConditionalFields);
     form?.querySelectorAll('input[name="service"]').forEach((input) => {
       input.addEventListener('change', updateConditionalFields);
     });
@@ -350,7 +364,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               budget: data.get('budget'),
               venuePackage: packageId,
               mobileBarPackage: data.get('mobileBarPackage'),
-              eventLocation: data.get('eventLocation'),
+              photoBoothRequested: data.get('service') === 'photo-booth' || data.get('includePhotoBooth') === 'yes',
+              photoBoothPackage: data.get('photoBoothPackage'),
+              photoBoothEventLocation: data.get('photoBoothEventLocation'),
+              photoBoothExtras: data.getAll('photoBoothExtra'),
+              eventLocation: data.get('eventLocation') || data.get('photoBoothEventLocation'),
               barStyle: data.get('barStyle'),
               venueTour: data.get('venueTour'),
               priorities: data.get('priorities'),
