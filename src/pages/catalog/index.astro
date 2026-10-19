@@ -272,6 +272,7 @@ const badgeClass = {
                 </div>
                 <h3 class:list={['display text-3xl leading-[1.03]', item.badges?.length ? 'mt-5' : 'mt-7']}>{item.name}</h3>
                 <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/62">{item.description}</p>
+                {item.id === 'photo-booth' && <a href="/photo-booth/" class="link-arrow mt-3 text-[var(--koa-forest)]">View Mirror X photos, packages and FAQ →</a>}
                 {item.note && <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/42">{item.note}</p>}
                 {item.bundleEligible && (
                   <p class="mt-3 text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Eligible for Koa’s Bundle Savings</p>
