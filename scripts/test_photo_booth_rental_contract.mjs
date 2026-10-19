@@ -4,6 +4,7 @@
  * secured inquiry-to-CRM pipeline in sync without storing customer information.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -35,11 +36,17 @@ assert.match(mirrorGallery, /const mirrorXGalleryPhotos = mirrorXPhotos/);
 assert.match(mirrorGallery, /!knownSources\.has\(photo\.src\)/);
 assert.match(mirrorGallery, /category: 'Enhancements'/);
 const committedMirrorPaths = mirrorPaths.filter((src) => exists('public' + src));
-assert.ok(committedMirrorPaths.length === 0 || committedMirrorPaths.length === mirrorPaths.length,
-  'Upload the full three-photo Mirror X pack together; partial uploads must fail QA');
-if (committedMirrorPaths.length === 0) {
-  console.warn('Mirror X image pack is pending: PR #297 must not merge before all three photos land.');
-}
+assert.equal(committedMirrorPaths.length, mirrorPaths.length,
+  'PR #297 release blocked: commit all three distinct Mirror X WebP photos under public/media/koa/');
+const mirrorPhotoBytes = committedMirrorPaths.map((src) => {
+  const bytes = readFileSync(new URL('../public' + src, import.meta.url));
+  assert.ok(bytes.length > 20_000, 'Mirror X image is unexpectedly tiny: ' + src);
+  assert.equal(bytes.toString('ascii', 0, 4), 'RIFF', 'Mirror X image must be a valid WebP: ' + src);
+  assert.equal(bytes.toString('ascii', 8, 12), 'WEBP', 'Mirror X image must be a valid WebP: ' + src);
+  return bytes;
+});
+assert.equal(new Set(mirrorPhotoBytes.map((bytes) => createHash('sha256').update(bytes).digest('hex'))).size,
+  mirrorPhotoBytes.length, 'Mirror X gallery must not repeat identical image binaries');
 
 assert.match(page, /Foto Master Mirror X/);
 assert.match(page, /<Header overlay=\{false\}/);
