@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { photoBoothPackages, photoBoothEnhancements } from '../../data/photoBooth';
+import { photoBoothPackages, photoBoothEnhancements } from '../../data/photoBooth';
 
 const requestedService = Astro.url.searchParams.get('service') || '';
 const requestedPackage = Astro.url.searchParams.get('package') || '';
@@ -124,6 +125,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               <label class="grid gap-2 text-sm font-semibold">Budget range
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="budget">
                   <option value="">Choose one</option>
+                  <option>Under $1,500</option>
                   <option>Under $1,500</option>
                   <option>$1,500–$3,000</option>
                   <option>$3,000–$8,000</option>
