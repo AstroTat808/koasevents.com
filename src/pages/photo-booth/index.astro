@@ -1,0 +1,232 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import ResponsiveImage from '../../components/ResponsiveImage.astro';
+import { photoBoothPackages, photoBoothStandardFeatures, photoBoothEnhancements } from '../../data/photoBooth';
+
+const boothImage = {
+  src: '/media/koa/mirror-photo-booth.webp',
+  alt: 'Mirror-style photo booth set up as a guest photo experience',
+};
+const moments = [
+  { number: '01', title: 'Step up', text: 'A full-length mirror becomes an elegant invitation to play.' },
+  { number: '02', title: 'Tap + pose', text: 'Follow prompts on the touch-enabled mirror and make the moment yours.' },
+  { number: '03', title: 'Take it home', text: 'Enjoy an instant photo keepsake and a gallery of moments after the event.' },
+];
+const questions = [
+  {
+    q: 'Can we rent the Mirror X at a venue other than Koa’s?',
+    a: 'Yes. Our Mirror X is available as a stand-alone event rental at suitable venues throughout Hawaiʻi Island, not only at Koa’s Events. Travel, loading access, electricity, weather protection and venue rules are reviewed in your quote.',
+  },
+  {
+    q: 'Is an attendant included?',
+    a: 'Yes. The packages are designed as staffed experiences, including planned setup, on-site operation and breakdown. Service hours refer to guest-facing booth time, not installation or teardown.',
+  },
+  {
+    q: 'Are prints and digital photos included?',
+    a: 'Standard print keepsakes and a post-event digital gallery are included in the proposed packages. The final proposal confirms print format, media allowance, sharing method and delivery timeline.',
+  },
+  {
+    q: 'What does our space need?',
+    a: 'The booth needs a flat, stable, weather-protected area with a suitable electrical outlet, safe access for loading and enough space for guests to gather. We will coordinate placement with your venue before the event.',
+  },
+  {
+    q: 'Can we customize the experience?',
+    a: 'Absolutely. We can plan a photo layout with your names, event date, colors or branding. Backdrop upgrades, guestbooks and specialty brand experiences are quoted separately.',
+  },
+  {
+    q: 'Can we add the booth to a Koa’s wedding or Mobile Bar booking?',
+    a: 'Yes. Ask about combined-event pricing. The Mirror X may already be included in a qualifying Signature Wedding agreement, so we review your existing inclusions before quoting an add-on.',
+  },
+];
+---
+<BaseLayout
+  title="Mirror X Photo Booth Rental on the Big Island | Koa’s Events"
+  description="Rent Koa’s Foto Master Mirror X interactive photo booth for weddings, parties and corporate events throughout Hawaiʻi Island. Explore staffed packages from $795."
+  canonical="https://koasevents.com/photo-booth/"
+  breadcrumbTitle="Mirror X Photo Booth"
+  socialImage="/media/koa/mirror-photo-booth.webp"
+  socialImageAlt="Mirror photo booth experience available from Koa’s Events"
+>
+  <Header overlay={false} />
+  <main class="mirror-x-page">
+    <section class="relative overflow-hidden bg-[var(--koa-forest)] text-white">
+      <div class="container-shell grid items-center gap-12 pb-20 pt-20 lg:min-h-[46rem] lg:grid-cols-[1.04fr_.96fr] lg:gap-20 lg:pb-28 lg:pt-24">
+        <div class="max-w-2xl">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Events · The Foto Master Mirror X</p>
+          <h1 class="display mt-6 text-6xl leading-[.92] sm:text-7xl lg:text-[6.25rem]">A mirror. A moment. A little magic.</h1>
+          <p class="mt-8 max-w-xl text-base leading-8 text-white/80 sm:text-lg">Meet the Mirror X: an interactive, full-length photo booth that makes taking pictures part of the celebration. Stylish enough for a wedding. Fun enough for everybody.</p>
+          <p class="mt-4 max-w-xl text-sm leading-7 text-white/60">Available for weddings, birthdays, graduations, corporate events and private parties—at Koa’s or your own Hawaiʻi Island venue.</p>
+          <div class="mt-9 flex flex-wrap gap-3">
+            <a href="#packages" class="inline-flex min-h-12 items-center rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)] transition hover:bg-[var(--koa-sand)]">Explore packages <span class="ml-2" aria-hidden="true">↓</span></a>
+            <a href="/inquire/?service=photo-booth" class="inline-flex min-h-12 items-center rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:border-white hover:bg-white/10">Check your date</a>
+          </div>
+          <div class="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-white/15 pt-6 text-[.66rem] font-bold uppercase tracking-[.13em] text-white/66">
+            <span>6-foot interactive mirror</span><span>Fully attended</span><span>Island-wide rentals</span>
+          </div>
+        </div>
+        <figure class="relative overflow-hidden rounded-[1.8rem] border border-white/12 bg-[var(--koa-ivory)] shadow-2xl">
+          <div class="grid min-h-[25rem] place-items-center px-8 py-10 sm:min-h-[35rem] lg:min-h-[38rem]">
+            <img
+              src="https://fotomaster.com/cdn/shop/files/Mirror-X-Booth-1-390x390_png.png?v=1734369552&amp;width=1600"
+              width="900"
+              height="900"
+              alt="Foto Master Mirror X six-foot full-length touchscreen mirror photo booth, shown with its welcome screen"
+              class="max-h-[34rem] h-full w-full object-contain"
+              fetchpriority="high"
+            />
+          </div>
+          <figcaption class="border-t border-[var(--koa-line)] px-6 py-4 text-[.64rem] font-bold uppercase tracking-[.12em] text-[var(--koa-clay)]">
+            Foto Master Mirror X · Manufacturer product image
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] py-7">
+      <div class="container-shell grid gap-5 text-center sm:grid-cols-3 sm:gap-6">
+        {[
+          ['A real camera', 'High-quality portraits'],
+          ['A real experience', 'Tap-to-start animations'],
+          ['Real keepsakes', 'Prints + digital memories'],
+        ].map(([title, detail]) => (
+          <div>
+            <p class="display text-2xl text-[var(--koa-text-strong)]">{title}</p>
+            <p class="mt-1 text-xs font-semibold uppercase tracking-[.12em] text-[var(--koa-clay)]">{detail}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-36">
+      <div class="container-shell grid items-center gap-14 lg:grid-cols-[.92fr_1.08fr] lg:gap-24">
+        <div class="overflow-hidden rounded-[1.7rem] bg-[var(--koa-sand)] shadow-[var(--shadow-soft)]">
+          <ResponsiveImage {...boothImage} width={1000} height={1100} sizes="(min-width: 1024px) 45vw, 100vw" class="h-[27rem] w-full object-cover sm:h-[36rem] lg:h-[39rem]" />
+        </div>
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">More than a photo station</p>
+          <h2 class="display mt-5 text-5xl leading-[1] text-[var(--koa-text-strong)] sm:text-6xl">A showpiece your guests get to play with.</h2>
+          <p class="mt-7 text-base leading-8 text-[var(--koa-ink)]/70">The Mirror X pairs a sleek reflective surface with a hidden DSLR camera, built-in lighting and guided touch-screen interactions. The experience feels personal, while the finished photos become something guests can hold onto.</p>
+          <p class="mt-5 text-sm leading-7 text-[var(--koa-ink)]/62">From black-tie receptions to a backyard milestone celebration, we tailor the photo artwork to the event—not the other way around.</p>
+          <a href="#how-it-works" class="link-arrow mt-7 text-[var(--koa-forest)]">See how it works →</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-it-works" class="bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell">
+        <div class="max-w-3xl"><p class="eyebrow text-[var(--koa-clay)]">The guest experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">The best photos happen when no one has to pose perfectly.</h2></div>
+        <div class="mt-14 grid gap-4 md:grid-cols-3">
+          {moments.map((moment) => (
+            <article class="rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-7 lg:min-h-[17rem]">
+              <span class="eyebrow text-[var(--koa-clay)]">{moment.number}</span>
+              <h3 class="display mt-9 text-4xl">{moment.title}</h3>
+              <p class="mt-4 text-sm leading-7 text-[var(--koa-ink)]/65">{moment.text}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="py-24 lg:py-32">
+      <div class="container-shell">
+        <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Rent the Mirror X</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Find your moment.</h2></div>
+          <p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/65 lg:justify-self-end">Simple starting packages, with a dedicated attendant and the essential photo experience planned in. Choose the amount of time that fits your celebration; we’ll confirm the details in your quote.</p>
+        </div>
+        <div class="mt-14 grid gap-4 lg:grid-cols-3">
+          {photoBoothPackages.map((pkg) => (
+            <article class:list={[
+              'flex h-full flex-col rounded-[1.6rem] border p-7 shadow-[var(--shadow-soft)] sm:p-8',
+              pkg.id === 'signature' ? 'border-[var(--koa-clay)] bg-[var(--koa-forest)] text-white' : 'border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-text-strong)]',
+            ]}>
+              <div class="min-h-7">
+                {pkg.id === 'signature' && <span class="inline-flex rounded-full bg-[var(--koa-sand)] px-3 py-1 text-[.58rem] font-black uppercase tracking-[.13em] text-[var(--koa-forest)]">Most popular</span>}
+              </div>
+              <p class:list={['eyebrow mt-5', pkg.id === 'signature' ? 'text-white/65' : 'text-[var(--koa-clay)]']}>{pkg.eyebrow}</p>
+              <h3 class="display mt-3 text-4xl">{pkg.name}</h3>
+              <p class:list={['mt-3 text-sm', pkg.id === 'signature' ? 'text-white/65' : 'text-[var(--koa-ink)]/62']}>{pkg.description}</p>
+              <div class:list={['mt-8 border-b pb-7', pkg.id === 'signature' ? 'border-white/18' : 'border-[var(--koa-line)]']}>
+                <span class="display text-6xl">{'$' + pkg.price.toLocaleString('en-US')}</span>
+                <span class:list={['ml-2 text-sm', pkg.id === 'signature' ? 'text-white/65' : 'text-[var(--koa-ink)]/62']}>/ {pkg.hours} hours</span>
+                <p class:list={['mt-3 text-xs uppercase tracking-[.12em]', pkg.id === 'signature' ? 'text-white/60' : 'text-[var(--koa-clay)]']}>Starting package rate</p>
+              </div>
+              <ul class="mt-7 grid gap-3 text-sm leading-6">
+                {pkg.highlights.map((detail) => <li class="flex gap-3"><span aria-hidden="true" class={pkg.id === 'signature' ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-clay)]'}>✓</span><span>{detail}</span></li>)}
+              </ul>
+              <a
+                href={'/inquire/?service=photo-booth&package=' + encodeURIComponent(pkg.id)}
+                class:list={[
+                  'mt-9 inline-flex min-h-12 items-center justify-center rounded-full px-5 py-3 text-center text-xs font-black uppercase tracking-[.12em] transition lg:mt-auto lg:translate-y-0',
+                  pkg.id === 'signature' ? 'bg-white text-[var(--koa-forest)] hover:bg-[var(--koa-sand)]' : 'bg-[var(--koa-forest)] text-white hover:bg-[var(--koa-ink)]',
+                ]}
+              >Request {pkg.name}</a>
+            </article>
+          ))}
+        </div>
+        <p class="mt-8 max-w-4xl text-sm leading-7 text-[var(--koa-ink)]/62">Prices are starting rates for the listed service time. Travel beyond the local service area, unusual load-in requirements, selected enhancements and applicable taxes may affect your final proposal. A date is only reserved after booking confirmation and any required payment.</p>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-28">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-24">
+        <div><p class="eyebrow text-[var(--koa-amber-light)]">The essentials</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Everything starts with the experience.</h2><p class="mt-6 text-sm leading-7 text-white/66">Your final agreement outlines the exact print allotment, logistics and event-specific setup details.</p></div>
+        <ul class="grid gap-px overflow-hidden rounded-[1.4rem] border border-white/15 bg-white/15 sm:grid-cols-2">
+          {photoBoothStandardFeatures.map((feature) => (
+            <li class="flex items-start gap-4 bg-[var(--koa-forest)] p-6 text-sm leading-6 text-white/85">
+              <span class="text-[var(--koa-amber-light)]" aria-hidden="true">✓</span><span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-ivory)] py-24 lg:py-32">
+      <div class="container-shell">
+        <div class="max-w-3xl"><p class="eyebrow text-[var(--koa-clay)]">Make it yours</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Your event has a personality. So should its photos.</h2><p class="mt-7 text-sm leading-7 text-[var(--koa-ink)]/65">Special touches can be added as part of your custom quote. We’ll confirm availability and deliverables before your event.</p></div>
+        <div class="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {photoBoothEnhancements.map((extra) => (
+            <article class="rounded-[1.4rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-6">
+              <p class="eyebrow text-[var(--koa-clay)]">{extra.price}</p>
+              <h3 class="display mt-6 text-3xl text-[var(--koa-text-strong)]">{extra.name}</h3>
+              <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/65">{extra.description}</p>
+            </article>
+          ))}
+        </div>
+        <div class="mt-10 flex flex-col items-start gap-5 border-t border-[var(--koa-line)] pt-8 sm:flex-row sm:items-center sm:justify-between">
+          <p class="max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/65">Already booking Koa’s venue or Mobile Bar? Tell us when you inquire and ask about a combined-service quote. Qualifying Signature Wedding clients may already have a photo booth included.</p>
+          <a href="/inquire/?service=photo-booth" class="link-arrow shrink-0 text-[var(--koa-forest)]">Ask about a bundle →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-32">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-24">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Good to know</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A few answers before your event.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/64">We serve suitable indoor and sheltered outdoor locations across the Big Island. Every booking is planned around your timeline and your venue.</p></div>
+        <div class="divide-y divide-[var(--koa-line)] border-y border-[var(--koa-line)]">
+          {questions.map((question) => (
+            <details class="mirror-faq group py-5">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-6 text-left text-base font-bold text-[var(--koa-text-strong)]">
+                {question.q}
+                <span aria-hidden="true" class="display text-3xl font-normal text-[var(--koa-clay)] group-open:rotate-45">+</span>
+              </summary>
+              <p class="mt-4 max-w-2xl pr-6 text-sm leading-7 text-[var(--koa-ink)]/66">{question.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid gap-8 lg:grid-cols-[1fr_.7fr] lg:items-end">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Let's make memories</p><h2 class="display mt-5 text-5xl leading-[.98] sm:text-6xl">Good company. Great photos. Your kind of event.</h2><p class="mt-6 max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/65">Share your date, venue and the rental package you have in mind. We’ll follow up with availability and a clear proposal.</p></div>
+        <div class="flex flex-wrap items-center gap-4 lg:justify-end">
+          <a href="/inquire/?service=photo-booth" class="inline-flex min-h-12 items-center rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check Mirror X availability</a>
+          <a href="mailto:aloha@koasevents.com?subject=Mirror%20X%20Photo%20Booth%20Rental" class="link-arrow text-[var(--koa-forest)]">Email our team →</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>
