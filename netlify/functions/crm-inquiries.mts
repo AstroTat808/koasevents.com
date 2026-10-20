@@ -646,6 +646,10 @@ export default async (req: Request, context: Context) => {
       budget: cleanText(payload.inquiry?.budget, 120),
       venuePackage: cleanText(payload.inquiry?.venuePackage, 80),
       mobileBarPackage: cleanText(payload.inquiry?.mobileBarPackage, 80),
+      photoBoothRequested: Boolean(payload.inquiry?.photoBoothRequested) || cleanText(payload.inquiry?.service, 80).toLowerCase() === 'photo-booth',
+      photoBoothPackage: cleanText(payload.inquiry?.photoBoothPackage, 80),
+      photoBoothEventLocation: cleanText(payload.inquiry?.photoBoothEventLocation, 320),
+      photoBoothExtras: cleanStringList(payload.inquiry?.photoBoothExtras, 10, 160),
       eventLocation: cleanText(payload.inquiry?.eventLocation, 320),
       priorities: cleanText(payload.inquiry?.priorities, 4000),
       source: cleanText(payload.inquiry?.source, 200),
@@ -823,6 +827,12 @@ export default async (req: Request, context: Context) => {
       if (!entry || entry.source !== formName) return false;
       if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
+      // Treat separate venue, bar and photo booth requests as distinct sales leads.
+      if (formName === 'koa-event-inquiry') {
+        if (String(entry.inquiry?.service || '') !== String(record.inquiry.service || '')) return false;
+        if (Boolean(entry.inquiry?.photoBoothRequested) !== Boolean(record.inquiry.photoBoothRequested)) return false;
+        if (String(entry.inquiry?.photoBoothPackage || '') !== String(record.inquiry.photoBoothPackage || '')) return false;
+      }
       // Two different homes requested for the same travel dates are distinct leads.
       if (formName === 'koa-stay-inquiry' &&
           !sameStayLodgingChoice(entry.inquiry?.lodgingPreference, record.inquiry.lodgingPreference)) return false;

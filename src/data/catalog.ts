@@ -1,3 +1,5 @@
+import { photoBoothPackages } from './photoBooth.ts';
+
 export type CatalogCategory =
   | 'packages'
   | 'furniture'
@@ -262,19 +264,19 @@ export const catalogItems: CatalogItem[] = [
   {
     id: 'photo-booth',
     category: 'production',
-    name: 'Photo Booth',
-    description: 'Guest photo experience available within the Signature Wedding Experience and for select custom events.',
-    priceType: 'quote',
-    priceLabel: 'Custom quote',
+    name: 'Foto Master Mirror X Photo Booth',
+    description: 'Interactive six-foot mirror photo booth for weddings, private celebrations and corporate events. Stand-alone attended service available across Hawaiʻi Island; some Signature Wedding agreements already include a booth.',
+    priceType: 'starting',
+    priceLabel: 'From $' + photoBoothPackages[0].price.toLocaleString('en-US') + ' / 2 hours',
     badges: [{ kind: 'favorite', label: 'Customer Favorite' }, { kind: 'deal', label: 'Add-On Savings' }, { kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
-    options: ['Mirrored photo booth', 'LED backdrop'],
+    options: ['2-, 3- and 4-hour attended rental packages', 'Personalized photo artwork', 'LED backdrop upgrade'],
     bundleEligible: true,
     specs: [
-      { label: 'Promotion', value: 'Preferred bundle pricing when added to an eligible event package' },
-      { label: 'Style', value: 'Mirrored booth + LED backdrop' },
+      { label: 'Packages', value: photoBoothPackages.map((pkg) => pkg.hours + ' hours from $' + pkg.price.toLocaleString('en-US')).join(' · ') },
+      { label: 'Details', value: 'See /photo-booth/ for full packages and inclusions' },
     ],
-    keywords: ['photos', 'mirror', 'guest', 'led backdrop'],
+    keywords: ['photo booth', 'Foto Master', 'Mirror X', 'mirror', 'guest photos', 'photo prints', 'led backdrop'],
   },
   {
     id: 'audio',

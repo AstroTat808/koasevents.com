@@ -35,6 +35,7 @@
     "test:build-diagnostics": "node scripts/test_build_failure_diagnostics.mjs",
     "test:calendar-contrast": "python scripts/test_calendar_contrast.py --base-url http://127.0.0.1:4173",
     "test:stay-lodging": "node --experimental-strip-types scripts/test_stay_lodging_inquiry.mjs",
+    "test:photo-booth": "node scripts/test_photo_booth_rental_contract.mjs",
     "test:ci-privacy": "node scripts/ci_privacy_gate.mjs && node scripts/test_ci_privacy_gate_rules.mjs && node scripts/private_release_evidence.mjs --self-test"
   },
   "dependencies": {

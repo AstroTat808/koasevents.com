@@ -22,6 +22,7 @@ const staticEntries: SitemapEntry[] = [
   { path: '/venue/packages/', changefreq: 'weekly', priority: '0.85' },
   { path: '/venue/faq/', changefreq: 'monthly', priority: '0.7' },
   { path: '/mobile-bar/', changefreq: 'weekly', priority: '0.9' },
+  { path: '/photo-booth/', changefreq: 'weekly', priority: '0.85' },
   { path: '/mobile-bar/faq/', changefreq: 'monthly', priority: '0.7' },
   { path: '/private-events/', changefreq: 'weekly', priority: '0.8' },
   { path: '/corporate-events/', changefreq: 'monthly', priority: '0.75' },

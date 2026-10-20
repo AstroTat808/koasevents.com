@@ -10,6 +10,7 @@ const checks=[
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
   ['theme-regression','Theme regression','npm',['run','test:theme']],
+  ['photo-booth-rental-regression','Mirror X rental inquiry + catalog regression','npm',['run','test:photo-booth']],
   ['health-dashboard-regression','System Health dashboard regression','npm',['run','test:health-dashboard']],
   ['health-collapse-runtime','System Health collapse runtime regression','node',['scripts/test_system_health_collapse_runtime.mjs']],
   ['health-collapse-release-contract','System Health collapse release contract','node',['scripts/test_system_health_collapse_release_contract.mjs']],
