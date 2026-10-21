@@ -22,6 +22,10 @@ ROUTES=[
  ("corporate","/corporate-events/"),("catalog","/catalog/"),("inquire","/inquire/"),
  ("wedding-inquiry","/wedding-inquiry/")
 ]
+ROUTE_FILTER={item.strip() for item in os.environ.get("VISUAL_ROUTE_FILTER","").split(",") if item.strip()}
+if ROUTE_FILTER:
+ ROUTES=[row for row in ROUTES if row[1] in ROUTE_FILTER]
+ if not ROUTES: raise RuntimeError("VISUAL_ROUTE_FILTER did not match any configured route")
 VIEWPORTS=[
  ("phone-small",320,568,2),("phone",390,844,2),("tablet",768,1024,2),
  ("desktop",1440,1000,1),("wide",1920,1080,1)
