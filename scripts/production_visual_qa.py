@@ -461,15 +461,25 @@ def expert_design_findings(dom, route, viewport):
 
  return f
 
-def findings(dom,console,page_errors,request_failed,asset_failed):
- f=[]
- filtered_page_errors=[
+def actionable_page_errors(page_errors,base_url=None):
+ """Ignore only the known third-party Turnstile frame-access diagnostic.
+
+ Apply the same narrow exception in public and protected System Health browser
+ audits; preserve every same-origin error, request failure, geometry check,
+ responsive case, and actual application JavaScript error as release blockers.
+ """
+ base=BASE if base_url is None else str(base_url)
+ return [
   message for message in page_errors
   if not (
    ("challenges.cloudflare.com" in message and "accessing a frame with origin" in message)
-   or ("deploy-preview-" in BASE and message.strip()=="[Cloudflare Turnstile] Error: 110200.")
+   or ("deploy-preview-" in base and message.strip()=="[Cloudflare Turnstile] Error: 110200.")
   )
  ]
+
+def findings(dom,console,page_errors,request_failed,asset_failed):
+ f=[]
+ filtered_page_errors=actionable_page_errors(page_errors)
  if filtered_page_errors:f.append(Finding("page-error","critical","JavaScript page errors detected",filtered_page_errors[:10]))
  if console:f.append(Finding("console-error","warning","Console errors detected",console[:10]))
  if request_failed:f.append(Finding("request-failed","critical","Same-origin requests failed",request_failed[:15]))
@@ -1872,8 +1882,9 @@ def health_mobile_mode(browser_name,health_payload_path):
      metrics["releaseHistoryEvidence"]=release_history_evidence
     if explanation_dialog_geometry is not None:
      metrics["explanationDialog"]=explanation_dialog_geometry
-    if page_errors:
-     detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(page_errors[:5])
+    actionable_errors=actionable_page_errors(page_errors)
+    if actionable_errors:
+     detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(actionable_errors[:5])
    except Exception as exc:
     detail=(detail+"; " if detail else "")+str(exc)
     top_shot=root/f"system-health-{viewport_name}-top.png"
