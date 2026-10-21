@@ -66,8 +66,7 @@ def geometry(page):
       const box=panel.getBoundingClientRect();
       if(box.left< -1||box.right>document.documentElement.clientWidth+1) problems.push('panel-outside-viewport');
       const list=panel.querySelector('[data-credential-provider-group="healthy"] [data-credential-provider-grid]');
-      // Resolve CSS Color 4 through the browser and composite alpha against
-      // ancestors before computing the WCAG relative-luminance contrast ratio.
+      // Resolve CSS Color 4 and alpha before calculating text contrast.
       const canvas=document.createElement('canvas'); canvas.width=canvas.height=1;
       const ctx=canvas.getContext('2d',{willReadFrequently:true});
       const rgba=value=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=value;ctx.fillRect(0,0,1,1);
@@ -94,17 +93,17 @@ def geometry(page):
 
 
 def capture_panel(page, panel, path):
-    # Exclude unrelated sticky navigation only during the element screenshot.
-    # Interaction and geometry assertions still use the unmodified page.
-    page.evaluate('''() => {
-      const panel=document.querySelector('[data-credential-layout]');
-      for(const el of document.querySelectorAll('body *')) {
-        if(!panel.contains(el)&&!el.contains(panel)&&['fixed','sticky'].includes(getComputedStyle(el).position))
-          el.setAttribute('data-credential-qa-chrome','');
-      }
-    }''')
-    panel.screenshot(path=str(path), animations='disabled', timeout=15000,
-                     style='[data-credential-qa-chrome] { visibility: hidden !important; }')
+    # Keep the tested viewport, media queries and live DOM unchanged. Native
+    # viewport screenshots include the real navigation; never hide surrounding UI.
+    # Overview shows the warning; expanded capture starts at the edited provider.
+    target = panel.locator('[data-credential-provider="quickbooks"]') if 'expanded' in path.name else panel
+    expect(target).to_be_visible()
+    target.evaluate('el=>window.scrollTo({top:Math.max(0,window.scrollY+el.getBoundingClientRect().top-110),behavior:"instant"})')
+    page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+    expect(panel).to_be_visible()
+    page.screenshot(path=str(path), full_page=False, animations='allow', timeout=15000)
+    expect(panel).to_be_visible()
+    assert page.locator('[data-credential-periods] strong:visible').count() == 21, 'All provider metrics remain visible after capture'
 
 
 def run_case(browser, browser_name, base_url, width, height, theme, out):
@@ -116,7 +115,6 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
                                   color_scheme='light' if theme == 'dark' else 'dark',
                                   service_workers='block')
     context.add_init_script("localStorage.setItem('koa-theme-preference', " + json.dumps(theme) + ");")
-    # Every protected endpoint is intercepted before navigating, even on production.
     context.route('**/api/**', lambda r: r.fulfill(status=200, content_type='application/json', body='{}'))
     context.route('**/.netlify/functions/**', lambda r: r.fulfill(status=200, content_type='application/json', body='{}'))
     context.route('**/.netlify/identity/**', lambda r: r.fulfill(status=200, content_type='application/json', body='{}'))
@@ -155,7 +153,7 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
     page_errors = []
     page.on('pageerror', lambda error: page_errors.append(str(error)))
     try:
-        response = page.goto(base_url + '/admin/health/', wait_until='domcontentloaded', timeout=45000)
+        response = page.goto(base_url + '/admin/health/', wait_until='load', timeout=45000)
         assert response and response.status == 200, 'Health HTML response'
         page.wait_for_selector('[data-app]:not(.hidden)', timeout=15000)
         page.wait_for_function("() => document.querySelectorAll('[data-credential-provider]').length===7", timeout=15000)
@@ -174,7 +172,6 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
         expect(page.locator('[data-credential-provider="resend"] ' + DETAIL)).to_be_visible()
         first_geometry = geometry(page)
         assert first_geometry['visiblePercentages'] == 21, 'All three percentages stay visible on all seven cards'
-        # Assert adaptive columns against the actual container, not an assumed viewport.
         content_width = panel.evaluate('el=>el.clientWidth-parseFloat(getComputedStyle(el).paddingLeft)-parseFloat(getComputedStyle(el).paddingRight)')
         root_font = panel.evaluate('()=>parseFloat(getComputedStyle(document.documentElement).fontSize)')
         expected_columns = 3 if content_width >= 66 * root_font else 2 if content_width >= 44 * root_font else 1
@@ -207,7 +204,6 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
         button.focus()
         page.keyboard.press('Enter')
         expect(button).to_have_attribute('aria-expanded', 'true')
-        # Saving re-renders the real component. Preserve user disclosure state.
         save.click()
         expect(page.locator('[data-credential-threshold-message]')).to_have_text('Thresholds saved.')
         expect(button).to_have_attribute('aria-expanded', 'true')
@@ -241,6 +237,19 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
         return {'browser': browser_name, 'width': width, 'height': height, 'theme': theme,
                 'passed': True, 'geometry': first_geometry, 'screenshot': screenshot,
                 'syntheticOnly': True, 'interceptedSaves': len(state['saves'])}
+    except Exception as error:
+        # Safe fixture-only state identifies a collapsed parent versus a failed
+        # child disclosure without dumping DOM, response data or user records.
+        diagnostic = page.evaluate('''() => {
+          const panel=document.querySelector('[data-credential-layout]');
+          const outer=panel?.closest('[data-mobile-collapsible]');
+          return {panelVisible:Boolean(panel?.getClientRects().length),
+            parentCollapsed:outer?.dataset.mobileCollapsed||null,
+            parentSeverity:outer?.dataset.healthSectionStatus||null,
+            theme:document.documentElement.dataset.theme||null};
+        }''')
+        error.add_note(json.dumps(diagnostic, sort_keys=True))
+        raise
     finally:
         context.close()
 
@@ -268,9 +277,9 @@ def main():
                         print(f'PASS | credential reliability | {args.browser} {width}x{height} {theme}')
                     except Exception as error:
                         failed = True
-                        # Only controlled fixture assertion diagnostics; never response bodies.
                         row = {'browser': args.browser, 'width': width, 'theme': theme,
-                               'passed': False, 'errorType': type(error).__name__, 'detail': str(error)[:1600], 'syntheticOnly': True}
+                               'passed': False, 'errorType': type(error).__name__, 'detail': str(error)[:1600],
+                               'diagnostics': getattr(error, '__notes__', []), 'syntheticOnly': True}
                         print(f'FAIL | credential reliability | {args.browser} {width}x{height} {theme} | {type(error).__name__}: {str(error)[:1600]}')
                     results.append(row)
         finally:
@@ -278,7 +287,7 @@ def main():
     report = {'sha': sha, 'baseUrl': args.base_url, 'syntheticOnly': True,
               'browser': args.browser, 'passed': sum(row['passed'] for row in results),
               'failed': sum(not row['passed'] for row in results), 'cases': results,
-              'capturePolicy': 'Component screenshots exclude unrelated sticky navigation; assertions run on the unmodified page.',
+              'capturePolicy': 'Real viewport screenshots retain navigation and do not alter DOM styles, viewport size or media queries.',
               'controllerSha256': hashlib.sha256((ROOT / 'public/credential-reliability-cards.js').read_bytes()).hexdigest()}
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     raise SystemExit(1 if failed else 0)
