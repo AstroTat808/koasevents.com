@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PROVIDERS = [('resend', 'Resend'), ('quickbooks', 'QuickBooks'), ('microsoft-graph', 'Microsoft Graph'),
              ('github', 'GitHub'), ('netlify', 'Netlify'), ('signwell', 'SignWell'),
              ('turnstile', 'Cloudflare Turnstile')]
-VIEWPORTS = [(320, 740), (390, 844), (768, 1024), (1440, 900), (1920, 1080)]
+VIEWPORTS = [(320, 740), (390, 844), (768, 1024), (1024, 768), (1440, 900), (1920, 1080)]
 CARD = '[data-credential-provider]'
 DETAIL = '[data-credential-provider-details]'
 TOGGLE = '[data-credential-provider-toggle]'
@@ -66,12 +66,45 @@ def geometry(page):
       const box=panel.getBoundingClientRect();
       if(box.left< -1||box.right>document.documentElement.clientWidth+1) problems.push('panel-outside-viewport');
       const list=panel.querySelector('[data-credential-provider-group="healthy"] [data-credential-provider-grid]');
-      return {problems, panelWidth:Math.round(box.width),
+      // Resolve CSS Color 4 through the browser and composite alpha against
+      // ancestors before computing the WCAG relative-luminance contrast ratio.
+      const canvas=document.createElement('canvas'); canvas.width=canvas.height=1;
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      const rgba=value=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=value;ctx.fillRect(0,0,1,1);
+        const a=ctx.getImageData(0,0,1,1).data;return [a[0],a[1],a[2],a[3]/255];};
+      const over=(f,b)=>[0,1,2].map(i=>f[i]*f[3]+b[i]*(1-f[3])).concat(1);
+      const background=el=>{const nodes=[];for(let n=el;n;n=n.parentElement)nodes.unshift(n);
+        return nodes.reduce((b,n)=>over(rgba(getComputedStyle(n).backgroundColor),b),[255,255,255,1]);};
+      const lum=c=>c.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;})
+        .reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+      const contrast=[];
+      for(const el of panel.querySelectorAll('[data-credential-provider-heading],[data-credential-provider-toggle],[data-credential-card-header] p,[data-credential-periods]>div>:last-child,[data-credential-reliability-note]')) {
+        if(!visible(el))continue;
+        const bg=background(el),fg=over(rgba(getComputedStyle(el).color),bg);
+        const ratio=(Math.max(lum(fg),lum(bg))+.05)/(Math.min(lum(fg),lum(bg))+.05);
+        contrast.push(ratio);
+        if(ratio<4.5)problems.push('insufficient-text-contrast:'+el.tagName+':'+ratio.toFixed(2));
+      }
+      return {problems, minimumTextContrast:Math.min(...contrast), panelWidth:Math.round(box.width),
         healthyColumns:list?getComputedStyle(list).gridTemplateColumns.split(' ').length:0,
         visiblePercentages:[...panel.querySelectorAll('[data-credential-periods] strong')].filter(visible).length};
     }''')
     assert not result['problems'], 'Credential layout geometry: ' + ','.join(result['problems'])
     return result
+
+
+def capture_panel(page, panel, path):
+    # Exclude unrelated sticky navigation only during the element screenshot.
+    # Interaction and geometry assertions still use the unmodified page.
+    page.evaluate('''() => {
+      const panel=document.querySelector('[data-credential-layout]');
+      for(const el of document.querySelectorAll('body *')) {
+        if(!panel.contains(el)&&!el.contains(panel)&&['fixed','sticky'].includes(getComputedStyle(el).position))
+          el.setAttribute('data-credential-qa-chrome','');
+      }
+    }''')
+    panel.screenshot(path=str(path), animations='disabled', timeout=15000,
+                     style='[data-credential-qa-chrome] { visibility: hidden !important; }')
 
 
 def run_case(browser, browser_name, base_url, width, height, theme, out):
@@ -147,7 +180,7 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
         expected_columns = 3 if content_width >= 66 * root_font else 2 if content_width >= 44 * root_font else 1
         assert first_geometry['healthyColumns'] == expected_columns, 'Container-aware healthy grid columns'
         screenshot = f'{browser_name}-{width}-{theme}-overview.png'
-        panel.screenshot(path=str(out / screenshot), animations='disabled', timeout=15000)
+        capture_panel(page, panel, out / screenshot)
 
         qb = page.locator('[data-credential-provider="quickbooks"]')
         button = qb.locator(TOGGLE)
@@ -181,7 +214,7 @@ def run_case(browser, browser_name, base_url, width, height, theme, out):
         expect(qb.locator(DETAIL)).to_be_visible()
         assert len(state['saves']) == 2, 'Second intercepted save'
         geometry(page)
-        panel.screenshot(path=str(out / f'{browser_name}-{width}-{theme}-expanded.png'), animations='disabled', timeout=15000)
+        capture_panel(page, panel, out / f'{browser_name}-{width}-{theme}-expanded.png')
         qb.locator('[data-credential-threshold-red]').fill('100')
         save.click()
         expect(page.locator('[data-credential-threshold-message]')).to_contain_text('Red threshold must be lower')
@@ -245,6 +278,7 @@ def main():
     report = {'sha': sha, 'baseUrl': args.base_url, 'syntheticOnly': True,
               'browser': args.browser, 'passed': sum(row['passed'] for row in results),
               'failed': sum(not row['passed'] for row in results), 'cases': results,
+              'capturePolicy': 'Component screenshots exclude unrelated sticky navigation; assertions run on the unmodified page.',
               'controllerSha256': hashlib.sha256((ROOT / 'public/credential-reliability-cards.js').read_bytes()).hexdigest()}
     (out / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
     raise SystemExit(1 if failed else 0)
