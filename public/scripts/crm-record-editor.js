@@ -127,6 +127,7 @@
   window.addEventListener('koa:crm-editor-context', event => {
     const context = event.detail || {};
     state.projects = Array.isArray(context.projects) ? context.projects : [];
+    state.customers = Array.isArray(context.customers) ? context.customers : [];
     state.canManage = context.canManage === true;
     state.selectedId = context.selectedId || '';
     tools.hidden = !state.canManage;
