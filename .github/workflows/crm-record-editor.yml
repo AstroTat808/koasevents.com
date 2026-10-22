@@ -4,21 +4,25 @@ on:
     paths:
       - 'netlify/functions/admin-crm*.mts'
       - 'netlify/functions/_shared/crm-record-editor.mjs'
+      - 'netlify/functions/_shared/customer-directory.mjs'
       - 'netlify/functions/_shared/crm-cleanup.ts'
       - 'netlify/functions/_shared/tenant-storage.ts'
       - 'src/pages/admin/crm/**'
       - 'src/components/admin/CrmRecordEditor.astro'
       - 'public/scripts/crm-record-editor.js'
       - 'scripts/test_crm_record_editor.mjs'
+      - 'scripts/test_crm_customer_directory.mjs'
       - '.github/workflows/crm-record-editor.yml'
   push:
     branches: [main]
     paths:
       - 'netlify/functions/admin-crm-records.mts'
       - 'netlify/functions/_shared/crm-record-editor.mjs'
+      - 'netlify/functions/_shared/customer-directory.mjs'
       - 'netlify/functions/_shared/crm-cleanup.ts'
       - 'netlify/functions/_shared/tenant-storage.ts'
       - 'scripts/test_crm_record_editor.mjs'
+      - 'scripts/test_crm_customer_directory.mjs'
 permissions:
   contents: read
 jobs:
@@ -34,4 +38,4 @@ jobs:
           node-version: '22'
       - run: npm install --no-package-lock --no-audit --no-fund
       - run: node --check public/scripts/crm-record-editor.js
-      - run: node --test scripts/test_crm_record_editor.mjs
+      - run: node --test scripts/test_crm_record_editor.mjs scripts/test_crm_customer_directory.mjs
