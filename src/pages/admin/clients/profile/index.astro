@@ -98,8 +98,14 @@ import BaseLayout from '../../../../layouts/BaseLayout.astro';
   })();
 </script>
 <style>
-  .customer-profile :global([data-theme="dark"]) {}
-  :global(html[data-theme="dark"]) .customer-profile :global(.bg-white){background-color:#1c2d25;color:#f3f3ed}
-  :global(html[data-theme="dark"]) .customer-profile :global(.text-\[var\(--koa-forest\)\]){color:#e6e8dc}
-  :global(html[data-theme="dark"]) .customer-profile :global(.bg-\[var\(--koa-sand\)\]){background-color:#253a30}
+  :global(html[data-theme="dark"]) .customer-profile :global(.bg-white) {
+    background-color: #1c2d25;
+    color: #f3f3ed;
+    border-color: #566c60;
+  }
+  :global(html[data-theme="dark"]) .customer-profile :global([data-name]),
+  :global(html[data-theme="dark"]) .customer-profile :global(h2),
+  :global(html[data-theme="dark"]) .customer-profile :global(h3) {
+    color: #f1e9d6;
+  }
 </style>
