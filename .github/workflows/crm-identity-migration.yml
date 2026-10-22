@@ -1,0 +1,36 @@
+name: CRM identity migration safety
+
+on:
+  pull_request:
+    paths:
+      - 'netlify/functions/admin-crm-customer-migration.mts'
+      - 'netlify/functions/_shared/customer-identity-migration.mjs'
+      - 'netlify/functions/_shared/customer-identity-workflow.mjs'
+      - 'src/pages/admin/crm/**'
+      - 'scripts/test_crm_identity_migration.mjs'
+      - 'scripts/test_crm_identity_migration_api.mjs'
+      - '.github/workflows/crm-identity-migration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'netlify/functions/admin-crm-customer-migration.mts'
+      - 'netlify/functions/_shared/customer-identity-migration.mjs'
+      - 'netlify/functions/_shared/customer-identity-workflow.mjs'
+permissions:
+  contents: read
+jobs:
+  identity-migration:
+    name: Customer identity approval, recovery and rollback regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - run: node --test scripts/test_crm_identity_migration.mjs scripts/test_crm_identity_migration_api.mjs
+      - name: Verify exact checkout builds all Astro routes and Netlify functions
+        run: npm run build
