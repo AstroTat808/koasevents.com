@@ -582,7 +582,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
 
   // Reuse the existing CRM record model rather than creating a duplicate contact database.
   function publishRecordEditorContext(){
-    window.dispatchEvent(new CustomEvent('koa:crm-editor-context',{detail:{projects:data.projects,canManage:can('crm.manage'),selectedId}}));
+    window.dispatchEvent(new CustomEvent('koa:crm-editor-context',{detail:{projects:data.projects,customers:data.customers||[],canManage:can('crm.manage'),selectedId}}));
   }
   window.addEventListener('koa:crm-editor-ready',publishRecordEditorContext);
   window.addEventListener('koa:crm-record-saved',async(event)=>{
