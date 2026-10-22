@@ -24,7 +24,7 @@ async function runTenantJob(_req:Request,context:Context){
 }
 export default async (req:Request, context:Context) => {
   if (context.deploy.context !== 'production') return;
-  return runForEachTenant(context, () => runTenantJob(req, context));
+  await runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config:Config={schedule:'@hourly'};
