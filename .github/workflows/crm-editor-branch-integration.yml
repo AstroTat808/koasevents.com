@@ -20,7 +20,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
       - name: Apply exact integration anchors and retire bootstrap
         run: |
           node scripts/apply_crm_manual_editor.mjs
@@ -32,7 +31,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "Integrate manual CRM editor into existing workspace and tenant storage"
           git push origin HEAD:refs/heads/feat/crm-manual-create-edit-20261021
-      - run: npm ci
+      - run: npm install --no-package-lock --no-audit --no-fund
       - name: Manual CRM regression tests
         run: node --test scripts/test_crm_record_editor.mjs
       - name: Full existing Astro build and prebuild gates
