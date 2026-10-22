@@ -27,7 +27,7 @@ async function history(crm, entry) {
     const rows = Array.isArray(snapshot.data) ? snapshot.data : [];
     const latest = [{ planId: entry.planId, status: entry.status, createdAt: entry.createdAt,
       updatedAt: entry.rolledBackAt || entry.appliedAt || entry.approvedAt || entry.createdAt,
-      assignmentCount: entry.assignments.length },
+      assignmentCount: entry.assignments.length, syncPending: Boolean(entry.syncPending) },
       ...rows.filter(row => row.planId !== entry.planId)].slice(0, 75);
     const result = await crm.writeJSON(prefix + 'index', latest, snapshot.etag);
     if (result.modified) return true;
