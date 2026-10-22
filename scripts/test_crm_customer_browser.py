@@ -50,7 +50,7 @@ def audit(browser, browser_name, base, results_dir):
             try:
                 response=page.goto(base+"/admin/crm/",wait_until="domcontentloaded",timeout=20000)
                 assert response is not None and response.status==200, "CRM route not served"
-                page.wait_for_selector("[data-crm-record-dialog] form",timeout=15000)
+                page.wait_for_selector("[data-crm-record-dialog] form",state="attached",timeout=15000)
                 page.wait_for_timeout(700)
                 page.evaluate("""([projects,customers])=>{
                   document.querySelector('[data-admin-ui]')?.classList.remove('hidden');
