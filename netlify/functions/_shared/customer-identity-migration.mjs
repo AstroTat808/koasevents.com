@@ -5,7 +5,7 @@ import { recordRevision } from './crm-record-editor.mjs';
 const clean = value => String(value ?? '').trim();
 const hash = value => createHash('sha256').update(value).digest('hex');
 const safeId = value => /^[a-zA-Z0-9_-]{1,120}$/.test(clean(value));
-const HARD_LIMIT = 75;
+const HARD_LIMIT = 12;
 
 export class IdentityMigrationError extends Error {
   constructor(code, message, status = 409) {
