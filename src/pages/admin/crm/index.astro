@@ -99,6 +99,18 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
             <div data-customer-review-list class="mt-4 grid max-h-[380px] gap-2 overflow-y-auto"></div>
           </details>
         </section>
+        <section data-customer-migration-section class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Controlled data migration</p><h2 class="display mt-2 text-3xl">Link legacy customer identities</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60">Preview verified, conflict-free customer links without changing projects or financial records. Propose a small batch, obtain approval from a second administrator, then apply. Each batch has a reversible customer-ID-only change set.</p></div>
+            <button data-migration-preview type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-bold text-white">Preview migration</button>
+          </div>
+          <p data-migration-status role="status" aria-live="polite" class="mt-3 text-sm text-[var(--koa-clay)]"></p>
+          <div data-migration-preview-detail class="mt-4 grid gap-3"></div>
+          <details class="mt-3 rounded-xl border border-[var(--koa-line)] p-4">
+            <summary class="cursor-pointer text-sm font-bold text-[var(--koa-forest)]">Migration approval and rollback history</summary>
+            <div data-migration-history class="mt-4 grid gap-2"></div>
+          </details>
+        </section>
         <section data-duplicate-booking-section class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50/70 p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -584,6 +596,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
   let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],duplicateBookingAudit:{groups:[]},cleanupAudit:[],cleanupAnalytics:{},cleanupSettings:{mode:'auto_trash'},integrations:{signwell:{}},staff:[]};
+  let identityMigrationPlan=null;
   let duplicateMergeGroup=null;
   let duplicateMergePreview=null;
   let analyticsRange='7';
@@ -733,6 +746,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     publishRecordEditorContext();
     const activeIds=new Set(data.projects.map(p=>p.id));
     renderCustomerIdentity();
+    const migrationSection=$('[data-customer-migration-section]');
+    if(migrationSection)migrationSection.classList.toggle('hidden',data.access?.role!=='admin');
     $('[data-stat-projects]').textContent=data.projects.length;
     $('[data-stat-tasks]').textContent=data.tasks.filter(t=>activeIds.has(t.recordId)&&t.status!=='done').length;
     $('[data-stat-appointments]').textContent=data.appointments.filter(a=>activeIds.has(a.recordId)&&a.status==='scheduled').length;
@@ -758,6 +773,43 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     if(count)count.textContent='('+groups.length+(audit.reviewTruncated?'+':'')+')';
     if(reviews)reviews.innerHTML=groups.length?groups.map(group=>'<article class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950"><strong class="text-xs uppercase">'+esc(group.category.replaceAll('_',' '))+'</strong><p class="mt-1 text-xs">'+esc(group.message)+'</p><p class="mt-2 text-xs font-medium">'+group.recordIds.map(id=>'<a href="/admin/crm/?record='+encodeURIComponent(id)+'" class="mr-2 underline">'+esc(id)+'</a>').join('')+'</p></article>').join(''):'<p class="text-sm">No customer identity conflicts detected.</p>';
   }
+  function renderMigrationHistory(rows){
+    const holder=$('[data-migration-history]');
+    if(!holder)return;
+    holder.innerHTML=rows.length?rows.map(row=>'<article class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--koa-line)] p-3"><div><strong class="text-xs">'+esc(row.planId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(row.status)+' · '+Number(row.assignmentCount||0)+' identity links · '+esc(row.updatedAt||'')+(row.syncPending?' · Synchronization pending':'')+'</p></div><div class="flex flex-wrap gap-2">'+(['proposed','approved'].includes(row.status)?'<button type="button" data-migrate-action="'+(row.status==='proposed'?'approve':'apply')+'" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">'+(row.status==='proposed'?'Approve (second admin)':'Apply approved batch')+'</button>':'')+(row.status==='applied'?'<button type="button" data-migrate-action="'+(row.syncPending?'reconcile':'rollback')+'" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">'+(row.syncPending?'Reconcile records':'Rollback batch')+'</button>':'')+(row.status==='rolled_back'&&row.syncPending?'<button type="button" data-migrate-action="reconcile" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Reconcile rollback</button>':'')+'</div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/55">No migrations proposed.</p>';
+  }
+  async function refreshMigration(){
+    const status=$('[data-migration-status]');if(status)status.textContent='Checking the current CRM index and migration audit…';
+    try{
+      const response=await fetch('/api/admin/crm-customer-migration',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(25000)});
+      const body=await response.json();
+      if(!response.ok)throw new Error(body.error||'Unable to load the migration preview.');
+      const plan=body.plan;identityMigrationPlan=plan;
+      const holder=$('[data-migration-preview-detail]');
+      if(holder)holder.innerHTML='<div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-sm font-bold">'+Number(plan.assignmentCount)+' ready for review · '+Number(plan.remainingAfterBatch)+' in subsequent batches</p><p class="mt-2 text-xs text-[var(--koa-ink)]/60">Safe links only: '+Number(plan.audit.customers)+' customer identities assessed · '+Number(plan.conflicts.length)+' unresolved identity review groups · '+Number(plan.skipped.unverified)+' unverified records excluded.</p><p class="mt-2 break-all text-[.7rem] text-[var(--koa-ink)]/55">Plan '+esc(plan.planId)+'</p></div>'+(plan.customers||[]).map(customer=>'<div class="rounded-lg border border-[var(--koa-line)] p-3 text-xs">'+esc(customer.name)+' · '+customer.recordIds.length+' records to link</div>').join('')+(plan.assignmentCount?'<button type="button" data-migrate-action="propose" data-migrate-id="'+esc(plan.planId)+'" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-bold text-white">Propose this batch for independent approval</button>':'');
+      renderMigrationHistory(body.recentMigrations||[]);
+      if(status)status.textContent='Preview is read-only. Applying a migration requires a second administrator’s approval.';
+    }catch(error){if(status)status.textContent=error?.message||'Could not load migration audit.';}
+  }
+  async function submitMigration(action,planId){
+    const status=$('[data-migration-status]');
+    const prompts={propose:'Propose this identity-linking batch? No CRM records will change until approved.',approve:'Approve the exact proposed customer-identity batch? The proposer cannot approve their own plan.',apply:'Apply approved customer-ID links only? Existing projects, bookings and financials will be preserved.',rollback:'Rollback customer-ID assignments? This will be blocked if any record changed since the migration.',reconcile:'Repair pending CRM record projections without altering customer identities?'};
+    if(!confirm(prompts[action]||'Confirm migration operation?'))return;
+    if(status)status.textContent='Verifying migration and storage revisions…';
+    try{
+      const response=await fetch('/api/admin/crm-customer-migration',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,planId,confirmation:action.toUpperCase()}),signal:AbortSignal.timeout(30000)});
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(body.error||'Migration operation could not be confirmed.');
+      await refreshMigration();
+      if(status)status.textContent='Migration '+esc(body.approval?.status||action)+'; '+(body.syncPending?'record synchronization requires reconciliation.':'all returned storage writes were confirmed.')+(body.historySyncPending?' History index requires reconciliation.':'');
+    }catch(error){if(status)status.textContent=error?.message||'Migration outcome unconfirmed. Refresh history before retrying.';}
+  }
+  document.addEventListener('click',event=>{
+    if(!(event.target instanceof Element))return;
+    if(event.target.closest('[data-migration-preview]'))refreshMigration();
+    const button=event.target.closest('[data-migrate-action]');
+    if(button)submitMigration(button.dataset.migrateAction,button.dataset.migrateId);
+  });
   function duplicateRecordLabel(row){
     const parts=[row.id,row.origin?.source,row.proposalStatus?(row.proposalStatus+' · '+money(row.proposalTotal)):'',row.quickBooksCustomerId?('QBO customer #'+row.quickBooksCustomerId):'',row.quickBooksEstimateId?('estimate '+row.quickBooksEstimateId):'',row.signWellDocumentId?('SignWell '+row.signWellDocumentId):''].filter(Boolean);
     return parts.join(' · ');
