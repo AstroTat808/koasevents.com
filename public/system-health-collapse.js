@@ -173,4 +173,10 @@
   } else {
     syncAll({ initial: true });
   }
+
+  // Load the provider-level controller only on the existing reliability panel.
+  // The original section disclosure behavior and listeners remain unchanged.
+  if (page.querySelector('[data-credential-reliability-grid]')) {
+    void import('/credential-reliability-cards.js');
+  }
 })();

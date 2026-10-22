@@ -667,7 +667,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
                 <span data-credential-threshold-message class="text-xs text-[var(--koa-ink)]/45"></span>
               </div>
             </div>
-            <div data-credential-reliability-grid class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-7"></div>
+            <div data-credential-reliability-grid class="mt-6 grid grid-cols-1 items-stretch gap-5 md:grid-cols-2 2xl:grid-cols-3"></div>
           </div>
           <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
             <div>
@@ -2032,7 +2032,8 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
       const left=document.createElement('div');
       const title=document.createElement('h3');title.className='font-semibold text-[var(--koa-forest)]';title.textContent=row.name;
       const meta=document.createElement('p');meta.className='mt-1 break-all text-xs text-[var(--koa-ink)]/48';meta.textContent=row.kind+' · '+row.path;
-      left.append(title,meta);
+      left.className='min-w-0 flex-1';
+        left.append(title,meta);
       if(row.issueType){
         const type=document.createElement('span');
         type.className='mt-2 inline-flex rounded-full bg-white/75 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';
@@ -3922,17 +3923,17 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
       providers.forEach((provider)=>{
         const severity=String(provider?.severity||'insufficient');
         const card=document.createElement('article');
-        card.className='rounded-xl border p-4 '+(
+        card.className='min-w-0 rounded-2xl border p-5 shadow-sm '+(
           severity==='red'?'border-red-200 bg-red-50':
           severity==='yellow'?'border-amber-200 bg-amber-50':
           severity==='green'?'border-emerald-200 bg-emerald-50':
           'border-[var(--koa-line)] bg-white'
         );
         const top=document.createElement('div');
-        top.className='flex items-start justify-between gap-3';
+        top.className='flex min-w-0 flex-wrap items-start justify-between gap-3';
         const left=document.createElement('div');
         const title=document.createElement('h4');
-        title.className='text-sm font-semibold text-[var(--koa-forest)]';
+        title.className='text-base font-semibold leading-6 text-[var(--koa-forest)]';
         title.textContent=String(provider.label||provider.id||'Provider');
         const meta=document.createElement('p');
         meta.className='mt-1 text-[.62rem] text-[var(--koa-ink)]/45';
@@ -3950,19 +3951,19 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
         top.append(left,badge);
 
         const grid=document.createElement('div');
-        grid.className='mt-3 grid grid-cols-3 gap-2';
+        grid.className='mt-5 grid grid-cols-3 gap-2 sm:gap-3';
         periodKeys.forEach((key)=>{
           const period=provider?.periods?.[key]||{};
           const box=document.createElement('div');
-          box.className='rounded-lg bg-white/80 p-2 text-center';
+          box.className='min-w-0 rounded-xl bg-white/80 px-2 py-3 text-center sm:px-3';
           const label=document.createElement('p');
-          label.className='text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
+          label.className='text-[.65rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
           label.textContent=key;
           const value=document.createElement('strong');
-          value.className='mt-1 block text-lg text-[var(--koa-forest)]';
+          value.className='mt-2 block whitespace-nowrap text-xl font-bold tabular-nums tracking-tight text-[var(--koa-forest)] sm:text-2xl';
           value.textContent=period.percentage==null?'—':Number(period.percentage).toFixed(1)+'%';
           const coverage=document.createElement('p');
-          coverage.className='mt-1 text-[.54rem] leading-4 text-[var(--koa-ink)]/42';
+          coverage.className='mt-2 text-[.68rem] leading-4 text-[var(--koa-ink)]/60';
           coverage.textContent=Number(period.samples||0)+' / '+Number(period.expectedSamples||0)+' hourly';
           box.append(label,value,coverage);
           grid.appendChild(box);
@@ -3970,10 +3971,10 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
 
         const thresholds=provider?.thresholds||{yellowBelow:99,redBelow:95};
         const controls=document.createElement('div');
-        controls.className='mt-3 grid grid-cols-2 gap-2';
+        controls.className='mt-5 grid grid-cols-2 gap-3 border-t border-[var(--koa-line)] pt-4';
         const yellowLabel=document.createElement('label');
-        yellowLabel.className='text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
-        yellowLabel.textContent='Yellow below %';
+        yellowLabel.className='min-w-0 text-[.65rem] font-black uppercase tracking-[.04em] text-[var(--koa-clay)]';
+        yellowLabel.textContent='Warning below %';
         const yellowInput=document.createElement('input');
         yellowInput.type='number';
         yellowInput.min='0';yellowInput.max='100';yellowInput.step='0.1';
@@ -3982,8 +3983,8 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
         yellowInput.className='mt-1 w-full rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm font-semibold text-[var(--koa-forest)]';
         yellowLabel.appendChild(yellowInput);
         const redLabel=document.createElement('label');
-        redLabel.className='text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
-        redLabel.textContent='Red below %';
+        redLabel.className='min-w-0 text-[.65rem] font-black uppercase tracking-[.04em] text-[var(--koa-clay)]';
+        redLabel.textContent='Critical below %';
         const redInput=document.createElement('input');
         redInput.type='number';
         redInput.min='0';redInput.max='100';redInput.step='0.1';
@@ -3994,7 +3995,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
         controls.append(yellowLabel,redLabel);
 
         const thresholdMeta=document.createElement('p');
-        thresholdMeta.className='mt-2 text-[.58rem] leading-4 text-[var(--koa-ink)]/45';
+        thresholdMeta.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
         const firstVerifiedAt=String(provider?.firstVerifiedAt||'');
         thresholdMeta.textContent=(provider.thresholdActive
           ? '7-day threshold active · '+Number(provider?.periods?.['7d']?.samples||0)+' samples'
@@ -4010,11 +4011,11 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
         const healthyProgress=Math.max(0,Math.min(100,healthyThreshold?currentPercentage/healthyThreshold*100:100));
 
         const progressWrap=document.createElement('div');
-        progressWrap.className='mt-3 grid gap-2';
+        progressWrap.className='mt-4 grid gap-3';
         const makeProgress=(labelText,valueText,width,tone)=>{
           const wrap=document.createElement('div');
           const header=document.createElement('div');
-          header.className='mb-1 flex items-center justify-between gap-2 text-[.54rem] font-bold text-[var(--koa-ink)]/55';
+          header.className='mb-1 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-[var(--koa-ink)]/65';
           const label=document.createElement('span');label.textContent=labelText;
           const value=document.createElement('span');value.textContent=valueText;
           header.append(label,value);
@@ -4031,7 +4032,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
 
         const recovery=provider?.recovery||{};
         const recoveryNote=document.createElement('p');
-        recoveryNote.className='mt-2 rounded-lg bg-white/80 p-2.5 text-[.6rem] font-semibold leading-4 '+(
+        recoveryNote.className='mt-4 rounded-xl bg-white/80 p-3 text-xs font-semibold leading-5 '+(
           severity==='red'?'text-red-800':
           severity==='yellow'?'text-amber-900':'text-[var(--koa-forest)]'
         );
@@ -4055,6 +4056,9 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
           recoveryNote.textContent='Recovery estimate · waiting for the first successful credential verification.';
         }
 
+        if(severity==='green'){
+          recoveryNote.textContent='Reliability is above the configured healthy threshold.';
+        }
         card.append(top,grid,controls,thresholdMeta,progressWrap,recoveryNote);
         credentialReliabilityGrid.appendChild(card);
       });
