@@ -144,8 +144,8 @@
   });
   $('[data-crm-record-customer-search]').addEventListener('input', customers);
   field('existingCustomer').addEventListener('change', () => {
-    const record = state.projects.find(row => row.id === field('existingCustomer').value);
-    if (record) contactFields.forEach(name => { field(name).value = record.customer?.[name] || ''; });
+    const customer = state.customers.find(row => row.id === field('existingCustomer').value);
+    if (customer) contactFields.forEach(name => { field(name).value = customer[name] || ''; });
     state.dirty = true;
   });
   form.addEventListener('input', () => { if (!state.locked) { state.pending = null; state.dirty = true; } });
