@@ -9,7 +9,7 @@
   const field = name => form.elements.namedItem(name);
   const notice = tools.querySelector('[data-crm-record-notice]');
   const save = $('[data-crm-record-save]');
-  const state = { projects: [], canManage: false, selectedId: '', action: '', recordId: '', revision: '', dirty: false, busy: false, loading: false, locked: false, pending: null, committed: false, opener: null };
+  const state = { projects: [], customers: [], canManage: false, selectedId: '', action: '', recordId: '', revision: '', dirty: false, busy: false, loading: false, locked: false, pending: null, committed: false, opener: null };
   const contactFields = ['name', 'email', 'phone'];
   const projectFields = ['projectName', 'eventDate', 'eventType', 'guestCount'];
   const labels = { 'create-customer': 'New customer', 'create-project': 'New project', 'update-customer': 'Edit customer', 'update-project': 'Edit project' };
