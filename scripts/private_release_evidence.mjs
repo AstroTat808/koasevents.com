@@ -2,11 +2,45 @@
 // Validate private signed evidence without returning customer fields or response text.
 import assert from 'node:assert/strict';
 import { sanitizeFailedHealthChecks } from './safe_health_diagnostic_codes.mjs';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-function requireValue(ok, message) { if (!ok) throw new Error(message); }
+// Only locally-created validation errors can select an exported diagnostic code.
+// No response field, parser error, pathname, exception message or stack is printed.
+const PRIVATE_FAILURE_CODES = new Map([
+  ['Signed health verification or audit persistence failed.', 'KOA_EVIDENCE_PRIVATE_HEALTH'],
+  ['Four live synthetic protocol probes must pass with matching markers.', 'KOA_EVIDENCE_PROTOCOL_PROBES'],
+  ['The private accounting invariant must pass.', 'KOA_EVIDENCE_PRIVATE_INVARIANT'],
+  ['Private accounting totals must be finite and reconcile.', 'KOA_EVIDENCE_PRIVATE_INVARIANT'],
+  ['Private accounting tax invariants failed.', 'KOA_EVIDENCE_PRIVATE_INVARIANT'],
+  ['The full private accounting cohort must be verified without failed or unverified rows.', 'KOA_EVIDENCE_PRIVATE_INVARIANT'],
+  ['Browser evidence is missing or malformed.', 'KOA_EVIDENCE_BROWSER_SHAPE'],
+  ['Route evidence is missing or malformed.', 'KOA_EVIDENCE_ROUTE_SHAPE'],
+  ['Browser route counts do not reconcile with the retained totals.', 'KOA_EVIDENCE_BROWSER_TOTALS'],
+  ['Signed dashboard evidence must match the exact release SHA and deploy.', 'KOA_EVIDENCE_RELEASE_IDENTITY'],
+  ['Dashboard health totals or timestamp are invalid.', 'KOA_EVIDENCE_HEALTH_SUMMARY'],
+  ['Signed envelope and dashboard health summaries disagree.', 'KOA_EVIDENCE_ENVELOPE_SUMMARY'],
+  ['Retained theme evidence and four thumbnails must match this release.', 'KOA_EVIDENCE_THEME_RECORD'],
+  ['Thumbnail evidence is malformed.', 'KOA_EVIDENCE_THUMBNAIL_SHAPE'],
+  ['Enrichment warning evidence is missing.', 'KOA_EVIDENCE_WARNING_SHAPE'],
+  ['A sanitized health failure count exceeds the authoritative snapshot.', 'KOA_EVIDENCE_DIAGNOSTIC_COUNTS'],
+  ['Private evidence input must be a temporary file.', 'KOA_EVIDENCE_INPUT_PATH'],
+  ['A sanitized JSON output path is required.', 'KOA_EVIDENCE_OUTPUT_PATH'],
+]);
+const ownedValidationErrors = new WeakMap();
+function requireValue(ok, message) {
+  if (ok) return;
+  const error = new Error(message);
+  ownedValidationErrors.set(error, PRIVATE_FAILURE_CODES.get(message) || 'KOA_EVIDENCE_VALIDATION');
+  throw error;
+}
+function privateFailureCode(error) {
+  // WeakMap lookup does not inspect hostile getters, message, name, code or stack.
+  return ownedValidationErrors.get(error) || 'KOA_EVIDENCE_UNEXPECTED';
+}
 function count(value) { return Number.isSafeInteger(value) && value >= 0; }
 function money(value) { return typeof value === 'number' && Number.isFinite(value); }
 function sha(value) { return typeof value === 'string' && /^[a-f0-9]{40}$/.test(value); }
@@ -202,6 +236,70 @@ function selfTest() {
   }
   assert.throws(() => verifyPrivateHealth({ ...health, probes: [] }));
   console.log('PASS | private release evidence validation, PII stripping, exact-SHA browser coverage, signed nested envelope, and 17 fail-closed fixtures.');
+  // Diagnostic-only regressions: retain rejection and print only the fixed stage code.
+  const diagnosticCases = [
+    [{ ...input, sha: 'c'.repeat(40) }, 'KOA_EVIDENCE_RELEASE_IDENTITY'],
+    [{ ...input, current: { ...input.current, passed: true } }, 'KOA_EVIDENCE_HEALTH_SUMMARY'],
+    [{ ...envelope, current: { ...input.current, failed: 1 } }, 'KOA_EVIDENCE_ENVELOPE_SUMMARY'],
+    [{ ...input, visualQuality: {} }, 'KOA_EVIDENCE_THEME_RECORD'],
+    [{ ...input, visualQuality: { ...input.visualQuality, webkit: {} } }, 'KOA_EVIDENCE_BROWSER_SHAPE'],
+    [{ ...input, visualQuality: { ...input.visualQuality,
+      chromium: { ...browser('chromium'), routeResults: [{ route: '/bad/../route', cases: 4, failureCount: 0, status: 'passed' }] } } },
+      'KOA_EVIDENCE_ROUTE_SHAPE'],
+    [{ ...input, visualQuality: { ...input.visualQuality,
+      chromium: { ...browser('chromium'), cases: 8 } } }, 'KOA_EVIDENCE_BROWSER_TOTALS'],
+    [{ ...input, visualQuality: { ...input.visualQuality,
+      screenshots: shots.map((shot, i) => i ? shot : { ...shot, width: 1 }) } }, 'KOA_EVIDENCE_THUMBNAIL_SHAPE'],
+    [{ ...input, enrichmentWarnings: null }, 'KOA_EVIDENCE_WARNING_SHAPE'],
+  ];
+  for (const [fixture, expectedCode] of diagnosticCases) {
+    let caught;
+    try { sanitizeDashboard(fixture, commit); } catch (error) { caught = error; }
+    assert.ok(caught, 'Invalid synthetic evidence must still be rejected.');
+    assert.equal(privateFailureCode(caught), expectedCode);
+  }
+  for (const hostileError of [
+    new Error('PRIVATE_CUSTOMER'),
+    { code: 'KOA_EVIDENCE_THEME_RECORD', message: 'PRIVATE_CUSTOMER' },
+    { get message() { throw new Error('PRIVATE_CUSTOMER'); } },
+    new Proxy({}, { get() { throw new Error('PRIVATE_CUSTOMER'); } }),
+    'PRIVATE_CUSTOMER', null, undefined,
+  ]) {
+    assert.equal(privateFailureCode(hostileError), 'KOA_EVIDENCE_UNEXPECTED');
+  }
+  // Exercise the real CLI with temporary synthetic files and no network calls.
+  const folder = mkdtempSync(resolve(tmpdir(), 'koa-private-evidence-codes-'));
+  try {
+    const inputPath = resolve(folder, 'synthetic.json');
+    const outputPath = resolve(folder, 'sanitized.json');
+    const program = resolve(process.argv[1]);
+    for (const [fixture, code] of [
+      ...diagnosticCases,
+      ['{"invalid":"PRIVATE_CUSTOMER"', 'KOA_EVIDENCE_UNEXPECTED'],
+    ]) {
+      rmSync(outputPath, { force: true });
+      writeFileSync(inputPath, typeof fixture === 'string' ? fixture : JSON.stringify(fixture));
+      const result = spawnSync(process.execPath, [program, 'sanitize-dashboard', inputPath, outputPath, commit],
+        { encoding: 'utf8', timeout: 10000, maxBuffer: 32768 });
+      assert.equal(result.status, 1, 'Every invalid synthetic CLI input must fail closed.');
+      assert.equal(result.stdout, '', 'Invalid evidence must not produce any success output.');
+      assert.equal(existsSync(outputPath), false, 'Invalid evidence must not create sanitized output.');
+      assert.equal(result.stderr,
+        'Private release evidence validation failed; raw response withheld. [' + code + ']\n');
+    }
+    writeFileSync(inputPath, JSON.stringify(input));
+    const valid = spawnSync(process.execPath, [program, 'sanitize-dashboard', inputPath, outputPath, commit],
+      { encoding: 'utf8', timeout: 10000, maxBuffer: 32768 });
+    assert.equal(valid.status, 0, 'Valid synthetic CLI input must remain accepted.');
+    assert.equal(valid.stderr, '');
+    assert.deepEqual(JSON.parse(readFileSync(outputPath, 'utf8')), safe);
+    for (const sentinel of ['PRIVATE_CUSTOMER', 'private@example.invalid', 'PRIVATE_IMAGE_CONTENT']) {
+      assert.equal((valid.stdout + readFileSync(outputPath, 'utf8')).includes(sentinel), false);
+    }
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+  console.log('PASS | private evidence stage codes: 9 validation cases, 7 hostile exceptions, 10 rejected CLI cases and 1 valid CLI case.');
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
@@ -223,9 +321,9 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
           checkedAt: safe.current.checkedAt, enrichmentWarningCount: safe.enrichmentWarnings.length }));
       } else throw new Error('Unknown private evidence mode.');
     }
-  } catch {
+  } catch (error) {
     // Never serialize the untrusted response or parser exception into public Actions logs.
-    console.error('Private release evidence validation failed; raw response withheld.');
+    console.error('Private release evidence validation failed; raw response withheld. [' + privateFailureCode(error) + ']');
     process.exitCode = 1;
   }
 }

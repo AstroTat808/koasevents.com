@@ -84,6 +84,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Check privacy-safe protected admin QA diagnostics
         run: python scripts/test_sanitized_protected_admin_qa.py
+      - name: Verify narrowly scoped Cloudflare frame-noise classification
+        run: python scripts/test_health_browser_frame_errors.py
       - name: Structural build-safety gate
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
