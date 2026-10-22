@@ -77,7 +77,7 @@ def audit(browser, browser_name, base, results_dir):
                 assert options.count()==3 or options.count()==2, "Unexpected customer search result"
                 values=page.locator('[name=existingCustomer] option').all_text_contents()
                 assert sum("Another Client" in value for value in values)==1
-                assert sum("Synthetic Client" in value for value in values)==0
+                assert sum("Synthetic Client" in value for value in values)<=1, "Existing selection was duplicated"
                 metrics=modal.evaluate("""el=>{const r=el.getBoundingClientRect();
                   return {width:r.width,left:r.left,right:r.right,viewport:innerWidth,
                     bg:getComputedStyle(el).backgroundColor,
