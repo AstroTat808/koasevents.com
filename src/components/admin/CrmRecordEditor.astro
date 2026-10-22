@@ -1,0 +1,63 @@
+<section data-crm-record-tools hidden class="crm-record-tools" aria-label="Customer and project management">
+  <div><h2>Customers &amp; projects</h2><p>Add a customer lead or an event project without submitting a website inquiry.</p></div>
+  <div class="crm-record-actions">
+    <button type="button" data-crm-record-action="create-customer">New customer</button>
+    <button type="button" data-crm-record-action="create-project">New project</button>
+  </div>
+  <p data-crm-record-notice role="status" aria-live="polite"></p>
+</section>
+<dialog data-crm-record-dialog class="crm-record-dialog" aria-labelledby="crm-record-title" aria-describedby="crm-record-description">
+  <form data-crm-record-form>
+    <header><div><p class="crm-record-eyebrow">Business CRM</p><h2 id="crm-record-title">New customer</h2></div><button type="button" data-crm-record-close aria-label="Close editor">Close</button></header>
+    <p id="crm-record-description"></p>
+    <div data-crm-record-error id="crm-record-error" class="crm-record-error" role="alert" tabindex="-1" hidden>
+      <p data-crm-record-error-message></p><div data-crm-record-matches></div>
+      <label data-crm-record-duplicate-label hidden><input type="checkbox" name="confirmDuplicate" /> I reviewed the matching records and intend to create a separate record.</label>
+      <button type="button" data-crm-record-reload hidden>Reload current record</button>
+    </div>
+    <fieldset data-crm-record-fields>
+      <div data-crm-record-reuse hidden>
+        <label>Use an existing customer's details (optional)<input type="search" data-crm-record-customer-search placeholder="Search by name, email, or phone" autocomplete="off" /></label>
+        <label>Existing customer<select name="existingCustomer"><option value="">Enter new customer details</option></select></label>
+        <p class="crm-record-help">Copied contact details belong to this new project. Existing projects are not changed.</p>
+      </div>
+      <div data-crm-record-contact class="crm-record-grid">
+        <label class="crm-record-wide"><span>Customer name <span aria-hidden="true">*</span></span><input name="name" maxlength="180" autocomplete="name" required /></label>
+        <label>Email<input name="email" type="email" maxlength="254" autocomplete="email" /></label>
+        <label>Phone<input name="phone" type="tel" maxlength="60" autocomplete="tel" /></label>
+      </div>
+      <div data-crm-record-project class="crm-record-grid" hidden>
+        <label class="crm-record-wide"><span>Project name</span><input name="projectName" maxlength="180" placeholder="Wedding reception, birthday, corporate event..." /></label>
+        <label>Event date<input name="eventDate" type="date" /></label>
+        <label>Event type<input name="eventType" maxlength="120" placeholder="Wedding, birthday, corporate..." /></label>
+        <label>Expected guests<input name="guestCount" type="number" min="1" max="100000" step="1" inputmode="numeric" /></label>
+        <p data-crm-record-date-lock class="crm-record-help crm-record-wide" hidden>The event date is tied to a proposal or booking and cannot be changed here. Signed agreements and payment schedules are not rewritten by this editor.</p>
+      </div>
+      <label data-crm-record-brand>Business line<select name="businessLine"><option value="events">Koa's Events</option><option value="mobile-bar">Koa's Mobile Bar</option><option value="wild-ones">Wild Ones</option></select></label>
+    </fieldset>
+    <p class="crm-record-help">Saving does not send email, issue a proposal or invoice, or reserve a date. Use the existing project workspace for notes, ownership, tags, pricing, and booking actions.</p>
+    <footer><button type="button" data-crm-record-cancel>Cancel</button><button type="submit" data-crm-record-save>Save customer</button></footer>
+  </form>
+</dialog>
+<script is:inline src="/scripts/crm-record-editor.js"></script>
+<style>
+  .crm-record-tools{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;border:1px solid var(--koa-line);border-radius:1.25rem;background:var(--koa-sand);color:var(--koa-ink)}
+  .crm-record-tools[hidden],.crm-record-dialog [hidden]{display:none!important}
+  .crm-record-tools h2{margin:0;font-size:1.25rem;font-weight:750}.crm-record-tools p{margin:.3rem 0 0;font-size:.875rem;line-height:1.6}
+  .crm-record-actions{display:flex;flex-wrap:wrap;gap:.75rem}.crm-record-tools [role=status]{flex-basis:100%;margin:0;overflow-wrap:anywhere}.crm-record-tools [role=status]:empty{display:none}
+  .crm-record-tools button,.crm-record-dialog button{min-height:44px;padding:.7rem 1rem;border:1px solid var(--koa-line);border-radius:999px;font-weight:700;cursor:pointer}
+  .crm-record-tools button,.crm-record-dialog [type=submit]{background:var(--koa-forest);color:#fff}
+  .crm-record-dialog{margin:auto;width:min(720px,calc(100% - 1.5rem));max-height:calc(100dvh - 1.5rem);padding:0;border:1px solid var(--koa-line);border-radius:1.25rem;background:var(--koa-sand);color:var(--koa-ink);box-shadow:0 24px 80px #0004;overflow:auto}
+  .crm-record-dialog::backdrop{background:#0009}.crm-record-dialog form{padding:1.5rem;display:grid;gap:1.25rem}.crm-record-dialog header{display:flex;align-items:start;justify-content:space-between;gap:1rem}.crm-record-dialog header h2{font-size:1.65rem;font-weight:750;margin:.25rem 0 0}.crm-record-eyebrow{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;margin:0}
+  .crm-record-dialog p{line-height:1.65;margin:0}.crm-record-dialog fieldset{min-width:0;border:0;padding:0;display:grid;gap:1rem}.crm-record-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.crm-record-wide{grid-column:1/-1}
+  .crm-record-dialog label{display:grid;gap:.4rem;min-width:0;font-size:.875rem;font-weight:650}.crm-record-dialog input,.crm-record-dialog select{width:100%;min-width:0;min-height:46px;padding:.65rem .75rem;border:1px solid var(--koa-line);border-radius:.65rem;background:var(--koa-sand);color:inherit;font-size:1rem;font-weight:400;box-sizing:border-box}.crm-record-dialog input[type=checkbox]{width:20px;min-height:20px;margin:.25rem 0;flex-shrink:0}
+  .crm-record-dialog [data-crm-record-reuse]{display:grid;gap:.75rem;padding:1rem;border:1px solid var(--koa-line);border-radius:.8rem}.crm-record-help{font-size:.8rem;font-weight:400;opacity:.85}
+  .crm-record-dialog footer{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.75rem;padding-top:1rem;border-top:1px solid var(--koa-line)}.crm-record-dialog button:disabled,.crm-record-dialog fieldset:disabled{opacity:.65;cursor:wait}
+  .crm-record-error{padding:1rem;border:1px solid #ad432c;border-radius:.75rem;background:#fff4ee;color:#6b2417;display:grid;gap:.75rem;overflow-wrap:anywhere}.crm-record-error label{display:flex;align-items:flex-start;gap:.65rem;font-weight:500}.crm-record-error a{display:block;text-decoration:underline;padding:.35rem 0}.crm-record-dialog [aria-invalid=true]{border:2px solid #ad432c}
+  .crm-record-dialog :focus-visible,.crm-record-tools :focus-visible{outline:3px solid var(--koa-clay);outline-offset:3px}
+  :global(html[data-theme=dark]) .crm-record-dialog{background:#17241e;color:#f5f0e7;color-scheme:dark}
+  :global(html[data-theme=dark]) .crm-record-dialog input,:global(html[data-theme=dark]) .crm-record-dialog select{background:#24362d;border-color:#627267}
+  :global(html[data-theme=dark]) .crm-record-error{background:#36251e;color:#ffdfc8;border-color:#d79a78}
+  :global(html[data-theme=dark]) .crm-record-tools button,:global(html[data-theme=dark]) .crm-record-dialog [type=submit]{background:#e5cc98;color:#16291f}
+  @media(max-width:540px){.crm-record-dialog form{padding:1rem}.crm-record-grid{grid-template-columns:1fr}.crm-record-dialog footer button{flex:1}.crm-record-actions{width:100%}.crm-record-actions button{flex:1}.crm-record-tools{padding:1rem}}
+</style>

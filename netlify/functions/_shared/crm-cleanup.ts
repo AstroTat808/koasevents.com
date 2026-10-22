@@ -75,7 +75,9 @@ export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
   const email=clean(record?.customer?.email,240).toLowerCase();
   const eventDate=clean(record?.customer?.eventDate,40).slice(0,10);
   const createdAt=new Date(record?.createdAt||'').getTime();
-  const protectedRecord=kind==='proposal'||stage==='proposal'||stage==='booked'||Boolean(record?.booking)||Boolean(record?.proposal)||Boolean(record?.accounting?.quickbooks?.invoices?.length);
+  // Staff-entered records may be reviewed, but automatic cleanup must not discard them.
+  const staffEntered=record?.source==='crm-manual-entry' && Boolean(record?.createdBy) && Array.isArray(record?.crmManualHistory) && record.crmManualHistory.some((entry:any)=>entry?.actor===record.createdBy && ['create-customer','create-project'].includes(entry?.action));
+  const protectedRecord=staffEntered||kind==='proposal'||stage==='proposal'||stage==='booked'||Boolean(record?.booking)||Boolean(record?.proposal)||Boolean(record?.accounting?.quickbooks?.invoices?.length);
 
   syntheticNameSignals(name).forEach(s=>add(signals,s.code,s.reason,s.score));
 
