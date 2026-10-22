@@ -105,6 +105,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
   const projectMeta:any = meta || fallbackMeta;
   return {
     id: record.id,
+    projectName: record.projectName || '',
     kind: record.kind || 'inquiry',
     stage: record.stage || record.kind || 'inquiry',
     status: record.status || '',
