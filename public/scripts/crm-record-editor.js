@@ -64,12 +64,13 @@
     const selected = select.value;
     const query = $('[data-crm-record-customer-search]').value.trim().toLowerCase();
     select.replaceChildren(new Option('Enter new customer details', ''));
-    for (const record of state.projects) {
-      const searchable = [record.customer?.name, record.customer?.email, record.customer?.phone, record.id].join(' ').toLowerCase();
-      if (query && !searchable.includes(query) && record.id !== selected) continue;
-      select.add(new Option([record.customer?.name || 'Unnamed customer', record.customer?.email || record.customer?.phone || record.id, record.customer?.eventDate || 'No event date'].join(' - '), record.id));
+    for (const customer of state.customers) {
+      const searchable = [customer.name, customer.email, customer.phone, customer.id].join(' ').toLowerCase();
+      if (query && !searchable.includes(query) && customer.id !== selected) continue;
+      const suffix = customer.projectCount + ' project' + (customer.projectCount === 1 ? '' : 's');
+      select.add(new Option([customer.name || 'Unnamed customer', customer.email || customer.phone || 'Contact details not provided', suffix].join(' - '), customer.id));
     }
-    select.value = selected;
+    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
   }
   async function request(url, options = {}) {
     const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000), ...options });
