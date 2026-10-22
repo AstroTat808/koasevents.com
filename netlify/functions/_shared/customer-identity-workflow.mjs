@@ -174,23 +174,33 @@ export async function migrationAction({ action, planId, tenantId, actorId, sales
     return { approval: publicLedger(completed), syncPending: Boolean(warnings.length), historySyncPending: !historySaved };
   }
   if (action === 'rollback') {
-    if (entry.status !== 'applied') throw new IdentityMigrationError('not_applied', 'Only applied migrations can be rolled back.');
-    if (entry.syncPending) throw new IdentityMigrationError('sync_pending',
+    if (!['applied', 'rolled_back'].includes(entry.status)) throw new IdentityMigrationError('not_applied', 'Only applied migrations can be rolled back.');
+    const isAlreadyRolledBack = revision(records) === entry.sourceRevision;
+    if (!isAlreadyRolledBack && entry.syncPending) throw new IdentityMigrationError('sync_pending',
       'Reconcile all record projections before attempting a rollback.');
-    if (revision(records) !== entry.appliedRevision) throw new IdentityMigrationError('rollback_conflict',
+    if (!isAlreadyRolledBack && revision(records) !== entry.appliedRevision) throw new IdentityMigrationError('rollback_conflict',
       'CRM records have changed since this migration. Automatic rollback is blocked to preserve later changes.');
-    await assertRecordCopiesSafe(sales, records, entry.assignments, 'rollback');
-    const reverted = rollbackIdentityRows(records, entry.assignments);
+    if (!isAlreadyRolledBack) {
+      await assertRecordCopiesSafe(sales, records, entry.assignments, 'rollback');
+    }
+    const reverted = isAlreadyRolledBack ? records : rollbackIdentityRows(records, entry.assignments);
     if (revision(reverted) !== entry.sourceRevision) throw new IdentityMigrationError('rollback_conflict',
       'The original CRM revision cannot be reconstructed.');
-    const written = await sales.writeJSON('records/index', reverted, index.etag);
-    if (!written.modified) throw new IdentityMigrationError('index_changed', 'CRM records changed during rollback.');
-    const rolledBack = await replaceLedger(crm, entry, current.etag, {
-      ...entry, status: 'rolled_back', rolledBackAt: now, syncPending: true, syncWarnings: ['rollback_projection_in_progress'],
-    });
-    const warnings = await syncCopies(sales, records, reverted, entry.assignments);
+    if (!isAlreadyRolledBack) {
+      const written = await sales.writeJSON('records/index', reverted, index.etag);
+      if (!written.modified) throw new IdentityMigrationError('index_changed', 'CRM records changed during rollback.');
+    }
+    if (!isAlreadyRolledBack || entry.status !== 'rolled_back') {
+      await replaceLedger(crm, entry, current.etag, {
+        ...entry, status: 'rolled_back', rolledBackAt: entry.rolledBackAt || now,
+        syncPending: true, syncWarnings: ['rollback_projection_in_progress'],
+      });
+    }
+    const before = isAlreadyRolledBack ? migrateIdentityRows(records, entry.assignments) : records;
+    const warnings = await syncCopies(sales, before, reverted, entry.assignments);
     const latest = await crm.readJSON(ledgerKey(planId));
-    const completed = await replaceLedger(crm, latest.data, latest.etag, { ...latest.data, syncPending: Boolean(warnings.length), syncWarnings: warnings });
+    const completed = await replaceLedger(crm, latest.data, latest.etag,
+      { ...latest.data, syncPending: Boolean(warnings.length), syncWarnings: warnings });
     const historySaved = await history(crm, completed);
     return { approval: publicLedger(completed), syncPending: Boolean(warnings.length), historySyncPending: !historySaved };
   }
