@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate private signed evidence without returning customer fields or response text.
 import assert from 'node:assert/strict';
-import { sanitizeFailedHealthChecks } from './safe_health_diagnostic_codes.mjs';
+import { sanitizeFailedHealthChecks, sanitizeFailedHealthIds } from './safe_health_diagnostic_codes.mjs';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -130,7 +130,13 @@ export function sanitizeDashboard(data, expectedSha) {
   requireValue(Array.isArray(dashboard.enrichmentWarnings), 'Enrichment warning evidence is missing.');
   // Preserve component identifiers only. Never expose check names, paths,
   // details, upstream payloads, client records or credential metadata in CI.
-  const failedDiagnostics=sanitizeFailedHealthChecks(current.checks,current.failed);
+  const failedDiagnosticsFromChecks=sanitizeFailedHealthChecks(current.checks,current.failed);
+  // Some signed snapshots retain the authoritative failedIds inventory even
+  // when a detailed failed check row is unavailable to the sanitizer. Use it
+  // only as an exact-count fallback and only through the same static allowlist.
+  const failedDiagnostics=failedDiagnosticsFromChecks.length===current.failed
+    ?failedDiagnosticsFromChecks
+    :sanitizeFailedHealthIds(current.failedIds,current.failed);
   const failedCheckIds=failedDiagnostics.map(row=>row.id);
   // Only these internally generated stable recovery codes may escape the
   // private signed production snapshot; provider messages remain withheld.
@@ -208,6 +214,18 @@ function selfTest() {
 
   assert(!JSON.stringify(failedSafe).includes('PRIVATE_CUSTOMER'));
   assert(!JSON.stringify(failedSafe).includes('customer@example.invalid'));
+  const fallbackFixture={...input,current:{...input.current,overall:'unhealthy',passed:81,failed:1,
+    failedIds:['turnstile-siteverify'],checks:[{id:'private-customer-check',ok:false,detail:'PRIVATE_CUSTOMER'}]}};
+  const fallbackSafe=sanitizeDashboard(fallbackFixture,commit);
+  assert.deepEqual(fallbackSafe.current.failedCheckIds,['turnstile-siteverify']);
+  assert.deepEqual(fallbackSafe.current.failedDiagnostics,[{id:'turnstile-siteverify',category:'security',errorCode:'HEALTH_SECURITY_FAILED'}]);
+  const rejectedFallback=sanitizeDashboard({...fallbackFixture,current:{...fallbackFixture.current,
+    failedIds:['private-customer-check']}},commit);
+  assert.deepEqual(rejectedFallback.current.failedCheckIds,[]);
+  assert(!JSON.stringify(rejectedFallback).includes('private-customer-check'));
+  const mismatchFallback=sanitizeDashboard({...fallbackFixture,current:{...fallbackFixture.current,
+    failedIds:['turnstile-siteverify','credential-netlify']}},commit);
+  assert.deepEqual(mismatchFallback.current.failedCheckIds,[]);
   // Match the actual OIDC run-dashboard-refresh response, whose detailed
   // browser evidence is nested under dashboard rather than at the top level.
   const envelope = { ok: true, sha: commit, deployId, source: 'github-actions-oidc',

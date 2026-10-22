@@ -28,3 +28,18 @@ export function sanitizeFailedHealthChecks(checks,authoritativeFailed){
   // A count mismatch is not evidence of success: caller retains authoritative failed count.
   return result.slice(0,Math.max(0,Number.isSafeInteger(authoritativeFailed)?authoritativeFailed:0));
 }
+
+
+export function sanitizeFailedHealthIds(failedIds,authoritativeFailed){
+  if(!Number.isSafeInteger(authoritativeFailed)||authoritativeFailed<=0||!Array.isArray(failedIds)
+    ||failedIds.length!==authoritativeFailed)return [];
+  const result=[],seen=new Set();
+  for(const raw of failedIds){
+    const id=typeof raw==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(raw)?raw:null;
+    if(!id||!KNOWN_CHECK_IDS.has(id)||seen.has(id))return [];
+    seen.add(id);
+    const match=RULES.find(([re])=>re.test(id));
+    result.push({id,category:match?.[1]||'other',errorCode:match?.[2]||'HEALTH_CHECK_FAILED'});
+  }
+  return result;
+}
