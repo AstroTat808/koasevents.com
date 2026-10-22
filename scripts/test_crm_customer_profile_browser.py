@@ -73,7 +73,7 @@ def main():
                                 assert page.locator("[data-stat-bookings]").text_content()=="1"
                                 assert page.locator("[data-stat-invoices]").text_content()=="1"
                                 assert page.locator("[data-stat-payments]").text_content()=="1"
-                                assert page.get_by_text("QuickBooks payments").count()==2
+                                assert page.locator("[data-projects] h4").filter(has_text="QuickBooks payments").count()==2
                                 assert page.get_by_text("$2,500.00 balance").count()==1
                                 assert page.get_by_role("link",name="Open project workspace").count()==2
                                 assert page.locator("[data-projects] article").first.is_visible()
