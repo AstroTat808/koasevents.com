@@ -21,6 +21,6 @@ This is not a global database transaction upgrade. Existing unrelated endpoints 
 
 ## Verification and release
 
-Run `node --test scripts/test_crm_record_editor.mjs` after `npm ci`. The suite exercises pure validation, preservation of financial data, duplication, concurrent manual writes, stale revisions, idempotent retries, partial projection recovery, and the HTTP wrapper with isolated authentication/storage adapters. It does not use real customer records or production credentials.
+This repository does not contain a dependency lockfile. Install using `npm install --no-package-lock --no-audit --no-fund`, then run `node --test scripts/test_crm_record_editor.mjs`. The suite exercises pure validation, preservation of financial data, duplication, concurrent manual writes, stale revisions, idempotent retries, partial projection recovery, and the HTTP wrapper with isolated authentication/storage adapters. It does not use real customer records or production credentials.
 
 Local browser testing covered the isolated component and real client script in Chromium at 1440x900, 390x844 and 360x780, Light and Dark, with mocked HTTP. This is not production authentication or real Safari certification. Before merging, require the exact-head Astro build, existing release gates, preview deployment match, and authenticated preview end-to-end checks. No production records should be created merely to test the UI.
