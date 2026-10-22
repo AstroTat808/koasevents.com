@@ -1,6 +1,7 @@
 import { emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
+import { ADMIN_BINDING_COOKIE, ADMIN_BINDING_MAX_AGE_MS, STANDARD_BINDING_MAX_AGE_MS, adminBindingCookie, newAdminBinding, sessionBindingStatus, validAdminBinding } from './session-binding';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
 import { tenantEnv } from './tenant-env';
@@ -18,6 +19,7 @@ export type AuthEventType =
   | 'login_failed'
   | 'suspicious_login'
   | 'session_revoked'
+  | 'session_refreshed'
   | 'sessions_revoked'
   | 'device_trusted'
   | 'device_untrusted'
@@ -55,6 +57,8 @@ export type ManagedSession = {
   device:string;
   revokedAt:string;
   revokedBy:string;
+  boundUntil?:string;
+  deviceFingerprint?:string;
 };
 
 export type TrustedDevice = {
@@ -140,10 +144,43 @@ function legacyFailureSignal(reasons:string[]){
 }
 
 export async function requestSessionId(req:Request){
-  const stable=cookie(req,'koa_sid');
-  return stable||hash(cookie(req,'nf_jwt'));
+  const secret=cookie(req,ADMIN_BINDING_COOKIE);
+  return validAdminBinding(secret)?hash('managed-session:'+secret):'';
 }
-export const requestDeviceFingerprint=requestSessionId;
+// The device-recognition cookie is never accepted as a managed session credential.
+export async function requestDeviceFingerprint(req:Request){
+  const device=cookie(req,'koa_sid');
+  return device||hash(cookie(req,'nf_jwt'));
+}
+function sessionRevokedKey(userId:string,sessionId:string){
+  return 'session-revocations/'+clean(userId,160)+'/'+clean(sessionId,64);
+}
+function allSessionsRevokedKey(userId:string){
+  return 'session-revocations-all/'+clean(userId,160);
+}
+export async function createBoundManagedSession(req:Request,user:any,remember=false){
+  if(!user?.id)throw new Error('Verified Identity user required.');
+  const credential=newAdminBinding();
+  const id=await hash('managed-session:'+credential);
+  const now=new Date().toISOString();
+  const trustCookie=cookie(req,'koa_sid');
+  const deviceFingerprint=trustCookie||crypto.randomUUID();
+  const row:ManagedSession={
+    id,userId:clean(user.id,160),email:clean(user.email,240).toLowerCase(),
+    createdAt:now,lastSeenAt:now,expiresAt:jwtExpiry(cookie(req,'nf_jwt')),
+    boundUntil:new Date(Date.now()+(remember?ADMIN_BINDING_MAX_AGE_MS:STANDARD_BINDING_MAX_AGE_MS)).toISOString(),
+    ipFingerprint:await ipFingerprint(req),userAgent:requestUserAgent(req),
+    device:deviceLabel(requestUserAgent(req)),deviceFingerprint,revokedAt:'',revokedBy:'',
+  };
+  const s=store();const key='sessions/'+row.userId;
+  const current=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
+  await s.setJSON(key,[row,...current.filter(x=>x.id!==id)].slice(0,30));
+  // Reverse lookup is only used to revoke this presented binding during logout,
+  // including when the short-lived provider JWT has already expired.
+  await s.setJSON('session-owners/'+id,{userId:row.userId,until:row.boundUntil});
+  return {session:row,cookie:adminBindingCookie(credential,remember),deviceCookie:
+    !trustCookie?'koa_sid='+encodeURIComponent(deviceFingerprint)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS:''};
+}
 export function requestUserAgent(req:Request){return clean(req.headers.get('user-agent'),800);}
 
 export async function recordLoginFailureSignal(email:string){
@@ -284,52 +321,92 @@ export async function isTrustedDevice(
   return true;
 }
 
+export async function rememberCurrentBoundSession(req:Request,userId:string){
+  const secret=cookie(req,ADMIN_BINDING_COOKIE);
+  if(!validAdminBinding(secret))throw new Error('A signed-in browser session is required.');
+  const status=await managedSessionStatus(req,userId);
+  if(!status.valid||!status.session)throw new Error('A live browser session is required.');
+  const s=store(),key='sessions/'+clean(userId,160);
+  const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
+  const boundUntil=new Date(Date.now()+ADMIN_BINDING_MAX_AGE_MS).toISOString();
+  if(!rows.some(row=>row.id===status.sessionId))
+    throw new Error('Browser session could not be verified.');
+  const updated=rows.map(row=>row.id===status.sessionId?{...row,boundUntil}:row);
+  await s.setJSON(key,updated);
+  // A parallel revocation marker remains authoritative even if this write races.
+  return adminBindingCookie(secret,true);
+}
+
+export async function revokePresentedBoundSession(req:Request,context:Context){
+  const sid=await requestSessionId(req);
+  if(!sid)return false;
+  const owner=await store().get('session-owners/'+sid,{type:'json'}) as {userId?:string;until?:string}|null;
+  if(!owner?.userId)throw new Error('Session ownership could not be verified.');
+  const status=await managedSessionStatus(req,owner.userId);
+  if(!status.session||status.session.id!==sid)
+    throw new Error('Session binding could not be verified.');
+  if(!status.session.revokedAt){
+    await revokeManagedSession(owner.userId,sid,'self',context);
+  }
+  return true;
+}
+
 export async function registerManagedSession(req:Request,user:any){
-  const sessionId=await requestSessionId(req);if(!sessionId||!user?.id)return null;
-  const s=store();const key='sessions/'+clean(user.id,160);
+  const sid=await requestSessionId(req);
+  if(!sid||!user?.id)return null;
+  const status=await managedSessionStatus(req,String(user.id));
+  if(!status.valid)return null; // Never bootstrap a new session from an existing JWT.
+  const s=store(),key='sessions/'+clean(user.id,160);
   const current=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
-  const now=new Date().toISOString();const ua=requestUserAgent(req);const ip=await ipFingerprint(req);const jwt=cookie(req,'nf_jwt');
-  const existing=current.find(row=>row.id===sessionId);
-  if(existing?.revokedAt)return existing;
-  const row:ManagedSession=existing?{...existing,lastSeenAt:now,ipFingerprint:ip||existing.ipFingerprint,userAgent:ua||existing.userAgent,device:deviceLabel(ua||existing.userAgent)}:{
-    id:sessionId,userId:clean(user.id,160),email:clean(user.email,240).toLowerCase(),createdAt:now,lastSeenAt:now,expiresAt:jwtExpiry(jwt),ipFingerprint:ip,userAgent:ua,device:deviceLabel(ua),revokedAt:'',revokedBy:''
-  };
-  const next=[row,...current.filter(x=>x.id!==sessionId)].slice(0,30);
-  await s.setJSON(key,next);
+  const existing=current.find(row=>row.id===sid);
+  if(!existing||existing.revokedAt)return null;
+  const now=new Date().toISOString();
+  const expiry=jwtExpiry(cookie(req,'nf_jwt'));
+  const row:ManagedSession={...existing,lastSeenAt:now,expiresAt:expiry||existing.expiresAt,
+    ipFingerprint:await ipFingerprint(req),userAgent:requestUserAgent(req),
+    device:deviceLabel(requestUserAgent(req))};
+  await s.setJSON(key,[row,...current.filter(x=>x.id!==sid)].slice(0,30));
   return row;
 }
 export async function managedSessionStatus(req:Request,userId:string){
-  const sid=await requestSessionId(req);if(!sid)return{sessionId:'',revoked:false};
-  const rows=((await store().get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
-  const row=rows.find(x=>x.id===sid);
-  return{sessionId:sid,revoked:Boolean(row?.revokedAt),session:row||null};
+  const sid=await requestSessionId(req);
+  if(!sid)return{sessionId:'',revoked:true,valid:false,reason:'session_binding_missing',session:null};
+  const s=store();
+  const [rows,revokedAll,revokedDirect]=await Promise.all([
+    s.get('sessions/'+clean(userId,160),{type:'json'}) as Promise<ManagedSession[]|null>,
+    s.get(allSessionsRevokedKey(userId),{type:'json'}) as Promise<{at?:string}|null>,
+    s.get(sessionRevokedKey(userId,sid),{type:'json'}) as Promise<{at?:string}|null>,
+  ]);
+  const row=(rows||[]).find(x=>x.id===sid)||null;
+  let reason:string=sessionBindingStatus(row,sid,userId);
+  if(revokedDirect?.at)reason='revoked';
+  if(revokedAll?.at&&row&&Date.parse(row.createdAt)<=Date.parse(revokedAll.at))reason='revoked';
+  return{sessionId:sid,revoked:reason!=='active',valid:reason==='active',reason,session:row};
 }
 export async function listManagedSessions(userId:string,currentReq?:Request){
-  const rows=((await store().get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
+  const s=store();
+  const rows=((await s.get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
   const trusted=await readTrustedDevices(userId);
-  const trustedByFingerprint=new Map(trusted.map((row)=>[row.fingerprint,row]));
+  const trustedByFingerprint=new Map(trusted.map(row=>[row.fingerprint,row]));
   const currentId=currentReq?await requestSessionId(currentReq):'';
-  const now=Date.now();
-  return rows.map(row=>{
-    const trustedRow=trustedByFingerprint.get(row.id);
-    return {
-      ...row,
-      current:row.id===currentId,
-      active:!row.revokedAt&&(!row.expiresAt||Date.parse(row.expiresAt)>now),
-      trusted:Boolean(trustedRow),
-      trustedName:trustedRow?.name||'',
-      trustedAt:trustedRow?.trustedAt||'',
-      trustedBy:trustedRow?.trustedBy||'',
-      trustedLastUsedAt:trustedRow?.lastUsedAt||trustedRow?.lastSeenAt||'',
-      trustedExpiresAt:trustedRow?.expiresAt||'',
-    };
-  }).sort((a,b)=>Date.parse(b.lastSeenAt)-Date.parse(a.lastSeenAt));
+  const revokedAll=await s.get(allSessionsRevokedKey(userId),{type:'json'}) as {at?:string}|null;
+  return Promise.all(rows.map(async row=>{
+    const [direct]=await Promise.all([s.get(sessionRevokedKey(userId,row.id),{type:'json'}) as Promise<{at?:string}|null>]);
+    const trustedRow=trustedByFingerprint.get(row.deviceFingerprint||row.id);
+    const revoked=Boolean(row.revokedAt||direct?.at||revokedAll?.at&&Date.parse(row.createdAt)<=Date.parse(revokedAll.at));
+    return{...row,current:row.id===currentId,
+      active:!revoked&&sessionBindingStatus(row,row.id,userId)==='active',
+      revokedAt:row.revokedAt||direct?.at||(revoked?'revoked':''),
+      trusted:Boolean(trustedRow),trustedName:trustedRow?.name||'',trustedAt:trustedRow?.trustedAt||'',
+      trustedBy:trustedRow?.trustedBy||'',trustedLastUsedAt:trustedRow?.lastUsedAt||trustedRow?.lastSeenAt||'',
+      trustedExpiresAt:trustedRow?.expiresAt||''};
+  })).then(result=>result.sort((a,b)=>Date.parse(b.lastSeenAt)-Date.parse(a.lastSeenAt)));
 }
 
 async function knownDeviceSource(userId:string,deviceFingerprint:string){
   const s=store();
   const sessions=((await s.get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
-  const session=sessions.find((row)=>row.id===deviceFingerprint);
+  const session=sessions.find((row)=>row.deviceFingerprint===deviceFingerprint||row.id===deviceFingerprint);
   if(session)return{device:session.device,userAgent:session.userAgent,email:session.email,lastSeenAt:session.lastSeenAt};
   const events=await readAuthEvents(2000);
   const event=events.find((row)=>row.userId===userId&&row.deviceFingerprint===deviceFingerprint);
@@ -438,14 +515,18 @@ export async function revokeManagedSession(userId:string,sessionId:string,actor:
   const now=new Date().toISOString();let found=false;
   const next=rows.map(row=>{if(row.id!==sessionId)return row;found=true;return{...row,revokedAt:now,revokedBy:clean(actor,240)};});
   if(!found)throw new Error('Session not found.');
+  // Dedicated revocation marker is monotonic and cannot be undone by stale session-list writes.
+  await s.setJSON(sessionRevokedKey(userId,sessionId),{at:now});
   await s.setJSON(key,next);
   const row=next.find(x=>x.id===sessionId)!;
-  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,deviceFingerprint:row.id,detail:'Revoked one active Koa’s session.',suspicious:false,reasons:[],riskLevel:'normal',alertSent:false,alertSuppressed:false,trustedDevice:await isTrustedDevice(userId,row.id)});
+  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,deviceFingerprint:row.id,detail:'Revoked one active Koa’s session.',suspicious:false,reasons:[],riskLevel:'normal',alertSent:false,alertSuppressed:false,trustedDevice:await isTrustedDevice(userId,row.deviceFingerprint||row.id)});
   return row;
 }
 export async function revokeAllManagedSessions(userId:string,actor:string,context:Context,email=''){
   const s=store();const key='sessions/'+clean(userId,160);const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];const now=new Date().toISOString();
   const next=rows.map(row=>row.revokedAt?row:{...row,revokedAt:now,revokedBy:clean(actor,240)});
+  // Newly verified password logins have a later createdAt and remain eligible.
+  await s.setJSON(allSessionsRevokedKey(userId),{at:now});
   await s.setJSON(key,next);
   await appendAuthEvent(context,{type:'sessions_revoked',email:clean(email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:'',userAgent:'',device:'',detail:'Revoked all tracked Koa’s sessions.',suspicious:false,reasons:[],riskLevel:'normal',alertSent:false,alertSuppressed:false,trustedDevice:false});
   return next;

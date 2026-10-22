@@ -1,0 +1,123 @@
+name: Identity live session QA
+
+# A protected 'koa-auth-qa' environment MUST require an independent reviewer.
+# Use only a dedicated least-privilege test account with synthetic-only data.
+# Never run user credentials on forked code or upload authenticated artifacts.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  statuses: read
+  actions: read
+
+concurrency:
+  group: koa-identity-live-session-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  exact-deploy-preview:
+    name: Verify exact-SHA Identity test preview
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == 'AstroTat808'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Require successful provider status on the exact PR SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os,re,time,urllib.request
+          repo=os.environ["GH_REPOSITORY"]
+          sha=os.environ["EXPECTED_SHA"]
+          assert re.fullmatch(r"[a-f0-9]{40}",sha), "Bad PR commit"
+          endpoint="https://api.github.com/repos/"+repo+"/commits/"+sha+"/status"
+          for _ in range(80):
+              req=urllib.request.Request(endpoint,headers={
+                  "Authorization":"Bearer "+os.environ["GH_TOKEN"],
+                  "Accept":"application/vnd.github+json",
+                  "User-Agent":"Koa-Identity-Auth-QA",
+              })
+              with urllib.request.urlopen(req,timeout=20) as response:
+                  statuses=json.load(response).get("statuses") or []
+              matching=[x for x in statuses if x.get("context")=="netlify/koasevents-website/deploy-preview"]
+              if matching:
+                  item=matching[0]
+                  if item.get("state") in ("failure","error"):
+                      raise SystemExit("FAIL | exact-sha-provider-preview-failed")
+                  if item.get("state")=="success":
+                      url=str(item.get("target_url") or "")
+                      if not re.search(r"/deploys/[a-f0-9]{24}(?:$|[/?#])",url):
+                          raise SystemExit("FAIL | exact-sha-preview-deploy-id-missing")
+                      print("PASS | Netlify provider reports ready Deploy Preview on exact PR SHA")
+                      break
+              time.sleep(12)
+          else:
+              raise SystemExit("FAIL | exact-sha-preview-not-ready")
+          PY
+
+      - name: Require browser-accessible preview before loading QA credentials
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os,urllib.request
+          from urllib.parse import urlparse
+          hostname="deploy-preview-"+str(os.environ["PR_NUMBER"])+"--koasevents-website.netlify.app"
+          try:
+              with urllib.request.urlopen("https://"+hostname+"/admin/",timeout=20) as response:
+                  destination=urlparse(response.geturl())
+                  document=response.read(300000).decode("utf-8","ignore")
+              if destination.hostname!=hostname or "data-login-form" not in document:
+                  raise ValueError("preview login page inaccessible")
+          except Exception:
+              raise SystemExit("FAIL | protected_preview_requires_approved_netlify_team_sso_or_isolated_QA_site")
+          print("PASS | preview accessible to isolated browser QA without exposing QA credentials")
+          PY
+
+  authenticated-identity:
+    name: Authenticated Identity browser QA
+    needs: [exact-deploy-preview]
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == 'AstroTat808'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: koa-auth-qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated browser QA runtime
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Verify real Identity login, refresh rotation, persistence and revocation
+        shell: bash
+        env:
+          KOA_AUTH_QA_EMAIL: ${{ secrets.KOA_AUTH_QA_EMAIL }}
+          KOA_AUTH_QA_PASSWORD: ${{ secrets.KOA_AUTH_QA_PASSWORD }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # No set -x, response-body logging, credentials on argv, or recordings.
+          test -n "$KOA_AUTH_QA_EMAIL" || { echo 'FAIL | dedicated_identity_qa_account_missing'; exit 1; }
+          test -n "$KOA_AUTH_QA_PASSWORD" || { echo 'FAIL | dedicated_identity_qa_password_missing'; exit 1; }
+          python scripts/test_identity_live_session.py \
+            --expected-sha "$EXPECTED_SHA" \
+            --base-url "https://deploy-preview-${PR_NUMBER}--koasevents-website.netlify.app"
+      - name: Confirm private test output remains unexported
+        if: always()
+        run: |
+          echo 'Authenticated Identity test secrets, cookies, screenshots and raw responses are never uploaded.'
