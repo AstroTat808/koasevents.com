@@ -1,0 +1,45 @@
+
+/** Conditional writes for manual CRM edits; legacy writers retain their existing API. */
+export function conditionalTenantStoreFor(context: Context, tenant: TenantProfile, domain: TenantStorageDomain) {
+  const canonical = canonicalStore(context);
+  const legacy = compatibilityStore(context, tenant, domain);
+  const prefix = tenantDataPrefix(tenant, domain);
+  async function mirrorJSON(key: string) {
+    if (!legacy || !tenant.storage.legacyDataBelongsToTenant) return true;
+    const logical = cleanTenantKey(key);
+    const scoped = prefix + logical;
+    try {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const latest = await canonical.getWithMetadata(scoped, { type: 'json', consistency: 'strong' });
+        if (!latest) return false;
+        const prior = await legacy.getWithMetadata(logical, { type: 'json', consistency: 'strong' });
+        const saved = await legacy.setJSON(logical, scopeJsonValue(tenant, latest.data), prior?.etag ? { onlyIfMatch: prior.etag } : { onlyIfNew: true });
+        if (!saved.modified) continue;
+        const verified = await canonical.getMetadata(scoped, { consistency: 'strong' });
+        if (verified?.etag === latest.etag) return true;
+      }
+    } catch { /* The canonical commit is retained for an idempotent retry. */ }
+    return false;
+  }
+  return {
+    mirrorJSON,
+    async readJSON(key: string): Promise<{ data: any; etag: string | null }> {
+      const logical = cleanTenantKey(key);
+      const scoped = prefix + logical;
+      let snapshot = await canonical.getWithMetadata(scoped, { type: 'json', consistency: 'strong' });
+      if (!snapshot && legacy && tenant.storage.legacyDataBelongsToTenant) {
+        const old = await legacy.get(logical, { type: 'json', consistency: 'strong' });
+        if (old != null) {
+          await canonical.setJSON(scoped, scopeJsonValue(tenant, old), { onlyIfNew: true });
+          snapshot = await canonical.getWithMetadata(scoped, { type: 'json', consistency: 'strong' });
+        }
+      }
+      return { data: snapshot ? scopeJsonValue(tenant, snapshot.data) : null, etag: snapshot?.etag || null };
+    },
+    async writeJSON(key: string, value: unknown, etag: string | null) {
+      const logical = cleanTenantKey(key);
+      const result = await canonical.setJSON(prefix + logical, scopeJsonValue(tenant, value), etag ? { onlyIfMatch: etag } : { onlyIfNew: true });
+      return { modified: Boolean(result.modified) };
+    },
+  };
+}

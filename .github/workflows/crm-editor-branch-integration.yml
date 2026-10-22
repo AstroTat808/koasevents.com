@@ -1,0 +1,39 @@
+name: CRM editor branch integration
+on:
+  push:
+    branches: [feat/crm-manual-create-edit-20261021]
+    paths: [.github/workflows/crm-editor-branch-integration.yml]
+permissions:
+  contents: write
+concurrency:
+  group: crm-editor-branch-integration
+  cancel-in-progress: false
+jobs:
+  integrate-and-test:
+    if: github.repository == 'AstroTat808/koasevents.com' && github.ref == 'refs/heads/feat/crm-manual-create-edit-20261021'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply exact integration anchors and retire bootstrap
+        run: |
+          node scripts/apply_crm_manual_editor.mjs
+          git diff --check
+          node --check public/scripts/crm-record-editor.js
+          rm scripts/apply_crm_manual_editor.mjs scripts/crm_conditional_storage.fragment.txt .github/workflows/crm-editor-branch-integration.yml
+          git add src/pages/admin/crm/index.astro netlify/functions/admin-crm.mts netlify/functions/_shared/tenant-storage.ts netlify/functions/_shared/crm-cleanup.ts scripts/apply_crm_manual_editor.mjs scripts/crm_conditional_storage.fragment.txt .github/workflows/crm-editor-branch-integration.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "Integrate manual CRM editor into existing workspace and tenant storage"
+          git push origin HEAD:refs/heads/feat/crm-manual-create-edit-20261021
+      - run: npm ci
+      - name: Manual CRM regression tests
+        run: node --test scripts/test_crm_record_editor.mjs
+      - name: Full existing Astro build and prebuild gates
+        run: npm run build
