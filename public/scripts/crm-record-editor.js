@@ -9,7 +9,7 @@
   const field = name => form.elements.namedItem(name);
   const notice = tools.querySelector('[data-crm-record-notice]');
   const save = $('[data-crm-record-save]');
-  const state = { projects: [], canManage: false, selectedId: '', action: '', recordId: '', revision: '', dirty: false, busy: false, loading: false, locked: false, pending: null, committed: false, opener: null };
+  const state = { projects: [], customers: [], canManage: false, selectedId: '', action: '', recordId: '', revision: '', dirty: false, busy: false, loading: false, locked: false, pending: null, committed: false, opener: null };
   const contactFields = ['name', 'email', 'phone'];
   const projectFields = ['projectName', 'eventDate', 'eventType', 'guestCount'];
   const labels = { 'create-customer': 'New customer', 'create-project': 'New project', 'update-customer': 'Edit customer', 'update-project': 'Edit project' };
@@ -64,12 +64,13 @@
     const selected = select.value;
     const query = $('[data-crm-record-customer-search]').value.trim().toLowerCase();
     select.replaceChildren(new Option('Enter new customer details', ''));
-    for (const record of state.projects) {
-      const searchable = [record.customer?.name, record.customer?.email, record.customer?.phone, record.id].join(' ').toLowerCase();
-      if (query && !searchable.includes(query) && record.id !== selected) continue;
-      select.add(new Option([record.customer?.name || 'Unnamed customer', record.customer?.email || record.customer?.phone || record.id, record.customer?.eventDate || 'No event date'].join(' - '), record.id));
+    for (const customer of state.customers) {
+      const searchable = [customer.name, customer.email, customer.phone, customer.id].join(' ').toLowerCase();
+      if (query && !searchable.includes(query) && customer.id !== selected) continue;
+      const suffix = customer.projectCount + ' project' + (customer.projectCount === 1 ? '' : 's');
+      select.add(new Option([customer.name || 'Unnamed customer', customer.email || customer.phone || 'Contact details not provided', suffix].join(' - '), customer.id));
     }
-    select.value = selected;
+    select.value = [...select.options].some(option => option.value === selected) ? selected : '';
   }
   async function request(url, options = {}) {
     const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000), ...options });
@@ -126,6 +127,7 @@
   window.addEventListener('koa:crm-editor-context', event => {
     const context = event.detail || {};
     state.projects = Array.isArray(context.projects) ? context.projects : [];
+    state.customers = Array.isArray(context.customers) ? context.customers : [];
     state.canManage = context.canManage === true;
     state.selectedId = context.selectedId || '';
     tools.hidden = !state.canManage;
@@ -142,8 +144,8 @@
   });
   $('[data-crm-record-customer-search]').addEventListener('input', customers);
   field('existingCustomer').addEventListener('change', () => {
-    const record = state.projects.find(row => row.id === field('existingCustomer').value);
-    if (record) contactFields.forEach(name => { field(name).value = record.customer?.[name] || ''; });
+    const customer = state.customers.find(row => row.id === field('existingCustomer').value);
+    if (customer) contactFields.forEach(name => { field(name).value = customer[name] || ''; });
     state.dirty = true;
   });
   form.addEventListener('input', () => { if (!state.locked) { state.pending = null; state.dirty = true; } });
