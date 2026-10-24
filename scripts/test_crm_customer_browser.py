@@ -69,9 +69,9 @@ def audit(browser, browser_name, base, results_dir):
                 assert all("2027-" not in value and "2028-" not in value for value in option_labels), "Project dates leaked into customer selector"
                 assert "3 projects" in option_labels[1] or "3 projects" in option_labels[2]
                 page.locator('[name=existingCustomer]').select_option(CUSTOMERS[0]['id'])
-                assert page.locator('input[name=name]').input_value()=='Synthetic Client'
-                assert page.locator('input[name=email]').input_value()=='synthetic@example.test'
-                assert page.locator('input[name=eventDate]').input_value()==''
+                assert modal.locator('input[name=name]').input_value()=='Synthetic Client'
+                assert modal.locator('input[name=email]').input_value()=='synthetic@example.test'
+                assert modal.locator('input[name=eventDate]').input_value()==''
                 search=page.locator('[data-crm-record-customer-search]')
                 search.fill('another')
                 assert options.count()==3 or options.count()==2, "Unexpected customer search result"
