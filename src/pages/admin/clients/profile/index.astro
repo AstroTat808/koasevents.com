@@ -1,0 +1,111 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Customer Profile | Koa’s Events" description="Authorized staff customer overview and linked event projects." canonical="https://koasevents.com/admin/clients/profile/">
+  <main class="customer-profile min-h-screen bg-[var(--koa-sand)] py-8 sm:py-12">
+    <div class="container-shell max-w-7xl">
+      <nav aria-label="Breadcrumb" class="mb-5 flex flex-wrap items-center gap-2 text-xs font-bold text-[var(--koa-clay)]">
+        <a href="/admin/crm/" class="underline underline-offset-4">Business CRM</a><span aria-hidden="true">/</span>
+        <span>Customer Profile</span>
+      </nav>
+      <div data-status role="status" aria-live="polite" class="rounded-[1.5rem] bg-white p-6 text-sm font-semibold shadow-[var(--shadow-soft)]">Loading customer profile…</div>
+      <div data-error class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)]" role="alert"></div>
+      <div data-profile class="hidden grid gap-6">
+        <header class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
+          <p class="eyebrow text-[var(--koa-clay)]">Customer profile</p>
+          <div class="mt-3 flex flex-wrap items-start justify-between gap-4">
+            <div class="min-w-0">
+              <h1 data-name class="display break-words text-4xl text-[var(--koa-forest)] sm:text-5xl"></h1>
+              <p data-contact class="mt-3 break-words text-sm text-[var(--koa-ink)]/70"></p>
+            </div>
+            <a href="/admin/crm/" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Back to CRM</a>
+          </div>
+          <p data-identity-alert class="mt-4 hidden rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Some linked contact details differ. Review this identity before approving any consolidation.</p>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.7rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Projects</p><strong data-stat-projects class="display mt-2 block text-3xl">0</strong></div>
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.7rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Bookings</p><strong data-stat-bookings class="display mt-2 block text-3xl">0</strong></div>
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.7rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">QuickBooks invoices</p><strong data-stat-invoices class="display mt-2 block text-3xl">0</strong></div>
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.7rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Recorded payments</p><strong data-stat-payments class="display mt-2 block text-3xl">0</strong></div>
+          </div>
+        </header>
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div><p class="eyebrow text-[var(--koa-clay)]">All events and projects</p><h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Project history</h2></div>
+            <p class="text-xs text-[var(--koa-ink)]/60">Each project retains its own booking, agreement, financials and activity</p>
+          </div>
+          <div data-projects class="mt-5 grid gap-4"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+<script is:inline>
+  (() => {
+    'use strict';
+    const $ = selector => document.querySelector(selector);
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, match => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[match]));
+    const money = amount => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(amount)||0);
+    const status=$('[data-status]'), error=$('[data-error]'), profile=$('[data-profile]');
+    const customerId=new URL(window.location.href).searchParams.get('customerId')||'';
+    const showError=(message)=>{
+      status.classList.add('hidden');error.classList.remove('hidden');
+      error.textContent=message;
+    };
+    const paymentsHtml=(payments,label)=>{
+      if(!payments.length)return '<p class="text-xs text-[var(--koa-ink)]/60">No '+esc(label.toLowerCase())+' recorded.</p>';
+      return '<div class="grid gap-2">'+payments.map(payment=>'<div class="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[var(--koa-line)] p-3"><div class="min-w-0"><p class="text-xs font-semibold">'+esc(payment.label||payment.docNumber||payment.id||label)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">'+esc(payment.date||payment.dueDate||'Date not provided')+' · '+esc(payment.status||'Status not provided')+'</p></div><strong class="text-sm">'+money(payment.amount)+'</strong></div>').join('')+'</div>';
+    };
+    const invoiceHtml=invoices=>{
+      if(!invoices.length)return '<p class="text-xs text-[var(--koa-ink)]/60">No QuickBooks invoices linked.</p>';
+      return '<div class="grid gap-2">'+invoices.map(invoice=>'<div class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[var(--koa-line)] p-3"><div><p class="text-xs font-semibold">Invoice '+esc(invoice.docNumber||invoice.id||'number unavailable')+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">'+esc(invoice.date||'Date unavailable')+' · '+esc(invoice.status||'Status unavailable')+'</p></div><div class="text-right text-xs"><strong>'+money(invoice.amount)+'</strong><p class="mt-1 text-[var(--koa-ink)]/60">'+money(invoice.balance)+' balance</p></div></div>').join('')+'</div>';
+    };
+    function renderProject(p){
+      const booked=p.booking.status==='booked'||p.stage==='booked';
+      return '<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/25 p-4 sm:p-5">'+
+        '<div class="flex flex-wrap items-start justify-between gap-3"><div class="min-w-0"><h3 class="text-lg font-bold text-[var(--koa-forest)]">'+esc(p.name)+'</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/65">'+esc(p.eventDate||'Event date not set')+' · '+esc(p.businessLine)+' · '+esc(p.stage)+'</p></div>'+
+        '<a href="/admin/clients/?id='+encodeURIComponent(p.id)+'&tab=overview" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-bold text-white">Open project workspace</a></div>'+
+        '<div class="mt-4 grid gap-3 sm:grid-cols-3"><div class="rounded-lg bg-white p-3"><p class="text-xs font-semibold">Booking</p><p class="mt-1 text-sm">'+esc(p.booking.status||'Not booked')+(booked?' · Confirmed':'')+'</p></div>'+
+        '<div class="rounded-lg bg-white p-3"><p class="text-xs font-semibold">Agreement</p><p class="mt-1 text-sm">'+esc(p.booking.contractStatus||p.booking.signWellStatus||'Not available')+'</p></div>'+
+        '<div class="rounded-lg bg-white p-3"><p class="text-xs font-semibold">Workspace</p><p class="mt-1 text-sm">'+p.noteCount+' notes · '+p.openTaskCount+' open tasks</p></div></div>'+
+        '<div class="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3"><section class="rounded-lg bg-white p-4"><h4 class="mb-3 text-xs font-bold uppercase tracking-[.07em]">Booking payment schedule</h4>'+paymentsHtml(p.booking.payments,'Booking payments')+'</section>'+
+        '<section class="rounded-lg bg-white p-4"><h4 class="mb-3 text-xs font-bold uppercase tracking-[.07em]">QuickBooks payments</h4>'+paymentsHtml(p.accounting.payments,'QuickBooks payments')+'</section>'+
+        '<section class="rounded-lg bg-white p-4"><h4 class="mb-3 text-xs font-bold uppercase tracking-[.07em]">QuickBooks invoices</h4>'+invoiceHtml(p.accounting.invoices)+'</section></div>'+
+        '</article>';
+    }
+    async function load(){
+      if(!/^CUST-[0-9A-F]{24}$/.test(customerId)){showError('Open a customer profile from the CRM customer directory.');return;}
+      try{
+        const r=await fetch('/api/admin/crm-customers?customerId='+encodeURIComponent(customerId),{
+          cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(20000),
+        });
+        if(r.status===401||r.status===403){showError('CRM access is required to view this customer profile.');return;}
+        if(!r.ok){showError(r.status===404?'This customer was not found. The directory may have changed.':'Unable to load customer profile.');return;}
+        const data=await r.json();
+        if(!data?.ok||!data.customer||!Array.isArray(data.projects)){showError('Customer profile data could not be verified.');return;}
+        const c=data.customer;
+        $('[data-name]').textContent=c.name||'Unnamed customer';
+        $('[data-contact]').textContent=[c.email,c.phone].filter(Boolean).join(' · ')||'Contact details not provided';
+        $('[data-identity-alert]').classList.toggle('hidden',!c.needsReview);
+        $('[data-stat-projects]').textContent=String(c.projectCount||0);
+        $('[data-stat-bookings]').textContent=String(data.counts.booked||0);
+        $('[data-stat-invoices]').textContent=String(data.counts.quickBooksInvoices||0);
+        $('[data-stat-payments]').textContent=String(data.counts.quickBooksPayments||0);
+        $('[data-projects]').innerHTML=data.projects.length?data.projects.map(renderProject).join(''):'<p class="rounded-xl border border-[var(--koa-line)] p-5 text-sm">This customer has no event projects yet. Add one from Business CRM.</p>';
+        status.classList.add('hidden');profile.classList.remove('hidden');
+      }catch{showError('Customer profile loading failed. Refresh the page and try again.');}
+    }
+    load();
+  })();
+</script>
+<style>
+  :global(html[data-theme="dark"]) .customer-profile :global(.bg-white) {
+    background-color: #1c2d25;
+    color: #f3f3ed;
+    border-color: #566c60;
+  }
+  :global(html[data-theme="dark"]) .customer-profile :global([data-name]),
+  :global(html[data-theme="dark"]) .customer-profile :global(h2),
+  :global(html[data-theme="dark"]) .customer-profile :global(h3) {
+    color: #f1e9d6;
+  }
+</style>
