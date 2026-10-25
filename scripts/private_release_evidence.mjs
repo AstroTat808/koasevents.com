@@ -198,7 +198,7 @@ function selfTest() {
     {id:'email-inline-logo-verification',ok:false,detail:'PRIVATE_CUSTOMER'},
   ]}},commit);
   assert.deepEqual(inlineFailure.current.failedDiagnostics,[
-    {id:'email-inline-logo-verification',category:'other',errorCode:'HEALTH_CHECK_FAILED'},
+    {id:'email-inline-logo-verification',category:'integration',errorCode:'HEALTH_INTEGRATION_FAILED'},
   ]);
   assert(!JSON.stringify(inlineFailure).includes('PRIVATE_CUSTOMER'));
   const classified=sanitizeDashboard({
