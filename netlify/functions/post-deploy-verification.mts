@@ -33,21 +33,32 @@ async function runTenantJob(_req:Request,context:Context){
     readLatestHourlyHealth(context),
   ]);
 
-  const current=await runSystemHealth(context,'post-deploy');
-  const deploymentSyncCheck:any=current.checks.find((row:any)=>String(row?.id||'')==='netlify-github-sync')||null;
+  // The branded email verification is a System Health prerequisite. Resolve
+  // the release identity first, run the controlled verification, then capture
+  // health. Otherwise a passing email check can leave an obsolete red snapshot.
+  // Netlify's runtime deploy metadata avoids a redundant system-wide probe.
+  const metadataHealth=runtimeDeployId&&runtimeCommit
+    ?null
+    :await runSystemHealth(context,'post-deploy');
+  const deploymentSyncCheck:any=metadataHealth?.checks.find(
+    (row:any)=>String(row?.id||'')==='netlify-github-sync',
+  )||null;
   const deployId=clean(
     runtimeDeployId
+      || metadataHealth?.deployId
       || deploymentSyncCheck?.deploymentDetails?.netlifyDeployId
       || '',
     120,
   );
   const commit=clean(
     runtimeCommit
+      || metadataHealth?.commit
       || deploymentSyncCheck?.deploymentDetails?.netlifyCommit
       || '',
     120,
   );
   await runBrandedEmailProductionVerification(context,{deployId,commit});
+  const current=await runSystemHealth(context,'post-deploy');
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
