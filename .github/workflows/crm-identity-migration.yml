@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'netlify/functions/admin-crm-customer-migration.mts'
+      - 'netlify/functions/post-deploy-verification.mts'
       - 'netlify/functions/_shared/customer-identity-migration.mjs'
       - 'netlify/functions/_shared/customer-identity-workflow.mjs'
       - 'src/pages/admin/crm/**'
       - 'scripts/test_crm_identity_migration.mjs'
       - 'scripts/test_crm_identity_migration_api.mjs'
+      - 'scripts/test_post_deploy_email_verification_order.mjs'
       - '.github/workflows/crm-identity-migration.yml'
   push:
     branches: [main]
@@ -31,6 +33,6 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-package-lock --no-audit --no-fund
-      - run: node --test scripts/test_crm_identity_migration.mjs scripts/test_crm_identity_migration_api.mjs
+      - run: node --test scripts/test_crm_identity_migration.mjs scripts/test_crm_identity_migration_api.mjs scripts/test_post_deploy_email_verification_order.mjs
       - name: Verify exact checkout builds all Astro routes and Netlify functions
         run: npm run build
