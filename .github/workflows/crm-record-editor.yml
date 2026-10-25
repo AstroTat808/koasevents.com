@@ -4,21 +4,26 @@ on:
     paths:
       - 'netlify/functions/admin-crm*.mts'
       - 'netlify/functions/_shared/crm-record-editor.mjs'
+      - 'netlify/functions/_shared/customer-directory.mjs'
       - 'netlify/functions/_shared/crm-cleanup.ts'
       - 'netlify/functions/_shared/tenant-storage.ts'
       - 'src/pages/admin/crm/**'
       - 'src/components/admin/CrmRecordEditor.astro'
       - 'public/scripts/crm-record-editor.js'
       - 'scripts/test_crm_record_editor.mjs'
+      - 'scripts/test_crm_customer_browser.py'
+      - 'scripts/test_crm_customer_directory.mjs'
       - '.github/workflows/crm-record-editor.yml'
   push:
     branches: [main]
     paths:
       - 'netlify/functions/admin-crm-records.mts'
       - 'netlify/functions/_shared/crm-record-editor.mjs'
+      - 'netlify/functions/_shared/customer-directory.mjs'
       - 'netlify/functions/_shared/crm-cleanup.ts'
       - 'netlify/functions/_shared/tenant-storage.ts'
       - 'scripts/test_crm_record_editor.mjs'
+      - 'scripts/test_crm_customer_directory.mjs'
 permissions:
   contents: read
 jobs:
@@ -34,4 +39,44 @@ jobs:
           node-version: '22'
       - run: npm install --no-package-lock --no-audit --no-fund
       - run: node --check public/scripts/crm-record-editor.js
-      - run: node --test scripts/test_crm_record_editor.mjs
+      - run: node --test scripts/test_crm_record_editor.mjs scripts/test_crm_customer_directory.mjs
+
+  visual-qa:
+    name: CRM modal Chromium/WebKit Light/Dark QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: manual-records
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - run: npm run build
+      - run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium webkit
+      - name: Test synthetic CRM modal at iPhone/desktop resolutions and both themes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/crm-editor-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/admin/crm/ >/dev/null; then break; fi
+            sleep 1
+          done
+          python scripts/test_crm_customer_browser.py --base-url http://127.0.0.1:4173
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-editor-synthetic-qa-${{ github.run_id }}-${{ github.run_attempt }}
+          path: visual-results/crm-editor/
+          if-no-files-found: warn
+          retention-days: 14

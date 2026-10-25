@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { buildCustomerDirectory } from './customer-directory.mjs';
 
 export class CrmRecordError extends Error {
   constructor(status, code, message, details = {}) {
@@ -114,7 +115,11 @@ export function prepareRecordMutation(records, input, { actor, tenantId, now = n
   let record;
   if (creating) {
     if (input.recordId || input.expectedRevision) fail('form', 'New records cannot overwrite an existing record.');
-    if (input.sourceCustomerRecordId && !records.some(row => row.id === input.sourceCustomerRecordId)) throw new CrmRecordError(404, 'customer_not_found', 'The selected customer is no longer available.');
+    const directory = buildCustomerDirectory(records, { tenantId });
+    const selectedCustomer = input.sourceCustomerRecordId ? directory.customers.find(customer => customer.recordIds.includes(input.sourceCustomerRecordId) || customer.id === input.sourceCustomerRecordId) : null;
+    if (input.sourceCustomerRecordId && !selectedCustomer) throw new CrmRecordError(404, 'customer_not_found', 'The selected customer is no longer available.');
+    if (selectedCustomer && input.action !== 'create-project') fail('sourceCustomerRecordId', 'Select an existing customer only when creating a project.');
+    if (selectedCustomer && !sameIdentity(fields, selectedCustomer)) throw new CrmRecordError(409, 'customer_identity_mismatch', 'The selected customer details changed or do not match. Re-select the customer before saving.');
     const matches = records.filter(row => sameIdentity(fields, row.customer || {}) && (input.action === 'create-customer'
       || (row.kind !== 'lead' && (row.customer?.eventDate || '') === (fields.eventDate || '')
         && editorSnapshot(row).values.businessLine === (fields.businessLine || 'events'))));
@@ -131,7 +136,8 @@ export function prepareRecordMutation(records, input, { actor, tenantId, now = n
       customer: { name: fields.name, email: fields.email || '', phone: fields.phone || '', eventDate: fields.eventDate || '' },
       inquiry: { formName: 'crm-manual-entry', eventType: fields.eventType || '', guestCount: fields.guestCount ?? '' },
       projectName: fields.projectName || '', createdAt: now, createdBy: actor,
-      ...(input.sourceCustomerRecordId ? { customerReferenceId: input.sourceCustomerRecordId } : {}),
+      customerId: selectedCustomer?.id || ('CUST-' + createHash('sha256').update(tenantId + ':customer:' + input.requestId).digest('hex').slice(0, 24).toUpperCase()),
+      ...(selectedCustomer ? { customerReferenceId: selectedCustomer.primaryRecordId } : {}),
     };
   } else {
     record = records.find(row => row.id === input.recordId);

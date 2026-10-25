@@ -10,6 +10,7 @@ import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfigu
 import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
+import { buildCustomerDirectory } from './_shared/customer-directory.mjs';
 import { buildDuplicateMergePreview, duplicateBookingGroups, mergeDuplicateSalesRecord, relinkRecordIdRows } from './_shared/duplicate-bookings.mjs';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; updatedAt?:string; updatedBy?:string; };
@@ -173,6 +174,7 @@ export default async (req:Request, context:Context) => {
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
     const cleanupSettings:any = (await sales.get('settings/crm-cleanup',{type:'json'})) || { mode:'auto_trash', updatedAt:'', updatedBy:'' };
+    const customerDirectory = buildCustomerDirectory(salesRecords, { tenantId: tenant.id });
     const projects = salesRecords
       .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test')
       .slice(0,1500)
@@ -446,7 +448,7 @@ export default async (req:Request, context:Context) => {
         capabilities:capabilitiesFor(auth.user),
         email:clean(auth.user?.email,240).toLowerCase(),
       },
-      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,duplicateBookingAudit:{groups:duplicateBookingGroups(salesRecords),generatedAt:new Date().toISOString()},cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
+      projects,customers:customerDirectory.customers,customerIdentityAudit:customerDirectory.audit,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,duplicateBookingAudit:{groups:duplicateBookingGroups(salesRecords),generatedAt:new Date().toISOString()},cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
         mode: normalizeCleanupMode(cleanupSettings.mode),
         updatedAt: cleanupSettings.updatedAt || '',
         updatedBy: cleanupSettings.updatedBy || '',

@@ -85,6 +85,20 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
           </div>
         </section>
 
+        <section class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]" data-customer-identity-section>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Customer identity</p><h2 class="display mt-2 text-3xl">Customer directory &amp; duplicate audit</h2><p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/60">Contacts are grouped without modifying bookings, contracts, payments, invoices, or activity. Ambiguous matches require human review; this audit never merges or deletes records.</p></div>
+            <span data-customer-identity-summary class="text-xs font-bold text-[var(--koa-clay)]">Loading customer directory…</span>
+          </div>
+          <details class="mt-4 rounded-xl border border-[var(--koa-line)] p-4">
+            <summary class="cursor-pointer text-sm font-bold text-[var(--koa-forest)]">Review customer groups and linked projects</summary>
+            <div data-customer-identity-list class="mt-4 grid max-h-[480px] gap-2 overflow-y-auto"></div>
+          </details>
+          <details class="mt-3 rounded-xl border border-[var(--koa-line)] p-4">
+            <summary class="cursor-pointer text-sm font-bold text-[var(--koa-forest)]">Review possible duplicate identities <span data-customer-review-count></span></summary>
+            <div data-customer-review-list class="mt-4 grid max-h-[380px] gap-2 overflow-y-auto"></div>
+          </details>
+        </section>
         <section data-duplicate-booking-section class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50/70 p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -582,7 +596,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
 
   // Reuse the existing CRM record model rather than creating a duplicate contact database.
   function publishRecordEditorContext(){
-    window.dispatchEvent(new CustomEvent('koa:crm-editor-context',{detail:{projects:data.projects,canManage:can('crm.manage'),selectedId}}));
+    window.dispatchEvent(new CustomEvent('koa:crm-editor-context',{detail:{projects:data.projects,customers:data.customers||[],canManage:can('crm.manage'),selectedId}}));
   }
   window.addEventListener('koa:crm-editor-ready',publishRecordEditorContext);
   window.addEventListener('koa:crm-record-saved',async(event)=>{
@@ -718,6 +732,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   function render(){
     publishRecordEditorContext();
     const activeIds=new Set(data.projects.map(p=>p.id));
+    renderCustomerIdentity();
     $('[data-stat-projects]').textContent=data.projects.length;
     $('[data-stat-tasks]').textContent=data.tasks.filter(t=>activeIds.has(t.recordId)&&t.status!=='done').length;
     $('[data-stat-appointments]').textContent=data.appointments.filter(a=>activeIds.has(a.recordId)&&a.status==='scheduled').length;
@@ -728,6 +743,20 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     const settings=$('[data-cleanup-settings]'); if(settings) settings.mode.value=data.cleanupSettings?.mode||'auto_trash';
     const meta=$('[data-cleanup-policy-meta]'); if(meta) meta.textContent=data.cleanupSettings?.updatedAt?('Updated '+fmt(data.cleanupSettings.updatedAt)):'';
     renderProjects(); renderTrash(); renderDuplicateBookings(); renderAnalytics(); renderAudit(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
+  }
+  function renderCustomerIdentity(){
+    const customers=data.customers||[];
+    const audit=data.customerIdentityAudit||{totals:{},reviewGroups:[]};
+    const totals=audit.totals||{};
+    const summary=$('[data-customer-identity-summary]');
+    if(summary)summary.textContent=(totals.uniqueCustomers??customers.length)+' customers · '+(totals.projects??0)+' projects · '+(totals.reviewGroups??0)+' review groups';
+    const directory=$('[data-customer-identity-list]');
+    if(directory)directory.innerHTML=customers.length?customers.map(customer=>'<article class="rounded-lg border border-[var(--koa-line)] p-3"><strong class="text-sm">'+esc(customer.name)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(customer.email||customer.phone||'No contact information')+' · '+customer.projectCount+' project(s) · '+customer.leadIds.length+' customer lead(s)</p><div class="mt-2 grid gap-1">'+customer.projects.map(project=>'<a class="text-xs text-[var(--koa-clay)] underline" href="/admin/crm/?record='+encodeURIComponent(project.id)+'">'+esc(project.projectName||project.kind||'Project')+' · '+esc(project.eventDate||'No date')+' · '+esc(project.stage)+'</a>').join('')+'</div></article>').join(''):'<p class="text-sm">No customer identities found.</p>';
+    const reviews=$('[data-customer-review-list]');
+    const groups=audit.reviewGroups||[];
+    const count=$('[data-customer-review-count]');
+    if(count)count.textContent='('+groups.length+(audit.reviewTruncated?'+':'')+')';
+    if(reviews)reviews.innerHTML=groups.length?groups.map(group=>'<article class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950"><strong class="text-xs uppercase">'+esc(group.category.replaceAll('_',' '))+'</strong><p class="mt-1 text-xs">'+esc(group.message)+'</p><p class="mt-2 text-xs font-medium">'+group.recordIds.map(id=>'<a href="/admin/crm/?record='+encodeURIComponent(id)+'" class="mr-2 underline">'+esc(id)+'</a>').join('')+'</p></article>').join(''):'<p class="text-sm">No customer identity conflicts detected.</p>';
   }
   function duplicateRecordLabel(row){
     const parts=[row.id,row.origin?.source,row.proposalStatus?(row.proposalStatus+' · '+money(row.proposalTotal)):'',row.quickBooksCustomerId?('QBO customer #'+row.quickBooksCustomerId):'',row.quickBooksEstimateId?('estimate '+row.quickBooksEstimateId):'',row.signWellDocumentId?('SignWell '+row.signWellDocumentId):''].filter(Boolean);
