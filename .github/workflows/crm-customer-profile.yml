@@ -1,0 +1,63 @@
+name: CRM customer profile regression
+
+on:
+  pull_request:
+    paths:
+      - 'netlify/functions/admin-crm-customers.mts'
+      - 'netlify/functions/_shared/customer-directory.mjs'
+      - 'src/pages/admin/clients/profile/**'
+      - 'src/pages/admin/crm/**'
+      - 'scripts/test_crm_customer_profile.mjs'
+      - 'scripts/test_crm_customer_profile_browser.py'
+      - '.github/workflows/crm-customer-profile.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'netlify/functions/admin-crm-customers.mts'
+      - 'src/pages/admin/clients/profile/**'
+      - 'scripts/test_crm_customer_profile.mjs'
+permissions:
+  contents: read
+jobs:
+  profile:
+    name: Customer profile API and browser QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - name: Test authenticated profile API with synthetic customer data
+        run: node --test scripts/test_crm_customer_profile.mjs
+      - name: Build source and all Astro routes
+        run: npm run build
+      - name: Install isolated browsers
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium webkit
+      - name: Verify customer profile interactions in Chromium/WebKit, desktop/iPhone Light/Dark
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/crm-profile.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:4173/admin/clients/profile/ >/dev/null; then break; fi
+            sleep 1
+          done
+          python scripts/test_crm_customer_profile_browser.py --base-url http://127.0.0.1:4173
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-profile-synthetic-qa
+          path: visual-results/crm-profile/
+          if-no-files-found: warn
+          retention-days: 14

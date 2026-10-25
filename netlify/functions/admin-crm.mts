@@ -178,7 +178,7 @@ export default async (req:Request, context:Context) => {
     const projects = salesRecords
       .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test')
       .slice(0,1500)
-      .map(r => ({...normalizeProject(r, metaMap.get(r.id) || null), cleanup: assessCrmRecord(r)}));
+      .map(r => ({...normalizeProject(r, metaMap.get(r.id) || null), customerId: customerDirectory.recordToCustomerId[r.id] || '', cleanup: assessCrmRecord(r)}));
 
     const trashRows = await Promise.all((trash || []).map(async (entry:any) => ({
       entry,
