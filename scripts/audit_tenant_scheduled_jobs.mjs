@@ -26,6 +26,9 @@ for(const full of walk(root)){
   if(!/\brunForEachTenant\s*\(/.test(text)){
     failures.push(rel+': scheduled function does not iterate active tenants');
   }
+  if(/\breturn\s+(?:await\s+)?runForEachTenant\s*\(/.test(text)){
+    failures.push(rel+': scheduled function returns the tenant result array; Netlify scheduled handlers must return Response or undefined');
+  }
 }
 
 if(failures.length){
