@@ -194,6 +194,13 @@ function selfTest() {
   assert.deepEqual(failedSafe.current.failedCheckIds,['netlify-recovery-credential']);
   assert.deepEqual(failedSafe.current.failedDiagnostics,[{id:'netlify-recovery-credential',category:'deployment',errorCode:'HEALTH_DEPLOYMENT_FAILED'}]);
   assert.equal(failedSafe.current.recoveryFailureCode,null);
+  const inlineFailure=sanitizeDashboard({...failedFixture,current:{...failedFixture.current,checks:[
+    {id:'email-inline-logo-verification',ok:false,detail:'PRIVATE_CUSTOMER'},
+  ]}},commit);
+  assert.deepEqual(inlineFailure.current.failedDiagnostics,[
+    {id:'email-inline-logo-verification',category:'integration',errorCode:'HEALTH_INTEGRATION_FAILED'},
+  ]);
+  assert(!JSON.stringify(inlineFailure).includes('PRIVATE_CUSTOMER'));
   const classified=sanitizeDashboard({
     ...failedFixture,current:{...failedFixture.current,checks:[
       {id:'netlify-recovery-credential',ok:false,diagnosticCode:'KOA_RECOVERY_PUBLISHED_PROOF_MISSING'},

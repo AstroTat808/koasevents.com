@@ -463,6 +463,7 @@ export function healthComponents() {
     {id:'signwell-webhook-delivery',name:'SignWell webhook delivery',path:'/api/webhooks/signwell',kind:'api' as const},
     {id:'signwell-signed-pdf',name:'SignWell signed PDF retrieval',path:'SignWell completed PDF',kind:'api' as const},
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
+    {id:'email-inline-logo-verification',name:'Email inline logo verification',path:'controlled production email verification',kind:'api' as const},
     {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
     {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
     {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
