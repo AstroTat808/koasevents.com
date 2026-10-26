@@ -79,7 +79,7 @@ for(const needle of [
 if(globalCss.includes('border-stone-300"]:not([class*="bg-"]):not([class*="text-"])')){
   failures.push('WebKit neutral-control hardening must not mistake text-size utilities such as text-xs for explicit text colors.');
 }
-const galleryPage=read('src/pages/gallery/index.astro');
+const galleryPage=await readFile(path.join(SRC,'pages','gallery','index.astro'),'utf8');
 for(const needle of [
   'overflow-hidden pb-10 pt-10 sm:pb-20 lg:pb-28',
   'bg-[var(--koa-ink)] pb-16 pt-9 text-white sm:py-20 lg:py-28',
