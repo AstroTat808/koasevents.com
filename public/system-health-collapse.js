@@ -173,4 +173,10 @@
   } else {
     syncAll({ initial: true });
   }
+
+  // Progressive provider-card enhancement only. Existing System Health section
+  // collapse behavior and the credential renderer/save contract remain intact.
+  if (page.querySelector('[data-credential-reliability-grid]')) {
+    void import('/credential-reliability-cards.js');
+  }
 })();
