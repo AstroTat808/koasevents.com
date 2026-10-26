@@ -297,8 +297,8 @@ async function backfillLegacyInlineLogoVerification(context: Context) {
   };
   try{
     const [emailResponse,attachmentResponse]=await Promise.all([
-      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId),{headers,signal:AbortSignal.timeout(10_000)}),
-      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(10_000)}),
+      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId),{headers,signal:AbortSignal.timeout(2_000)}),
+      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(2_000)}),
     ]);
     if(!emailResponse.ok||!attachmentResponse.ok) return null;
     const email:any=await emailResponse.json().catch(()=>({}));
@@ -437,7 +437,7 @@ async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
   let attachmentPresent=false;
   let attachmentContentId='';
   let detail='';
-  for(let attempt=0;attempt<6;attempt+=1){
+  for(let attempt=0;attempt<3;attempt+=1){
     try{
       const headers={
         Authorization:'Bearer '+monitoringKey,
@@ -445,8 +445,8 @@ async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
         'User-Agent':'KoaEvents-EmailHealth/1.0',
       };
       const [emailResponse,attachmentResponse]=await Promise.all([
-        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId),{headers,signal:AbortSignal.timeout(10_000)}),
-        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(10_000)}),
+        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId),{headers,signal:AbortSignal.timeout(2_000)}),
+        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(2_000)}),
       ]);
       const emailBody:any=await emailResponse.json().catch(()=>({}));
       const attachmentBody:any=await attachmentResponse.json().catch(()=>({}));
@@ -467,7 +467,7 @@ async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
     }catch(error){
       detail=error instanceof Error?error.message:'Unable to inspect the sent branded email.';
     }
-    if(attempt<5) await wait(750);
+    if(attempt<2) await wait(250);
   }
   const htmlCidPresent=html.toLowerCase().includes(metadata.cid.toLowerCase());
   const failedStatus=['failed','bounced','complained','suppressed'].includes(resendStatus);
@@ -585,7 +585,7 @@ export async function runBrandedEmailProductionVerification(
         text:rendered.text,
         attachments,
       }),
-      signal:AbortSignal.timeout(12_000),
+      signal:AbortSignal.timeout(5_000),
     });
     const body:any=await response.json().catch(()=>({}));
     const messageId=clean(body?.id,180);
