@@ -94,3 +94,14 @@ test('previous successful verification never resends a controlled email', async 
   await h.run();
   assert.deepEqual(h.events, []);
 });
+
+
+test('branded email verification stays inside the scheduled function time budget', async () => {
+  const emailSource = await readFile(new URL('../netlify/functions/_shared/email-health.ts', import.meta.url), 'utf8');
+  assert.match(emailSource, /for\(let attempt=0;attempt<3;attempt\+=1\)/);
+  assert.match(emailSource, /AbortSignal\.timeout\(2_000\)/);
+  assert.match(emailSource, /if\(attempt<2\) await wait\(250\)/);
+  assert.match(emailSource, /signal:AbortSignal\.timeout\(5_000\)/);
+  assert.doesNotMatch(emailSource, /for\(let attempt=0;attempt<6;attempt\+=1\)/);
+  assert.doesNotMatch(emailSource, /AbortSignal\.timeout\(10_000\)/);
+});
