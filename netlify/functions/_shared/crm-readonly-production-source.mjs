@@ -1,39 +1,26 @@
-// Read-only direct Blob access: no normalization, migration, canonical backfill,
-// index mirroring, record writes, or automatic identity assignment.
-import { getStore } from '@netlify/blobs';
-import { tenantDataPrefix } from './tenant-boundary.mjs';
-import { buildReadOnlyCrmProductionAudit } from './crm-readonly-production-audit.mjs';
+// Audit snapshots use the same authorized tenant-bound storage abstraction as
+// the CRM. readOnlyJSON performs no copy-on-read, normalization writes or mirrors.
+import { tenantStoreFor } from './tenant-storage';
 
-const canonicalName = 'venueloom-data';
-function readOnlyStore(name) { return getStore({ name, consistency: 'strong' }); }
+import { buildReadOnlyCrmProductionAudit } from './crm-readonly-production-audit.mjs';
 
 export async function auditLiveCrmReadOnly(context, tenant) {
   if (context?.deploy?.context !== 'production') {
     throw new Error('Read-only audit requires an exact production deployment.');
   }
   if (!tenant?.id || !tenant?.storage) throw new Error('No audited tenant.');
-  const canonical = readOnlyStore(canonicalName);
-  const legacy = new Map();
-  async function read(domain, key) {
-    const current = await canonical.get(tenantDataPrefix(tenant, domain) + key, { type: 'json' });
-    if (current != null) return { value: current, source: 'canonical' };
-    if (!tenant.storage.legacyDataBelongsToTenant) return { value: null, source: 'missing' };
-    const legacyName = tenant.storage.compatibilityBlobStores?.[domain];
-    if (!legacyName) return { value: null, source: 'missing' };
-    if (!legacy.has(legacyName)) legacy.set(legacyName, readOnlyStore(legacyName));
-    const prior = await legacy.get(legacyName).get(key, { type: 'json' });
-    return { value: prior, source: prior == null ? 'missing' : 'legacy' };
-  }
+  const sales = tenantStoreFor(context, tenant, 'sales');
+  const crm = tenantStoreFor(context, tenant, 'crm');
   const [index, notes, tasks] = await Promise.all([
-    read('sales', 'records/index'),
-    read('crm', 'notes/index'),
-    read('crm', 'tasks/index'),
+    sales.readOnlyJSON('records/index'),
+    crm.readOnlyJSON('notes/index'),
+    crm.readOnlyJSON('tasks/index'),
   ]);
-  if (!Array.isArray(index.value)) throw new Error('Authoritative CRM records index was unavailable.');
-  if (notes.value != null && !Array.isArray(notes.value)) throw new Error('CRM note index format requires review.');
-  if (tasks.value != null && !Array.isArray(tasks.value)) throw new Error('CRM task index format requires review.');
+  if (!Array.isArray(index.data)) throw new Error('Authoritative CRM records index was unavailable.');
+  if (notes.data != null && !Array.isArray(notes.data)) throw new Error('CRM note index requires review.');
+  if (tasks.data != null && !Array.isArray(tasks.data)) throw new Error('CRM task index requires review.');
   return buildReadOnlyCrmProductionAudit({
-    records:index.value, notes:notes.value || [], tasks:tasks.value || [],
+    records:index.data, notes:notes.data || [], tasks:tasks.data || [],
     tenantId:tenant.id, indexSource:index.source, notesSource:notes.source, tasksSource:tasks.source,
   });
 }
