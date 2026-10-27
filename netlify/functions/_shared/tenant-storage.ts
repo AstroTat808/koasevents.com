@@ -143,6 +143,20 @@ export function tenantStoreFor(
       return prefix + cleanTenantKey(key);
     },
 
+    // Side-effect-free view for signed production audits. Unlike get(), this
+    // never backfills or rewrites canonical/legacy objects. Data is tenant
+    // scoped in memory only, with the same cross-tenant rejection policy.
+    async readOnlyJSON(key: string): Promise<{ data: any; source: 'canonical'|'legacy'|'missing' }> {
+      const logical = cleanTenantKey(key);
+      const current = await canonical.get(prefix + logical, { type: 'json' });
+      if (current != null) return { data: scopeJsonValue(tenant, current), source: 'canonical' };
+      if (!legacy || !tenant.storage.legacyDataBelongsToTenant) return { data: null, source: 'missing' };
+      const fallback = await legacy.get(logical, { type: 'json' });
+      return fallback == null
+        ? { data: null, source: 'missing' }
+        : { data: scopeJsonValue(tenant, fallback), source: 'legacy' };
+    },
+
     async get(key: string, options?: GetOptions) {
       const logical = cleanTenantKey(key);
       const scoped = prefix + logical;
