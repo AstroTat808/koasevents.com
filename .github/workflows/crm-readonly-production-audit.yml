@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: '22'
       - name: Exercise privacy, record integrity and safe recipient selection
-        run: node --test scripts/test_crm_readonly_production_audit.mjs scripts/test_email_production_recipient.mjs
+        run: node --test scripts/test_crm_readonly_production_audit.mjs scripts/test_email_production_recipient.mjs scripts/test_crm_migration_preview_no_writes.mjs
 
   signed-production-audit:
     name: Signed production CRM totals and first-batch preview
