@@ -19,9 +19,16 @@ const rules=[
     id:'raw-response-echo',
     description:'raw protected API response logging',
     patterns:[
-      /echo\s+["']?\$(?:response|recovery|verification|audit|report|payload)["']?/i,
-      /cat\s+["']?\$(?:response|recovery|verification|audit_file|report_file|payload_file)["']?/i,
+      /echo\s+["']?\$(?:response|recovery|verification|audit|report|payload|raw_file|verification_file|recovery_file|audit_file|report_file|dark_mode_response)["']?/i,
+      /cat\s+["']?\$(?:response|recovery|verification|audit_file|report_file|payload_file|raw_file|verification_file|recovery_file|dark_mode_response)["']?/i,
       /cat\s+[^\n]*system-health-dashboard(?:\.raw)?\.json/i,
+    ],
+  },
+  {
+    id:'sensitive-raw-response-payload',
+    description:'raw CRM/accounting preview payload emitted by workflow logic',
+    patterns:[
+      /['"]?rows['"]?\s*:\s*preview\.get\(\s*['"]rows['"]\s*\)/i,
     ],
   },
   {
@@ -75,6 +82,25 @@ for(const file of walk(workflowsDir)){
       });
     }
   }
+
+  // Historical CI exposure branches recorded raw authenticated responses in
+  // artifact directories without necessarily calling the protected Health URL.
+  // Track only dedicated response-file variables; ordinary fixture paths are
+  // unaffected. A private /tmp or mktemp destination is mandatory.
+  const sensitiveRawVariables=new Set([
+    'raw_file','verification_file','recovery_file','audit_file',
+    'report_file','dark_mode_response',
+  ]);
+  lines.forEach((line,index)=>{
+    const assignment=line.match(/^\s*(raw_file|verification_file|recovery_file|audit_file|report_file|dark_mode_response)\s*=\s*(.+?)\s*$/i);
+    if(!assignment)return;
+    const value=assignment[2].trim().replace(/^["']|["']$/g,'');
+    const safe=value.startsWith('/tmp/')||value.startsWith('$(mktemp')||value.startsWith('${RUNNER_TEMP}/');
+    if(!safe){
+      findings.push({file:rel,line:index+1,rule:'sensitive-raw-response-file',
+        description:'raw authenticated response files must stay in a private temporary directory'});
+    }
+  });
 
   // Protected production API calls must write response bodies to a file, never stdout.
   for(let i=0;i<lines.length;i++){
