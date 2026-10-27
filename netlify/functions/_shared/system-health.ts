@@ -3402,8 +3402,15 @@ export async function netlifyRecoveryCredentialHealthCheck(context:Context):Prom
 
 export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck>{
   const started=Date.now();
-  const productionDeployId=clean(Netlify.env.get('DEPLOY_ID'),120);
-  const productionCommit=clean(Netlify.env.get('COMMIT_REF'),120);
+  let productionDeployId=clean((context as any)?.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+  let productionCommit=clean(Netlify.env.get('COMMIT_REF'),120);
+  if(!productionDeployId||!productionCommit){
+    try{
+      const deployment=await inspectDeploymentSync(context);
+      productionDeployId=productionDeployId||clean(deployment?.deployId,120);
+      productionCommit=productionCommit||clean(deployment?.liveCommit,120);
+    }catch{}
+  }
   let releases:ProductionRelease[]=[];
   try{
     releases=await readProductionReleases(context,50);
