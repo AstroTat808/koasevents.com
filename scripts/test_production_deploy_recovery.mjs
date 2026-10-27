@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { planExactProductionRecovery as plan } from './production_deploy_recovery_policy.mjs';
 const sha='a'.repeat(40);
 const deploy=(state,id='d',commit_ref=sha,context='production',error_message='')=>({state,id,commit_ref,context,error_message});
@@ -40,4 +41,20 @@ assert.equal(check([deploy('ready','preview',sha,'deploy-preview')]).action,'tri
 assert.equal(plan({expectedSha:'bad',deploys:[]}).action,'block','invalid SHA rejected');
 assert.equal(plan({expectedSha:sha,deploys:null}).action,'block','missing Netlify evidence fails closed');
 assert.equal(check(Array.from({length:100},(_,i)=>deploy('error',String(i),'b'.repeat(40)))).action,'block','truncated deploy history fails closed');
+const recoverySource=readFileSync('scripts/production_deploy_recovery.mjs','utf8');
+const visualWorkflow=readFileSync('.github/workflows/production-visual-qa.yml','utf8');
+assert(
+  recoverySource.includes("netlify-cli@27.14.2")
+    && recoverySource.includes("'--prod'")
+    && recoverySource.includes("'--context','production'")
+    && recoverySource.includes("GITHUB_RELEASE_GATE_TOKEN:githubToken")
+    && recoverySource.includes("external-CI deploy completed without a ready exact-SHA Netlify production record."),
+  'Credit-exhaustion recovery must build in authenticated GitHub Actions, preserve the release gate, deploy to production, and verify an exact ready SHA.',
+);
+assert(
+  visualWorkflow.includes('timeout-minutes: 40')
+    && visualWorkflow.includes("node-version: '22.13.0'")
+    && visualWorkflow.includes('node scripts/production_deploy_recovery.mjs'),
+  'Production deploy smoke must provide a supported Node runtime and enough time for exact-SHA external-CI recovery.',
+);
 console.log('PASS | safe exact-SHA production recovery: active/ready/failed/credit-exhaustion/manual-CI/unknown/stale/preview and bounded retry.');
