@@ -25,6 +25,7 @@ import { getQuickBooksSettings } from './_shared/quickbooks';
 import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { auditLiveCrmReadOnly } from './_shared/crm-readonly-production-source.mjs';
+import { runBrandedEmailProductionVerification } from './_shared/email-health';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -436,6 +437,31 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='verify-controlled-inline-email-logo'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(context.deploy?.context!=='production'||deployedCommit!==String(claims.sha||'')){
+        return Response.json({ok:false,code:'EXACT_PRODUCTION_SHA_REQUIRED'},
+          {status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const tenant=await resolveTenantAsync(req,context);
+        const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'');
+        const verification=await runWithTenant(tenant,()=>runBrandedEmailProductionVerification(
+          context,{deployId,commit:deployedCommit},
+        ));
+        const ok=verification.status==='success'||(verification.status==='skipped'&&!verification.required);
+        // No email addresses, credential values, provider messages or message IDs.
+        return Response.json({
+          ok,status:verification.status,required:Boolean(verification.required),
+          failureCategory:ok?'':String(verification.failureCategory||'system_health'),
+          sha:deployedCommit,deployId,
+        },{status:ok?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch{
+        return Response.json({ok:false,code:'CONTROLLED_EMAIL_VERIFICATION_UNAVAILABLE'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+      }
+    }
 
     if(body?.action==='read-only-crm-identity-audit'){
       // Only signed main-branch GitHub Actions requests can inspect these
