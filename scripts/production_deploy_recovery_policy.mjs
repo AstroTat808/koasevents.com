@@ -20,6 +20,14 @@ export function planExactProductionRecovery(input={}){
     return {action:'wait',reason:'ready exact-SHA deploy exists',
       deployId:String(exact.find(row=>isSuccessfulNetlifyState(row?.state))?.id||'')};
   }
+  const creditFailure=exact.find(row=>
+    FAILED.has(String(row?.state||'').trim().toLowerCase())
+    &&/credit usage exceeded/i.test(String(row?.error_message||row?.error||''))
+  );
+  if(creditFailure){
+    return {action:'manual-deploy',reason:'Netlify hosted build credits are exhausted',
+      deployId:String(creditFailure?.id||'')};
+  }
   if(exact.some(row=>ACTIVE.has(String(row?.state||'').trim().toLowerCase()))){
     return {action:'wait',reason:'exact-SHA build already in progress',
       deployId:String(exact.find(row=>ACTIVE.has(String(row?.state||'').trim().toLowerCase()))?.id||'')};
