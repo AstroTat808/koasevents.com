@@ -501,6 +501,19 @@ export function conditionalTenantStoreFor(context: Context, tenant: TenantProfil
   }
   return {
     mirrorJSON,
+    // Migration previews must not create canonical records or update legacy
+    // storage. All returned JSON is tenant-validated in memory only.
+    async readOnlyJSON(key: string): Promise<{ data: any; etag: null; source: 'canonical'|'legacy'|'missing' }> {
+      const logical = cleanTenantKey(key);
+      const scoped = prefix + logical;
+      const current = await canonical.get(scoped, { type: 'json' });
+      if (current != null) return { data: scopeJsonValue(tenant, current), etag: null, source: 'canonical' };
+      if (!legacy || !tenant.storage.legacyDataBelongsToTenant) return { data: null, etag: null, source: 'missing' };
+      const fallback = await legacy.get(logical, { type: 'json' });
+      return fallback == null
+        ? { data: null, etag: null, source: 'missing' }
+        : { data: scopeJsonValue(tenant, fallback), etag: null, source: 'legacy' };
+    },
     async readJSON(key: string): Promise<{ data: any; etag: string | null }> {
       const logical = cleanTenantKey(key);
       const scoped = prefix + logical;
