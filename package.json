@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "predev": "node scripts/generate_brand_icons.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
@@ -46,7 +47,8 @@
     "@netlify/functions": "latest",
     "@netlify/identity": "latest",
     "@netlify/edge-functions": "latest",
-    "read-excel-file": "latest"
+    "read-excel-file": "latest",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

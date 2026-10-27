@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 
 const FAILURE_FILE='/tmp/koa-build-failure.json';
 const checks=[
+  ['brand-icons','Generate white-background favicon and iPhone icon','node',['scripts/generate_brand_icons.mjs']],
   ['build-safety','Build safety','npm',['run','build:safety']],
   ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],

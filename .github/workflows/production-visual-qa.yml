@@ -120,6 +120,32 @@ jobs:
         run: |
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
+      - name: Verify white-background favicon and iPhone home-screen icon in Chromium + WebKit
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4173 --directory dist > /tmp/koa-brand-icons-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'Brand icon browser preview failed to start'
+            exit 1
+          fi
+          python scripts/test_brand_icons_browser.py --base-url http://127.0.0.1:4173
+      - name: Upload Chromium and WebKit favicon QA evidence
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: koa-brand-icons
+          path: visual-results/brand-icons
+          if-no-files-found: error
+          retention-days: 30
       - name: Fail closed if Netlify Image CDN outage breaks the tablet homepage image
         if: github.event_name == 'pull_request'
         shell: bash
