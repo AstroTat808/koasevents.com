@@ -2,7 +2,7 @@
 // GitHub-owned production bootstrap. Does not rely on the old deployed Netlify
 // function: a failed deploy cannot publish its own fix.
 import { spawnSync } from 'node:child_process';
-import { planExactProductionRecovery } from './production_deploy_recovery_policy.mjs';
+import { getCompleteProductionDeployHistory, planExactProductionRecovery } from './production_deploy_recovery_policy.mjs';
 
 const expected=String(process.env.EXPECTED_COMMIT||'').trim().toLowerCase();
 const repo=String(process.env.GITHUB_REPOSITORY||'');
@@ -67,10 +67,7 @@ async function manualCreditDeploy(){
     '--timeout','900',
     '--json',
   ],env);
-  const deployments=await getJson(
-    'https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100',
-    netlifyToken,
-  );
+  const deployments=await getCompleteProductionDeployHistory({siteId,token:netlifyToken,getJson});
   const exactReady=(Array.isArray(deployments)?deployments:[]).find((row)=>
     String(row?.context||'').trim()==='production'
     &&String(row?.commit_ref||row?.commit||row?.branch_commit||'').trim().toLowerCase()===expected
@@ -93,8 +90,8 @@ async function main(){
   if((await githubMain())!==expected){
     return block('main advanced; stale SHA will not be rebuilt.');
   }
-  const deployments=await getJson('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100',netlifyToken);
-  const plan=planExactProductionRecovery({expectedSha:expected,deploys:deployments});
+  const deployments=await getCompleteProductionDeployHistory({siteId,token:netlifyToken,getJson});
+  const plan=planExactProductionRecovery({expectedSha:expected,deploys:deployments,historyComplete:true});
   console.log('[koa production recovery] '+JSON.stringify(plan));
   if(plan.action==='block')return block(plan.reason);
   if(plan.action==='wait')return;
