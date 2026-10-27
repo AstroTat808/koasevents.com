@@ -1106,6 +1106,34 @@ export default async (req:Request,context:Context) => {
         const webkit=normalizeBrowser(body?.webkit,'webkit');
         const checkedAt=cleanText(body?.checkedAt,80)||new Date().toISOString();
         const failed=chromium.reportMissing||webkit.reportMissing||chromium.failureCount>0||webkit.failureCount>0;
+        const incomingIncomplete=chromium.reportMissing||webkit.reportMissing;
+        const existingRelease=(await readProductionReleases(context,100))
+          .find((row:any)=>row?.deployId===deployId&&row?.commit===String(claims.sha||''))||null;
+        const previousVisual:any=existingRelease?.visualQuality||null;
+        const previousExactPassed=Boolean(
+          previousVisual?.status==='passed'
+          &&cleanText(previousVisual?.commit,80)===String(claims.sha||'')
+          &&cleanText(previousVisual?.deployId,120)===deployId
+          &&previousVisual?.chromium?.reportMissing===false
+          &&previousVisual?.webkit?.reportMissing===false
+          &&Number(previousVisual?.chromium?.failureCount||0)===0
+          &&Number(previousVisual?.webkit?.failureCount||0)===0
+        );
+        if(incomingIncomplete&&previousExactPassed){
+          return Response.json({
+            ok:true,
+            preserved:true,
+            accepted:result.accepted,
+            sha:result.signal.sha,
+            deployId,
+            source:'github-actions-oidc',
+            visualQuality:previousVisual,
+            detail:'Incomplete Dark Mode QA evidence was not allowed to replace the last passing result for this exact production commit and deploy.',
+          },{
+            status:200,
+            headers:{'Cache-Control':'no-store'},
+          });
+        }
         const screenshots=[] as any[];
         for(const shot of Array.isArray(body?.screenshots)?body.screenshots.slice(0,4):[]){
           try{
