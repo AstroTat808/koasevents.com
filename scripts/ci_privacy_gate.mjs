@@ -87,10 +87,6 @@ for(const file of walk(workflowsDir)){
   // artifact directories without necessarily calling the protected Health URL.
   // Track only dedicated response-file variables; ordinary fixture paths are
   // unaffected. A private /tmp or mktemp destination is mandatory.
-  const sensitiveRawVariables=new Set([
-    'raw_file','verification_file','recovery_file','audit_file',
-    'report_file','dark_mode_response',
-  ]);
   lines.forEach((line,index)=>{
     const assignment=line.match(/^\s*(raw_file|verification_file|recovery_file|audit_file|report_file|dark_mode_response)\s*=\s*(.+?)\s*$/i);
     if(!assignment)return;
