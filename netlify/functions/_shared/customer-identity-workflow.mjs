@@ -79,11 +79,17 @@ async function syncCopies(sales, before, after, assignments) {
 }
 
 export async function migrationPreview({ tenantId, sales, crm }) {
-  const snapshot = await sales.readJSON('records/index');
+  // Production preview is a genuine no-write read, even on legacy-only Blob
+  // indexes. In-memory synthetic storage fixtures use readJSON as a fallback.
+  const readSales = typeof sales.readOnlyJSON === 'function'
+    ? key => sales.readOnlyJSON(key) : key => sales.readJSON(key);
+  const readCrm = typeof crm.readOnlyJSON === 'function'
+    ? key => crm.readOnlyJSON(key) : key => crm.readJSON(key);
+  const snapshot = await readSales('records/index');
   const records = snapshot.data ?? [];
   const plan = buildIdentityMigrationPlan(records, tenantId);
-  const ledger = await crm.readJSON(ledgerKey(plan.planId));
-  const historySnapshot = await crm.readJSON(prefix + 'index');
+  const ledger = await readCrm(ledgerKey(plan.planId));
+  const historySnapshot = await readCrm(prefix + 'index');
   const recent = Array.isArray(historySnapshot.data) ? historySnapshot.data : [];
   return { plan, currentApproval: publicLedger(ledger.data), recentMigrations: recent };
 }
