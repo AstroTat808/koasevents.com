@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
 import { tenantEnv } from './tenant-env';
+import { controlledEmailQaRecipient } from './email-production-recipient.mjs';
 import { assertEmailInlineAssets, emailDocumentClose, emailDocumentOpen, emailGreeting, emailGreetingText, emailHeader, emailInlineAssetAudit, emailLogoAttachment, emailLogoMetadata, emailSignature, emailSignatureText } from './email-brand';
 
 export type EmailHealthEvent = {
@@ -534,7 +535,7 @@ export async function runBrandedEmailProductionVerification(
 
   const apiKey=clean(tenantSetting('RESEND_API_KEY'),500);
   const monitoringKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
-  const testTo=clean(tenantSetting('EMAIL_RENDER_TEST_TO','KOA_EMAIL_RENDER_TEST_TO'),240).toLowerCase();
+  const testTo=controlledEmailQaRecipient(resolveTenant(),tenantSetting('EMAIL_RENDER_TEST_TO','KOA_EMAIL_RENDER_TEST_TO'));
   const baseFailure=(detail:string,failureCategory:BrandedEmailProductionVerification['failureCategory']='system_health'):BrandedEmailProductionVerification=>({
     deployId,
     commit,
@@ -558,7 +559,7 @@ export async function runBrandedEmailProductionVerification(
   if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.','system_health'));
   if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.','system_health'));
   if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.','system_health'));
-  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.','system_health'));
+  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('No approved internal production email QA recipient is configured.','system_health'));
 
   const rendered=syntheticBrandedEmail(commit);
   const attachments=[emailLogoAttachment()];
