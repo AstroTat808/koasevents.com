@@ -9,6 +9,7 @@ const checks=[
   ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
+  ['signed-prod-identity-regression','Signed exact-production runtime identity regression','node',['--test','scripts/test_signed_production_deploy_identity.mjs']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
   ['theme-regression','Theme regression','npm',['run','test:theme']],
   ['photo-booth-rental-regression','Mirror X rental inquiry + catalog regression','npm',['run','test:photo-booth']],
