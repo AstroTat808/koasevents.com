@@ -22,7 +22,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
-import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation, verifiedSignedProductionDeploymentIdentity } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { auditLiveCrmReadOnly } from './_shared/crm-readonly-production-source.mjs';
 import { runBrandedEmailProductionVerification } from './_shared/email-health';
@@ -304,6 +304,27 @@ async function productionDeployForCommit(token:string,siteId:string,sha:string){
   })[0]||null;
 }
 
+// Require an authoritative Netlify API record for the exact deployment
+// currently serving the OIDC-authenticated GitHub main-branch request.
+// COMMIT_REF is not guaranteed in serverless Functions at runtime.
+async function signedExactServingProduction(context:Context,claims:any){
+  const sha=cleanText(claims?.sha,80).toLowerCase();
+  const repository=cleanText(claims?.repository,120);
+  const ref=cleanText(claims?.ref,120);
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  const servingDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+  const servingContext=cleanText(context.deploy?.context,60);
+  if(repository!==REPOSITORY||ref!==MAIN_REF||!/^[a-f0-9]{40}$/.test(sha)
+    ||!token||!siteId||!servingDeployId||servingContext!=='production')return null;
+  const {body:providerDeploy}=await netlifyJson(token,'/deploys/'+encodeURIComponent(servingDeployId));
+  if(!verifiedSignedProductionDeploymentIdentity({
+    expectedSha:sha,siteId,servingDeployId,servingContext,
+    runtimeCommit:Netlify.env.get('COMMIT_REF'),providerDeploy,
+  }))return null;
+  return {sha,deployId:servingDeployId};
+}
+
 async function currentGithubMainSha(){
   const token=cleanText(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   if(!token)throw new Error('KOA_GITHUB_READ_TOKEN is required to confirm the exact GitHub main SHA before deployment recovery.');
@@ -439,14 +460,20 @@ export default async (req:Request,context:Context) => {
     const body:any=await req.json().catch(()=>({}));
 
     if(body?.action==='verify-controlled-inline-email-logo'){
-      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
-      if(context.deploy?.context!=='production'||deployedCommit!==String(claims.sha||'')){
+      let serving:null|{sha:string;deployId:string}=null;
+      try{serving=await signedExactServingProduction(context,claims);}
+      catch{
+        return Response.json({ok:false,code:'PRODUCTION_DEPLOY_IDENTITY_LOOKUP_UNAVAILABLE'},
+          {status:503,headers:{'Cache-Control':'no-store'}});
+      }
+      if(!serving){
         return Response.json({ok:false,code:'EXACT_PRODUCTION_SHA_REQUIRED'},
           {status:409,headers:{'Cache-Control':'no-store'}});
       }
+      const deployedCommit=serving.sha;
       try{
         const tenant=await resolveTenantAsync(req,context);
-        const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'');
+        const deployId=serving.deployId;
         const verification=await runWithTenant(tenant,()=>runBrandedEmailProductionVerification(
           context,{deployId,commit:deployedCommit},
         ));
@@ -466,8 +493,13 @@ export default async (req:Request,context:Context) => {
     if(body?.action==='read-only-crm-identity-audit'){
       // Only signed main-branch GitHub Actions requests can inspect these
       // aggregate counts. Never return customer names, contacts or record IDs.
-      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
-      if(context.deploy?.context!=='production'||deployedCommit!==String(claims.sha||'')){
+      let serving:null|{sha:string;deployId:string}=null;
+      try{serving=await signedExactServingProduction(context,claims);}
+      catch{
+        return Response.json({ok:false,code:'PRODUCTION_DEPLOY_IDENTITY_LOOKUP_UNAVAILABLE'},
+          {status:503,headers:{'Cache-Control':'private, no-store'}});
+      }
+      if(!serving){
         return Response.json({ok:false,code:'EXACT_PRODUCTION_SHA_REQUIRED'},
           {status:409,headers:{'Cache-Control':'private, no-store'}});
       }
@@ -475,8 +507,8 @@ export default async (req:Request,context:Context) => {
         const tenant=await resolveTenantAsync(req,context);
         const audit=await runWithTenant(tenant,()=>auditLiveCrmReadOnly(context,tenant));
         return Response.json({
-          ok:true,sha:deployedCommit,
-          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          ok:true,sha:serving.sha,
+          deployId:serving.deployId,
           source:'github-actions-oidc',audit,
         },{headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
       }catch{
