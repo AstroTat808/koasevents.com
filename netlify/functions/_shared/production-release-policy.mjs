@@ -58,3 +58,41 @@ export function evaluateProductionReleaseGate({expectedSha='',workflowResults={}
     healthOk,
   };
 }
+
+
+/**
+ * Authoritative identity gate for GitHub OIDC signed production-only operations.
+ * Netlify's COMMIT_REF is read-only BUILD metadata, not guaranteed in Functions.
+ * Runtime deployment ID / site ID are obtained from Netlify Context, while the
+ * deploy details are fetched from Netlify's authenticated deployment API.
+ * The signed GitHub claim must match that exact ready, published deployment.
+ */
+export function verifiedSignedProductionDeploymentIdentity(input={}){
+  const sha=String(input.expectedSha||'').trim().toLowerCase();
+  const siteId=String(input.siteId||'').trim();
+  const servingDeployId=String(input.servingDeployId||'').trim();
+  const context=String(input.servingContext||'').trim();
+  const runtimeCommit=String(input.runtimeCommit||'').trim().toLowerCase();
+  const deploy=input.providerDeploy;
+  if(!SHA.test(sha)||!siteId||!/^[a-f0-9]{24}$/.test(servingDeployId)
+    ||context!=='production'||!deploy||typeof deploy!=='object'||Array.isArray(deploy)){
+    return false;
+  }
+  const providerId=String(deploy.id||'').trim();
+  const providerSiteId=String(deploy.site_id||'').trim();
+  const providerCommit=String(deploy.commit_ref||deploy.commit||deploy.branch_commit||'').trim().toLowerCase();
+  if(providerId!==servingDeployId||providerSiteId!==siteId
+    ||(runtimeCommit&&runtimeCommit!==sha)){
+    return false;
+  }
+  return productionDeployMatchesAttestation({
+    expectedSha:sha,
+    deployId:providerId,
+    deployState:deploy.state,
+    deployContext:deploy.context,
+    deployCommit:providerCommit,
+    publishedAt:deploy.published_at,
+    liveCommit:runtimeCommit||providerCommit,
+    liveDeployId:servingDeployId,
+  });
+}
