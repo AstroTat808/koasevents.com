@@ -11,6 +11,7 @@ import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { buildCustomerDirectory } from './_shared/customer-directory.mjs';
+import { reviewCustomerDuplicates } from './_shared/crm-duplicate-review.mjs';
 import { buildDuplicateMergePreview, duplicateBookingGroups, mergeDuplicateSalesRecord, relinkRecordIdRows } from './_shared/duplicate-bookings.mjs';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; updatedAt?:string; updatedBy?:string; };
@@ -141,6 +142,32 @@ export default async (req:Request, context:Context) => {
   if (req.method === 'GET') {
     const requestUrl=new URL(req.url);
     const signWellPdfRecordId=clean(requestUrl.searchParams.get('signwellPdf'),100);
+    // Audit mode is deliberately read-only. It does not normalize, mirror or
+    // reconcile CRM indexes and requires the existing crm.view capability.
+    if(requestUrl.searchParams.has('auditName')){
+      const name=clean(requestUrl.searchParams.get('auditName'),180);
+      if(name.length<2)return Response.json({error:'Enter a customer name to audit.'},{status:400});
+      const auditStore=tenantStoreFor(context,tenant,'sales');
+      const index=await auditStore.readOnlyJSON('records/index');
+      if(!Array.isArray(index.data))return Response.json({error:'The customer index is not available for read-only audit.'},{status:503});
+      const auditNameKey=(value:any)=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
+      const matchingIds=new Set(index.data.filter((r:any)=>auditNameKey(r?.customer?.name)===auditNameKey(name)).map((r:any)=>String(r?.id||'')));
+      const [aliasesSnapshot,trashSnapshot]=await Promise.all([
+        auditStore.readOnlyJSON('merged/aliases'),
+        auditStore.readOnlyJSON('trash/index'),
+      ]);
+      const aliasRows=Array.isArray(aliasesSnapshot.data)?aliasesSnapshot.data.filter((a:any)=>matchingIds.has(String(a?.survivorId||''))):[];
+      const trashRows=Array.isArray(trashSnapshot.data)?trashSnapshot.data.filter((a:any)=>auditNameKey(a?.customerName)===auditNameKey(name)):[];
+      const [archived,trashed]=await Promise.all([
+        Promise.all(aliasRows.slice(0,100).map(async (a:any)=>(await auditStore.readOnlyJSON('merged/records/'+clean(a.sourceId,120))).data).filter(Boolean)),
+        Promise.all(trashRows.slice(0,100).map(async (a:any)=>(await auditStore.readOnlyJSON('trash/records/'+clean(a.id,120))).data).filter(Boolean)),
+      ]);
+      const review=reviewCustomerDuplicates(index.data,{name,archivedRecords:archived,trashedRecords:trashed});
+      return Response.json({...review,auditScope:{
+        activeIndex:true,archivedAliasesChecked:aliasRows.length,trashEntriesChecked:trashRows.length,
+        archiveReadTruncated:aliasRows.length>100,trashReadTruncated:trashRows.length>100,
+      }},{headers:{'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+    }
     const salesRecords = (await readTenantIndex<any>(sales,tenant,'records/index')).rows;
 
     if(signWellPdfRecordId){
