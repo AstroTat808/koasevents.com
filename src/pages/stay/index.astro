@@ -123,6 +123,7 @@ const stayDetails = [
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
         body: JSON.stringify({
+          firstTouch: window.KoaFirstTouch?.get?.() || null,
           attribution: {
             pagePath: window.location.pathname,
             referringHost: (() => { try { return new URL(document.referrer).hostname; } catch { return ''; } })(),
