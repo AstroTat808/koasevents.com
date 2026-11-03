@@ -160,6 +160,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
                   <button type="button" data-trash-client class="rounded-full border border-red-300/35 bg-red-950/25 px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-red-100">Move to Trash</button>
                 </div>
               </div>
+              <div class="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-white/65" data-lead-provenance><span>Lead source: <strong data-detail-lead-source class="font-semibold text-white"></strong></span><span>Received: <strong data-detail-lead-received class="font-semibold text-white"></strong></span></div>
               <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Event date</p><p data-detail-date class="mt-1 font-semibold"></p></div>
                 <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Package</p><p data-detail-package class="mt-1 font-semibold"></p></div>
@@ -168,6 +169,12 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
               </div>
             </section>
 
+            <section class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">Lead origin history</p>
+              <h3 class="display mt-2 text-2xl">Inquiry provenance</h3>
+              <p class="mt-2 text-xs text-[var(--koa-ink)]/60">Original CRM capture details are read-only. Staff-reported source updates appear in the activity history below.</p>
+              <div data-lead-origin-history class="mt-4 grid gap-2 text-sm"></div>
+            </section>
             <section data-stay-inquiry-summary class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 shadow-[var(--shadow-soft)]">
               <p class="eyebrow text-[var(--koa-clay)]">Stay inquiry</p>
               <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Requested accommodations</h3>
@@ -737,10 +744,34 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     else window.__koaCrmStartupPending={status:'healthy',phase:'rendered',detail:'Business CRM data loaded and interface rendered.'};
     return true;
   }
+  function leadSourceLabel(p){
+    const source=String(p.source||p.inquiry?.formName||'').trim().toLowerCase();
+    const known={
+      'koa-event-inquiry':'Koa’s Events website · Event inquiry',
+      'koa-wedding-inquiry':'Koa’s Events website · Wedding inquiry',
+      'koa-stay-inquiry':'Koa’s Events website · Stay inquiry',
+      'koa-mobile-bar-inquiry':'Koa’s Mobile Bar website',
+      'koa-photo-booth-inquiry':'Koa’s Events website · Photo booth',
+      'wild-ones-production-inquiry':'Wild Ones website · Production inquiry',
+      'wild-ones-site-tour-request':'Wild Ones website · Site tour',
+      'wild-ones-producer-packet-request':'Wild Ones website · Producer packet',
+      'koa-discovery-call-request':'Koa’s Events website · Discovery call',
+      'crm-manual-entry':'Manually entered in CRM',
+      'website':'Website · Form unspecified'
+    };
+    if(known[source])return known[source];
+    if(source)return 'Form: '+source.replaceAll(/[^a-z0-9 -]/g,' ').replaceAll(/\s+/g,' ').trim();
+    return p.meta?.sourceDetail?'Reported source: '+p.meta.sourceDetail:'Unknown source';
+  }
+  function leadReceivedLabel(p){
+    const raw=p.createdAt;
+    if(!raw || !Number.isFinite(Date.parse(raw)))return 'Unknown date';
+    return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(raw));
+  }
   function businessLineLabel(value){ return value==='wild-ones'?'Wild Ones':value==='mobile-bar'?'Koa’s Mobile Bar':'Koa’s Events'; }
   function wildValue(p,key){ return p.meta?.customFields?.[key] || p.wildOnes?.[key] || ''; }
   function qualificationBand(p){ const score=Number(p.qualification?.score); if(!Number.isFinite(score)||!p.qualification)return 'unscored'; return p.qualification?.band || (score>=80?'priority':score>=60?'qualified':score>=40?'review':'nurture'); }
-  function projectText(p){ return [p.projectName,p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.businessLine,p.projectType,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName,p.inquiry?.eventType,p.qualification?.score,p.qualification?.productionComplexity,p.wildOnes?.eventConcept,p.wildOnes?.stagePlan,p.wildOnes?.powerProfile,p.wildOnes?.parkingPlan].join(' ').toLowerCase(); }
+  function projectText(p){ return [p.projectName,p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.businessLine,p.projectType,p.source,p.inquiry?.formName,p.inquiry?.referralSource,p.meta?.sourceDetail,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName,p.inquiry?.eventType,p.qualification?.score,p.qualification?.productionComplexity,p.wildOnes?.eventConcept,p.wildOnes?.stagePlan,p.wildOnes?.powerProfile,p.wildOnes?.parkingPlan].join(' ').toLowerCase(); }
   function openTasks(recordId){ return data.tasks.filter(t=>t.recordId===recordId&&t.status!=='done'); }
   function render(){
     publishRecordEditorContext();
@@ -892,7 +923,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
           : ['send_failed','error','bounced','declined','canceled','expired'].includes(swStatus)
             ? '<span class="rounded-full bg-red-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-red-900">SignWell '+esc(swStatus.replaceAll('_',' '))+'</span>'
             : '';
-      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><div data-project="'+esc(p.id)+'" role="button" tabindex="0" class="min-w-0 cursor-pointer text-left"><div class="flex items-start justify-between gap-3"><div><a data-client-workspace="'+esc(p.id)+'" href="/admin/clients/?id='+encodeURIComponent(p.id)+'&tab=overview" class="text-base font-bold text-[var(--koa-ink)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]">'+esc(p.customer?.name||'Unnamed client')+'</a><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.projectName||'')+(p.projectName?' - ':'')+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+lineBadge+qualificationBadge+cleanupBadge+signwellBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></div></div>';
+      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><div data-project="'+esc(p.id)+'" role="button" tabindex="0" class="min-w-0 cursor-pointer text-left"><div class="flex items-start justify-between gap-3"><div><a data-client-workspace="'+esc(p.id)+'" href="/admin/clients/?id='+encodeURIComponent(p.id)+'&tab=overview" class="text-base font-bold text-[var(--koa-ink)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]">'+esc(p.customer?.name||'Unnamed client')+'</a><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.projectName||'')+(p.projectName?' - ':'')+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p><p class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/65">Source: '+esc(leadSourceLabel(p))+'<span class="mx-1">·</span>Received: '+esc(leadReceivedLabel(p))+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+lineBadge+qualificationBadge+cleanupBadge+signwellBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></div></div>';
     }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No projects match these filters.</p>';
     $$('[data-project]').forEach(b=>{b.addEventListener('click',(event)=>{if(event.target?.closest?.('[data-client-workspace]'))return;selectedId=b.dataset.project;renderProjects();renderDetail();renderAudit();});b.addEventListener('keydown',(event)=>{if((event.key==='Enter'||event.key===' ')&&!event.target?.closest?.('[data-client-workspace]')){event.preventDefault();selectedId=b.dataset.project;renderProjects();renderDetail();renderAudit();}});});
     $$('[data-project-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?selectedProjects.add(ch.dataset.projectCheck):selectedProjects.delete(ch.dataset.projectCheck);updateBulkUi();}));
@@ -989,6 +1020,19 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     }
     $('[data-detail-name]').textContent=p.projectName||p.customer?.name||'Unnamed client';
     $('[data-detail-contact]').textContent=[p.projectName?p.customer?.name:'',p.customer?.email,p.customer?.phone].filter(Boolean).join(' · ')||'No contact details';
+    $('[data-detail-lead-source]').textContent=leadSourceLabel(p);
+    $('[data-detail-lead-received]').textContent=leadReceivedLabel(p);
+    const originRows=[
+      ['Original channel',leadSourceLabel(p)],
+      ['Recorded',leadReceivedLabel(p)],
+      ['Original form identifier',p.inquiry?.formName||p.source||'Not recorded'],
+      ['Customer-reported discovery source',p.inquiry?.source||'Not provided'],
+      ['Customer-reported referral',p.inquiry?.referralSource||'Not provided'],
+      ['Staff-reported source',p.meta?.sourceDetail||'Not provided'],
+      ['Inquiry request', [p.inquiry?.service,p.inquiry?.eventType,p.inquiry?.budget].filter(Boolean).join(' · ')||'Not recorded'],
+      ['Original customer request',p.inquiry?.priorities||'Not recorded']
+    ];
+    $('[data-lead-origin-history]').innerHTML=originRows.map(([label,value])=>'<div class="grid gap-1 rounded-xl bg-[var(--koa-sand)]/45 p-3 sm:grid-cols-[12rem_1fr]"><span class="text-xs font-bold text-[var(--koa-ink)]/55">'+esc(label)+'</span><span class="break-words text-sm text-[var(--koa-ink)]">'+esc(value)+'</span></div>').join('');
     $('[data-detail-date]').textContent=p.customer?.eventDate||'—'; $('[data-detail-package]').textContent=p.packageId||'—';
     $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
     const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);

@@ -111,6 +111,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
     stage: record.stage || record.kind || 'inquiry',
     status: record.status || '',
     createdAt: record.createdAt || '',
+    source: record.source || '',
     updatedAt: record.updatedAt || record.createdAt || '',
     businessLine: projectMeta.businessLine || record.businessLine || inferredBusinessLine,
     projectType: projectMeta.projectType || record.projectType || '',
@@ -878,6 +879,9 @@ export default async (req:Request, context:Context) => {
     const next = existing ? current.map(x=>x.recordId===recordId?row:x) : [row,...current];
     await crm.setJSON('projects/index',next.slice(0,1500));
     await crm.setJSON('projects/'+recordId,row);
+    if (existing?.sourceDetail !== row.sourceDetail) {
+      await appendActivity(crm,recordId,'lead_source_detail_updated','Reported source changed by '+actor+' from '+(existing?.sourceDetail||'[not recorded]')+' to '+(row.sourceDetail||'[cleared]'));
+    }
     await appendActivity(crm,recordId,'project_updated','Project details updated by '+actor);
     return Response.json({ok:true,project:row});
   }
