@@ -105,6 +105,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
         body: JSON.stringify({
+          attribution: {
+            pagePath: window.location.pathname,
+            referringHost: (() => { try { return new URL(document.referrer).hostname; } catch { return ''; } })(),
+            ...Object.fromEntries(['utm_source','utm_medium','utm_campaign','utm_content','utm_term'].map(key => {
+              const property = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+              return [property, new URLSearchParams(window.location.search).get(key) || ''];
+            })),
+          },
           formName: 'koa-wedding-inquiry',
           quoteId,
           packageId,

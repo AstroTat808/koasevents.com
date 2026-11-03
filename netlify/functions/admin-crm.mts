@@ -9,7 +9,8 @@ import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
-import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
+import { readTenantIndex, tenantStoreFor, conditionalTenantStoreFor } from './_shared/tenant-storage';
+import { appendLeadSourceCorrection, makeLeadSourceCorrection } from './_shared/lead-provenance.mjs';
 import { buildCustomerDirectory } from './_shared/customer-directory.mjs';
 import { reviewCustomerDuplicates } from './_shared/crm-duplicate-review.mjs';
 import { buildDuplicateMergePreview, duplicateBookingGroups, mergeDuplicateSalesRecord, relinkRecordIdRows } from './_shared/duplicate-bookings.mjs';
@@ -21,7 +22,7 @@ type WorkflowStep = { id:string; label:string; offsetDays:number; taskTitle:stri
 type Workflow = { id:string; name:string; description:string; trigger:'manual'|'new-inquiry'|'proposal-sent'|'booked'; steps:WorkflowStep[]; active:boolean; createdAt:string; updatedAt:string; };
 type Enrollment = { id:string; workflowId:string; recordId:string; startedAt:string; createdTaskIds:string[]; };
 type Template = { id:string; type:'email'|'form'|'questionnaire'|'proposal-note'; name:string; subject:string; body:string; active:boolean; updatedAt:string; };
-type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; updatedAt:string; };
+type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; sourceCorrections?:any[]; updatedAt:string; };
 type Activity = { id:string; recordId:string; type:string; detail:string; createdAt:string; };
 
 function crmStoreFor(context: Context, req?: Request) {
@@ -888,6 +889,8 @@ export default async (req:Request, context:Context) => {
     if (!recordId) return Response.json({error:'recordId required'},{status:400});
     const current = await readIndex<ProjectMeta>(crm,'projects/index');
     const existing = current.find(x=>x.recordId===recordId);
+    const newSource=clean(body.sourceDetail,300);
+    const correction=(existing?.sourceDetail||'')!==newSource?makeLeadSourceCorrection({recordId,before:existing?.sourceDetail||'',after:newSource,actor}):null;
     const row:ProjectMeta = {
       recordId,
       projectStatus:clean(body.projectStatus,80),
@@ -896,7 +899,8 @@ export default async (req:Request, context:Context) => {
       company:clean(body.company,180),
       address:clean(body.address,400),
       partnerName:clean(body.partnerName,180),
-      sourceDetail:clean(body.sourceDetail,300),
+      sourceDetail:newSource,
+      sourceCorrections:correction?[...(existing?.sourceCorrections||[]),correction]:(existing?.sourceCorrections||[]),
       businessLine:['events','mobile-bar','wild-ones'].includes(clean(body.businessLine,40)) ? clean(body.businessLine,40) : clean(existing?.businessLine,40),
       projectType:clean(body.projectType,80) || clean(existing?.projectType,80),
       customFields:body.customFields && typeof body.customFields==='object'
@@ -907,11 +911,14 @@ export default async (req:Request, context:Context) => {
     const next = existing ? current.map(x=>x.recordId===recordId?row:x) : [row,...current];
     await crm.setJSON('projects/index',next.slice(0,1500));
     await crm.setJSON('projects/'+recordId,row);
-    if (existing?.sourceDetail !== row.sourceDetail) {
-      await appendActivity(crm,recordId,'lead_source_detail_updated','Reported source changed by '+actor+' from '+(existing?.sourceDetail||'[not recorded]')+' to '+(row.sourceDetail||'[cleared]'));
+    let provenanceWarning='';
+    if(correction){
+      try { await appendLeadSourceCorrection(conditionalTenantStoreFor(context,resolveTenant(req),'crm'),correction); }
+      catch { provenanceWarning='provenance_ledger_sync_pending'; }
+      await appendActivity(crm,recordId,'lead_source_detail_updated','Reported source changed by '+actor+' from '+(correction.before||'[not recorded]')+' to '+(correction.after||'[cleared]'));
     }
     await appendActivity(crm,recordId,'project_updated','Project details updated by '+actor);
-    return Response.json({ok:true,project:row});
+    return Response.json({ok:true,project:row,...(provenanceWarning?{warnings:[provenanceWarning]}:{})});
   }
 
   if (action === 'add-note') {
