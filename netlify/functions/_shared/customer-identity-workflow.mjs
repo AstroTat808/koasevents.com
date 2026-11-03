@@ -32,6 +32,7 @@ async function history(crm, entry) {
       updatedAt: entry.rolledBackAt || entry.appliedAt || entry.approvedAt || entry.reviewUpdatedAt || entry.createdAt,
       assignmentCount: entry.assignments.length, candidateCount: entry.candidateCount || entry.assignments.length,
       reviewedCount: Object.keys(entry.reviewDecisions || {}).length,
+      reviewMode: entry.approvalMode || 'legacy',
       approvedCount: Object.values(entry.reviewDecisions || {}).filter(row => row?.decision === 'approve').length,
       syncPending: Boolean(entry.syncPending) },
       ...rows.filter(row => row.planId !== entry.planId)].slice(0, 75);
