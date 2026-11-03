@@ -67,16 +67,22 @@ export function makeLeadSourceCorrection({ recordId, before = '', after = '', ac
 // The per-record ledger never rotates. Each event is stored under an independent
 // only-if-new key and its ID is indexed through ETag conditional writes.
 export async function appendLeadSourceCorrection(store, entry) {
+  const sameEntry = (a, b) => {
+    const { tenantId: _tenantA, ...left } = a || {};
+    const { tenantId: _tenantB, ...right } = b || {};
+    return JSON.stringify(left) === JSON.stringify(right);
+  };
+
   if (!validId(entry?.recordId) || !validId(entry?.id)) throw new Error('Invalid provenance event');
   const prefix = 'lead-provenance/' + entry.recordId + '/';
   const key = prefix + 'events/' + entry.id;
   const original = await store.readJSON(key);
-  if (original.data && JSON.stringify(original.data) !== JSON.stringify(entry)) throw new Error('Provenance event conflict');
+  if (original.data && !sameEntry(original.data, entry)) throw new Error('Provenance event conflict');
   if (!original.data) {
     const created = await store.writeJSON(key, entry, null);
     if (!created.modified) {
       const check = await store.readJSON(key);
-      if (JSON.stringify(check.data) !== JSON.stringify(entry)) throw new Error('Provenance event collision');
+      if (!sameEntry(check.data, entry)) throw new Error('Provenance event collision');
     }
   }
   for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -95,5 +101,5 @@ export async function readLeadSourceCorrections(store, recordId) {
   const snapshot = await store.readOnlyJSON(prefix + 'index');
   const ids = Array.isArray(snapshot.data) ? snapshot.data.filter(validId) : [];
   const rows = await Promise.all(ids.map(id => store.readOnlyJSON(prefix + 'events/' + id)));
-  return rows.map(row => row.data).filter(row => row && row.recordId === recordId);
+  return rows.map(row => row.data).filter(row => row && row.recordId === recordId).map(({ tenantId: _tenantId, ...event }) => event);
 }
