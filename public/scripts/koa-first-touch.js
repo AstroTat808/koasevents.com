@@ -72,7 +72,8 @@
     };
     try {
       const ref = new URL(root.document?.referrer || '');
-      if (ref.hostname !== url.hostname) result.referringHost = safeHost(ref.hostname);
+      const canonicalHost = host => host.toLowerCase().replace(/^www\./, '');
+      if (canonicalHost(ref.hostname) !== canonicalHost(url.hostname)) result.referringHost = safeHost(ref.hostname);
     } catch { /* Direct visit or withheld referrer. */ }
     for (const name of UTM) {
       const param = name.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase());
