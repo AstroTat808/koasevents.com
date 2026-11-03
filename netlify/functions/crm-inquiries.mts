@@ -735,8 +735,8 @@ export default async (req: Request, context: Context) => {
   };
 
   const inquiryFingerprint = inquiryReplayFingerprint(record);
-  const submissionRecord = { ...record, inquiryFingerprint };
-  (record as any).inquiryFingerprint = inquiryFingerprint;
+  const submissionRecord:any = record;
+  submissionRecord.inquiryFingerprint = inquiryFingerprint;
   const notificationConfigured = Boolean(tenantEnv(resolveTenant(req),'RESEND_API_KEY'));
 
   if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
