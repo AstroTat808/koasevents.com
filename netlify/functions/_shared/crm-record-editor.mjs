@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { buildCustomerDirectory } from './customer-directory.mjs';
+import { buildLeadOriginSnapshot } from './lead-provenance.mjs';
 
 export class CrmRecordError extends Error {
   constructor(status, code, message, details = {}) {
@@ -139,6 +140,7 @@ export function prepareRecordMutation(records, input, { actor, tenantId, now = n
       customerId: selectedCustomer?.id || ('CUST-' + createHash('sha256').update(tenantId + ':customer:' + input.requestId).digest('hex').slice(0, 24).toUpperCase()),
       ...(selectedCustomer ? { customerReferenceId: selectedCustomer.primaryRecordId } : {}),
     };
+    record.leadProvenance = buildLeadOriginSnapshot(record, { mode: 'manual', actor });
   } else {
     record = records.find(row => row.id === input.recordId);
     if (!record) throw new CrmRecordError(404, 'record_not_found', 'This CRM record was removed or moved to Trash.');
