@@ -79,4 +79,6 @@ assert.equal(unsafeCampaign.utmCampaign, '');
 assert.equal(unsafeCampaign.utmContent, '');
 assert.equal(unsafeCampaign.utmTerm, '');
 assert.equal(normalizeFirstTouch({...unsafeCampaign,utmSource:'sensitive@example.com'})?.utmSource,'');
+persisted.clear();
+assert.equal(visit('https://koasevents.com/gallery/', 'https://www.koasevents.com/weddings/?campaign=sensitive').referringHost,'');
 console.log('PASS | first-touch persists across public routes, expires after session/TTL, honors privacy control, and is stored separately in CRM');
