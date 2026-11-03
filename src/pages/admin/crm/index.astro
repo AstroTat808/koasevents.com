@@ -791,6 +791,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   function leadOriginAuditCard(record){
     const origin=record.origin||{}, attribution=origin.attribution||{}, initial=origin.initialInquiry||{};
     const recorded=origin.reliability==='saved_at_intake';
+    const firstTouch=origin.firstTouch||null;
+    const firstCampaign=firstTouch?[firstTouch.utmSource&&('source: '+firstTouch.utmSource),firstTouch.utmMedium&&('medium: '+firstTouch.utmMedium),firstTouch.utmCampaign&&('campaign: '+firstTouch.utmCampaign),firstTouch.utmContent&&('content: '+firstTouch.utmContent),firstTouch.utmTerm&&('term: '+firstTouch.utmTerm)].filter(Boolean).join(' · '):'';
     const utm=[attribution.utmSource&&('source: '+attribution.utmSource),attribution.utmMedium&&('medium: '+attribution.utmMedium),attribution.utmCampaign&&('campaign: '+attribution.utmCampaign),attribution.utmContent&&('content: '+attribution.utmContent),attribution.utmTerm&&('term: '+attribution.utmTerm)].filter(Boolean).join(' · ');
     const rows=[
       ['Evidence',recorded?'Saved at original intake':'Legacy record fields; original capture not independently established'],
@@ -799,7 +801,10 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
       ['Received',leadReceivedLabel({createdAt:origin.capturedAt})],
       ['Submitted discovery source',origin.discoverySource||'Not provided'],
       ['Submitted referral',origin.referralSource||'Not provided'],
-      ['Campaign (browser-reported)',utm||'Not captured'],
+      ['First visit (browser-reported)',firstTouch?.entryPage?(firstTouch.entryPage+' · '+leadReceivedLabel({createdAt:firstTouch.capturedAt})):'Not captured'],
+      ['Original referring host',firstTouch?.referringHost||'Direct / not captured'],
+      ['First-touch campaign',firstCampaign||'Not captured'],
+      ['Submission-page campaign',utm||'Not captured'],
       ['Referring host (browser-reported)',attribution.referringHost||'Not captured'],
       ['Original inquiry', [initial.service,initial.eventType,initial.guestCount?initial.guestCount+' guests':'',initial.budget,initial.priorities].filter(Boolean).join(' · ')||'Not recorded']
     ];
