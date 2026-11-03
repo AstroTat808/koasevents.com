@@ -5,6 +5,7 @@ import { findInquiryReplay, inquiryReplayFingerprint } from './_shared/crm-inqui
 import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { normalizeLodgingPreference, sameStayLodgingChoice, validateStayInquiry } from './_shared/lodging-inquiry.ts';
+import { buildLeadOriginSnapshot } from './_shared/lead-provenance.mjs';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
   analyzeInquirySecurity,
@@ -737,6 +738,7 @@ export default async (req: Request, context: Context) => {
   const inquiryFingerprint = inquiryReplayFingerprint(record);
   const submissionRecord:any = record;
   submissionRecord.inquiryFingerprint = inquiryFingerprint;
+  submissionRecord.leadProvenance = buildLeadOriginSnapshot(record,{mode:'website',attribution:payload.attribution});
   const notificationConfigured = Boolean(tenantEnv(resolveTenant(req),'RESEND_API_KEY'));
 
   if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
