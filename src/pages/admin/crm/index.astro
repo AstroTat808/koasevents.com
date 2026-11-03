@@ -769,6 +769,50 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     if(!raw || !Number.isFinite(Date.parse(raw)))return 'Unknown date';
     return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(raw));
   }
+  function leadOriginAuditCard(record){
+    const origin=record.origin||{}, attribution=origin.attribution||{}, initial=origin.initialInquiry||{};
+    const recorded=origin.reliability==='saved_at_intake';
+    const utm=[attribution.utmSource&&('source: '+attribution.utmSource),attribution.utmMedium&&('medium: '+attribution.utmMedium),attribution.utmCampaign&&('campaign: '+attribution.utmCampaign),attribution.utmContent&&('content: '+attribution.utmContent),attribution.utmTerm&&('term: '+attribution.utmTerm)].filter(Boolean).join(' · ');
+    const rows=[
+      ['Evidence',recorded?'Saved at original intake':'Legacy record fields; original capture not independently established'],
+      ['Channel',origin.channel||'Unknown'],
+      ['Form',origin.formName||'Not recorded'],
+      ['Received',leadReceivedLabel({createdAt:origin.capturedAt})],
+      ['Submitted discovery source',origin.discoverySource||'Not provided'],
+      ['Submitted referral',origin.referralSource||'Not provided'],
+      ['Campaign (browser-reported)',utm||'Not captured'],
+      ['Referring host (browser-reported)',attribution.referringHost||'Not captured'],
+      ['Original inquiry', [initial.service,initial.eventType,initial.guestCount?initial.guestCount+' guests':'',initial.budget,initial.priorities].filter(Boolean).join(' · ')||'Not recorded']
+    ];
+    const corrections=(record.corrections||[]).map(item=>'<div class="rounded-lg border border-[var(--koa-line)] p-2 text-xs">'+esc(leadReceivedLabel({createdAt:item.at}))+' · '+esc(item.actor||'staff')+' changed reported source from '+esc(item.before||'[empty]')+' to '+esc(item.after||'[empty]')+'</div>').join('');
+    const manual=(record.manualHistory||[]).map(item=>'<div class="rounded-lg border border-[var(--koa-line)] p-2 text-xs">'+esc(leadReceivedLabel({createdAt:item.at}))+' · '+esc(item.actor||'staff')+' · '+esc(item.action||'manual edit')+' ('+esc((item.fields||[]).join(', '))+')</div>').join('');
+    return '<details class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/40 p-3"><summary class="cursor-pointer text-sm font-bold text-[var(--koa-forest)]">'+esc(record.projectName||record.recordId)+' <span class="text-xs font-normal text-[var(--koa-ink)]/55">· '+esc(record.recordId)+'</span></summary><div class="mt-3 grid gap-2">'+rows.map(([label,value])=>'<div class="grid gap-1 text-xs sm:grid-cols-[11rem_1fr]"><strong class="text-[var(--koa-ink)]/60">'+esc(label)+'</strong><span class="break-words">'+esc(value)+'</span></div>').join('')+'</div><div class="mt-3 grid gap-2">'+(corrections||manual?'<p class="text-xs font-bold">Source and record amendments</p>'+corrections+manual:'<p class="text-xs text-[var(--koa-ink)]/55">No recorded source corrections.</p>')+'</div></details>';
+  }
+  async function loadLeadOriginAudit(recordId,offset=0){
+    const target=$('[data-lead-audit-history]');
+    if(!target||selectedId!==recordId)return;
+    if(offset===0)target.innerHTML='<p class="text-xs text-[var(--koa-ink)]/60">Loading customer provenance…</p>';
+    try{
+      const response=await fetch('/api/admin/crm/lead-origin?recordId='+encodeURIComponent(recordId)+'&offset='+offset,{cache:'no-store',credentials:'same-origin'});
+      if(!response.ok)throw new Error('Lead origin history unavailable (HTTP '+response.status+')');
+      const payload=await response.json();
+      if(selectedId!==recordId)return;
+      const fragment=(payload.records||[]).map(leadOriginAuditCard).join('')||'<p class="text-xs text-[var(--koa-ink)]/55">No origin records were found.</p>';
+      if(offset===0)target.innerHTML='';
+      target.querySelector('[data-next-origin]')?.remove();
+      target.insertAdjacentHTML('beforeend',(payload.customerIdentityNeedsReview?'<p class="rounded-lg bg-amber-50 p-2 text-xs text-amber-900">Customer identity associations require review. No records were automatically merged.</p>':'')+fragment);
+      if(payload.nextOffset!==null&&payload.nextOffset!==undefined){
+        const button=document.createElement('button');
+        button.type='button';button.dataset.nextOrigin=String(payload.nextOffset);
+        button.className='rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-bold text-[var(--koa-forest)]';
+        button.textContent='Load more project origins';
+        button.addEventListener('click',()=>loadLeadOriginAudit(recordId,payload.nextOffset));
+        target.append(button);
+      }
+    }catch(error){
+      if(selectedId===recordId)target.innerHTML='<p class="text-xs text-red-800">'+esc(error.message||'Unable to load lead history')+'</p>';
+    }
+  }
   function businessLineLabel(value){ return value==='wild-ones'?'Wild Ones':value==='mobile-bar'?'Koa’s Mobile Bar':'Koa’s Events'; }
   function wildValue(p,key){ return p.meta?.customFields?.[key] || p.wildOnes?.[key] || ''; }
   function qualificationBand(p){ const score=Number(p.qualification?.score); if(!Number.isFinite(score)||!p.qualification)return 'unscored'; return p.qualification?.band || (score>=80?'priority':score>=60?'qualified':score>=40?'review':'nurture'); }
@@ -1034,6 +1078,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
       ['Original customer request',p.inquiry?.priorities||'Not recorded']
     ];
     $('[data-lead-origin-history]').innerHTML=originRows.map(([label,value])=>'<div class="grid gap-1 rounded-xl bg-[var(--koa-sand)]/45 p-3 sm:grid-cols-[12rem_1fr]"><span class="text-xs font-bold text-[var(--koa-ink)]/55">'+esc(label)+'</span><span class="break-words text-sm text-[var(--koa-ink)]">'+esc(value)+'</span></div>').join('');
+    void loadLeadOriginAudit(p.id);
     $('[data-detail-date]').textContent=p.customer?.eventDate||'—'; $('[data-detail-package]').textContent=p.packageId||'—';
     $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
     const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);
