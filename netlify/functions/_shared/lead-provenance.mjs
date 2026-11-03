@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 const clean = (value, max = 200) => String(value ?? '').trim().slice(0, max);
 const validId = value => /^[a-zA-Z0-9_-]{1,120}$/.test(String(value || ''));
-const safeUtm = value => clean(value, 120).replace(/[^\p{L}\p{N} _.-]/gu, '');
+const safeUtm = value => {
+  const raw = clean(value, 120);
+  if (/@|https?:\/\/|[?&#=]|\b(?:\+?\d[\d ()-]{7,}\d)\b/i.test(raw)) return '';
+  return raw.replace(/[^\p{L}\p{N} _.-]/gu, '');
+};
 const fields = ['utmSource', 'utmMedium', 'utmCampaign', 'utmContent', 'utmTerm'];
 
 export function normalizeLeadAttribution(value) {
