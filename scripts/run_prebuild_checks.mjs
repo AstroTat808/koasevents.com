@@ -6,6 +6,7 @@ const FAILURE_FILE='/tmp/koa-build-failure.json';
 const checks=[
   ['brand-icons','Generate white-background favicon and iPhone icon','node',['scripts/generate_brand_icons.mjs']],
   ['brand-placements','Enforce canonical light-background Koa logo everywhere','node',['scripts/test_brand_placements.mjs']],
+  ['email-white-logo','Verify all email templates embed an opaque white-background emblem','node',['scripts/test_email_white_logo.mjs']],
   ['build-safety','Build safety','npm',['run','build:safety']],
   ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],

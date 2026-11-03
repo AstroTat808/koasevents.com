@@ -138,7 +138,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     const esc=(value)=>String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
     const brandName=(brand)=>brand==='mobile'?'Koa’s Mobile Bar':'Koa’s Events';
-    const logo=()=>'/brand/koa-mark.png';
+    const logo=()=>'/brand/koa-email-white-medallion.png';
 
     function roleLabel(role){const labels={admin:'Administrator',manager:'Manager',sales:'Sales Rep',event_coordinator:'Event Coordinator',vendor_manager:'Vendor Manager',content_editor:'Content Editor',accounting:'Accounting',read_only:'Read Only',custom:'Custom Role'};return labels[role]||'Koa’s Events Team';}
     let currentSession=null;

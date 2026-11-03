@@ -81,14 +81,17 @@ verify(iconBuilder.includes("faviconSvg.includes('data:image/png;base64,' + logo
 verify(iconBuilder.includes("flatten({ background: '#fffdf8' })"),
   'Apple and PNG icons must keep opaque ivory corners.');
 
-verify(preview.includes("const logo=()=>'/brand/koa-mark.png'"),
-  'Email preview must use the canonical image.');
+verify(preview.includes("const logo=()=>'/brand/koa-email-white-medallion.png'"),
+  'Email preview must use the opaque white-backed email emblem.');
 verify(preview.includes('background:#fbf8f2;border-radius:'),
   'Email preview must explicitly back its logo with ivory.');
 verify(email.includes('bgcolor="#fbf8f2"') && email.includes('background-color:#fbf8f2'),
   'Outbound email logo header needs a light inline background.');
 verify(email.includes("return 'cid:' + EMAIL_LOGO_CONTENT_ID"),
   'Outbound email emblem must remain CID-embedded for mail clients.');
+verify(email.includes('background-color:#ffffff;'), 'Email image must also declare a white CSS fallback.');
+verify(email.includes('organization-logo.png'), 'Outbound email logo must have a stable CID filename.');
+
 verify(tenant.includes("logoPath: '/brand/koa-mark.png'"),
   'Koa tenant identity must retain the canonical mark.');
 
