@@ -28,7 +28,7 @@ test('pipeline groups verified contacts once and preserves independent projects'
   const original = structuredClone(records);
   const groups=groupProjects(records,[dir('CUST-A',['INQ-1','INQ-2'])]);
   assert.equal(groups.length,1);
-  assert.deepEqual(groups[0].records.map(p=>p.id),['INQ-1','INQ-2']);
+  assert.deepEqual(Array.from(groups[0].records, p=>p.id),['INQ-1','INQ-2']);
   assert.deepEqual(records,original);
 });
 
