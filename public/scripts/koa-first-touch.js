@@ -7,7 +7,9 @@
   const BLOCKED = /^\/(?:admin|staff|bartender|booking|proposal|planning|portal|api)(?:\/|$)/i;
 
   function safeText(value, max) {
-    return String(value || '').trim().slice(0, max).replace(/[^\p{L}\p{N} _.-]/gu, '');
+    const raw = String(value || '').trim().slice(0, max);
+    if (/@|https?:\/\/|[?&#=]|\b(?:\+?\d[\d ()-]{7,}\d)\b/i.test(raw)) return '';
+    return raw.replace(/[^\p{L}\p{N} _.-]/gu, '');
   }
   function safePath(value) {
     const path = String(value || '');
