@@ -169,6 +169,12 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
               </div>
             </section>
 
+            <section class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">Lead origin history</p>
+              <h3 class="display mt-2 text-2xl">Inquiry provenance</h3>
+              <p class="mt-2 text-xs text-[var(--koa-ink)]/60">Original CRM capture details are read-only. Staff-reported source updates appear in the activity history below.</p>
+              <div data-lead-origin-history class="mt-4 grid gap-2 text-sm"></div>
+            </section>
             <section data-stay-inquiry-summary class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 shadow-[var(--shadow-soft)]">
               <p class="eyebrow text-[var(--koa-clay)]">Stay inquiry</p>
               <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Requested accommodations</h3>
@@ -1016,6 +1022,17 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     $('[data-detail-contact]').textContent=[p.projectName?p.customer?.name:'',p.customer?.email,p.customer?.phone].filter(Boolean).join(' · ')||'No contact details';
     $('[data-detail-lead-source]').textContent=leadSourceLabel(p);
     $('[data-detail-lead-received]').textContent=leadReceivedLabel(p);
+    const originRows=[
+      ['Original channel',leadSourceLabel(p)],
+      ['Recorded',leadReceivedLabel(p)],
+      ['Original form identifier',p.inquiry?.formName||p.source||'Not recorded'],
+      ['Customer-reported discovery source',p.inquiry?.source||'Not provided'],
+      ['Customer-reported referral',p.inquiry?.referralSource||'Not provided'],
+      ['Staff-reported source',p.meta?.sourceDetail||'Not provided'],
+      ['Inquiry request', [p.inquiry?.service,p.inquiry?.eventType,p.inquiry?.budget].filter(Boolean).join(' · ')||'Not recorded'],
+      ['Original customer request',p.inquiry?.priorities||'Not recorded']
+    ];
+    $('[data-lead-origin-history]').innerHTML=originRows.map(([label,value])=>'<div class="grid gap-1 rounded-xl bg-[var(--koa-sand)]/45 p-3 sm:grid-cols-[12rem_1fr]"><span class="text-xs font-bold text-[var(--koa-ink)]/55">'+esc(label)+'</span><span class="break-words text-sm text-[var(--koa-ink)]">'+esc(value)+'</span></div>').join('');
     $('[data-detail-date]').textContent=p.customer?.eventDate||'—'; $('[data-detail-package]').textContent=p.packageId||'—';
     $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
     const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);
