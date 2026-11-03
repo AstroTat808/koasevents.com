@@ -111,6 +111,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
     stage: record.stage || record.kind || 'inquiry',
     status: record.status || '',
     createdAt: record.createdAt || '',
+    source: record.source || '',
     updatedAt: record.updatedAt || record.createdAt || '',
     businessLine: projectMeta.businessLine || record.businessLine || inferredBusinessLine,
     projectType: projectMeta.projectType || record.projectType || '',
