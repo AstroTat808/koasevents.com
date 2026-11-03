@@ -18,3 +18,7 @@ jobs:
           node-version: '22'
       - name: Validate provenance snapshots and audit ledger
         run: node scripts/test_crm_lead_provenance.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build site with provenance UI and Netlify routes
+        run: npm run build
