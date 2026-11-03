@@ -51,6 +51,36 @@ with sync_playwright() as playwright:
                 if opaque:
                     assert min(result['corner'][:3]) > 225 and result['corner'][3] == 255,(engine,mode,url,result)
                 checks.append({'engine':engine,'theme':mode,'asset':url,'size':size,'result':result})
+            # The footer must use the exact navbar emblem and light medallion,
+            # regardless of color theme and viewport width.
+            for viewport_name, viewport in (
+                ('iphone', {'width':390,'height':844}),
+                ('desktop', {'width':1440,'height':900}),
+            ):
+                page.set_viewport_size(viewport)
+                page.evaluate('(theme) => document.documentElement.dataset.theme = theme', mode)
+                footer_logo = page.locator('[data-footer-brand-medallion]')
+                footer_logo.wait_for(state='visible')
+                footer_logo.locator('img').evaluate('(img) => img.decode()')
+                identity = page.evaluate("""() => {
+                    const footer = document.querySelector('[data-footer-brand-medallion]');
+                    const navbar = document.querySelector('.site-brand .brand-medallion');
+                    if (!footer || !navbar) return null;
+                    return {
+                        footerImage: footer.querySelector('img')?.getAttribute('src'),
+                        navbarImage: navbar.querySelector('img')?.getAttribute('src'),
+                        footerBackground: getComputedStyle(footer).backgroundImage,
+                        navbarBackground: getComputedStyle(navbar).backgroundImage,
+                    };
+                }""")
+                assert identity is not None, (engine, mode, viewport_name, 'missing medallion')
+                assert identity['footerImage'] == identity['navbarImage'] == '/brand/koa-mark.png', (engine, mode, identity)
+                assert 'gradient' in identity['footerBackground'], (engine, mode, identity)
+                assert identity['footerBackground'] == identity['navbarBackground'], (engine, mode, identity)
+                footer_logo.screenshot(path=str(output/('footer-logo-'+engine+'-'+mode+'-'+viewport_name+'.png')))
+                checks.append({'engine':engine,'theme':mode,'viewport':viewport_name,
+                               'asset':'footer-logo','result':identity})
+            page.set_viewport_size({'width':390,'height':844})
             page.evaluate("""() => {
               const layer = document.createElement('div'); layer.id='brand-icon-proof';
               layer.style.cssText='position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:var(--koa-surface,#ffffff)';
@@ -63,5 +93,5 @@ with sync_playwright() as playwright:
             context.close()
         browser.close()
 (output/'results.json').write_text(json.dumps({'checks':checks,'total':len(checks),'passed':True},indent=2))
-assert len(checks)==12
-print("PASS: Koa's favicon + opaque Apple icon, Chromium/WebKit light/dark, 12 checks")
+assert len(checks)==20
+print("PASS: Koa's favicon, opaque Apple icon and identical light footer medallion, Chromium/WebKit light/dark + iPhone/desktop, 20 checks")

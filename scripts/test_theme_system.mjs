@@ -79,6 +79,26 @@ for(const needle of [
 if(globalCss.includes('border-stone-300"]:not([class*="bg-"]):not([class*="text-"])')){
   failures.push('WebKit neutral-control hardening must not mistake text-size utilities such as text-xs for explicit text colors.');
 }
+// Guard the public footer against dark-mode token overrides of its logo background.
+const siteFooter=await readFile(path.join(SRC,'components','Footer.astro'),'utf8');
+if(!siteFooter.includes('class="brand-medallion footer-brand-medallion" data-footer-brand-medallion')){
+  failures.push('Footer must reuse the navbar\'s light medallion, independent of selected theme.');
+}
+if(!siteFooter.includes('src="/brand/koa-mark.png"') ||
+   !siteHeader.includes('src="/brand/koa-mark.png"')){
+  failures.push('Header and footer must use the same canonical Koa emblem.');
+}
+if(siteFooter.includes('bg-[var(--koa-ivory)]') ||
+   siteFooter.includes('bg-[var(--koa-surface)]')){
+  failures.push('Footer logo must not depend on a theme-recolored background utility.');
+}
+const standardMedallion=globalCss.match(/(?:^|\n)\.brand-medallion\s*\{([^}]*)\}/)?.[1]||'';
+const darkMedallion=globalCss.match(/html\[data-theme="dark"\]\s+\.brand-medallion\s*\{([^}]*)\}/)?.[1]||'';
+const whiteMedallion='background: linear-gradient(145deg, #fffdf8, #efe5d2)';
+if(!standardMedallion.includes(whiteMedallion) || !darkMedallion.includes(whiteMedallion)){
+  failures.push('Navbar and footer logo medallions must stay ivory-white in light and dark themes.');
+}
+
 const galleryPage=await readFile(path.join(SRC,'pages','gallery','index.astro'),'utf8');
 for(const needle of [
   'overflow-hidden pb-10 pt-10 sm:pb-20 lg:pb-28',
