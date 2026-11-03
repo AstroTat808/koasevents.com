@@ -15,9 +15,26 @@ export function normalizeLeadAttribution(value) {
   return result;
 }
 
+
+export function normalizeFirstTouch(value, now = Date.now()) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.schemaVersion !== 1) return null;
+  const capturedAt = Date.parse(String(value.capturedAt || ''));
+  if (!Number.isFinite(capturedAt) || capturedAt > now + 60_000 || now - capturedAt > 86_400_000) return null;
+  const entryPage = normalizeLeadAttribution({ pagePath: value.entryPage }).pagePath;
+  if (!entryPage || /^\/(?:admin|staff|bartender|booking|proposal|planning|portal|api)(?:\/|$)/i.test(entryPage)) return null;
+  const sanitized = normalizeLeadAttribution(value);
+  return {
+    schemaVersion: 1,
+    capturedAt: new Date(capturedAt).toISOString(),
+    entryPage,
+    referringHost: sanitized.referringHost,
+    ...Object.fromEntries(fields.map(key => [key, sanitized[key]])),
+  };
+}
+
 // Captured once at intake. Later customer/project edits must not rewrite this snapshot.
 // Referrer and UTM are explicitly browser-reported, not independently verified.
-export function buildLeadOriginSnapshot(record, { mode = 'website', actor = '', attribution = {} } = {}) {
+export function buildLeadOriginSnapshot(record, { mode = 'website', actor = '', attribution = {}, firstTouch = null } = {}) {
   const inquiry = record?.inquiry || {};
   return {
     schemaVersion: 1,
@@ -29,6 +46,7 @@ export function buildLeadOriginSnapshot(record, { mode = 'website', actor = '', 
     discoverySource: clean(inquiry.source, 200),
     referralSource: clean(inquiry.referralSource, 120),
     attribution: normalizeLeadAttribution(attribution),
+    firstTouch: mode === 'manual' ? null : normalizeFirstTouch(firstTouch),
     initialInquiry: {
       service: clean(inquiry.service, 80),
       eventType: clean(inquiry.eventType, 120),
