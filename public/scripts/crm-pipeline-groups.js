@@ -26,7 +26,17 @@
       });
       groups.get(key).records.push(project);
     }
-    return [...groups.values()].sort((a, b) =>
+    const values = [...groups.values()];
+    const names = new Map();
+    for (const group of values) {
+      const label = String(group.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      names.set(label, (names.get(label) || 0) + 1);
+    }
+    for (const group of values) {
+      const label = String(group.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      if ((names.get(label) || 0) > 1) group.needsReview = true;
+    }
+    return values.sort((a, b) =>
       a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
   }
   function isPipelineProject(project, stage) {
