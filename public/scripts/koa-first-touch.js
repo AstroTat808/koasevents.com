@@ -83,7 +83,12 @@
   root.KoaFirstTouch = Object.freeze({
     get() {
       if (isOptedOut()) { clear(); inMemory = null; return null; }
-      return read() || inMemory || (inMemory = capture());
+      const saved = read();
+      if (saved) return saved;
+      const memory = normalized(inMemory);
+      if (memory) return memory;
+      inMemory = capture();
+      return inMemory;
     },
     clear() { clear(); inMemory = null; },
   });
