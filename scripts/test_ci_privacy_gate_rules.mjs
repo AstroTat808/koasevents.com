@@ -32,12 +32,29 @@ jobs:
           path: visual-results/critical-integration-real-rollback-summary.json
 `;
   assert(scan(safe).status === 0, 'Safe private response + redacted summary was falsely rejected.');
+  const safeLegacy = `name: Safe legacy response capture
+jobs:
+  private-only:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          verification_file="$(mktemp)"
+          report_file="/tmp/koa-signed-health-response.json"
+          test -f "$report_file" || true
+`;
+  assert(scan(safeLegacy).status===0,'Private legacy response file assignments were incorrectly rejected.');
   const cases = [
     ['raw rollback artifact', safe.replace('critical-integration-real-rollback-summary.json', 'critical-integration-real-rollback-drill.json')],
     ['raw sandbox self-heal', safe.replace('critical-integration-real-rollback-summary.json', 'netlify-sandbox-self-heal-drill.json')],
     ['non-temporary response', safe.replace('raw_file="$(mktemp)"', 'raw_file="visual-results/raw-production.json"')],
     ['hardcoded sensitive QBO identifier', safe + '# QBO-CUST-123456\\n'],
     ['raw console output', safe.replace('curl -sS -o "$raw_file"', 'curl -sS')],
+    ['raw temporary response printed', safe.replace('test -s "$raw_file"', 'cat "$raw_file"')],
+    ['authenticated verification file echoed', safe.replace('test -s "$raw_file"', 'echo "$verification_file"')],
+    ['private response assigned to retained artifacts', safe.replace('raw_file="$(mktemp)"', 'raw_file="visual-results/raw-private-response.json"')],
+    ['response file outside temp with no Health endpoint', 'name: Source-private response\nsteps:\n  - run: |\n      report_file="visual-results/response.json"\n      test -f "$report_file"\n'],
+    ['dark mode private response outside temp', 'name: Dark-mode raw response\nsteps:\n  - run: |\n      dark_mode_response="visual-results/health.json"\n      test -f "$dark_mode_response"\n'],
+    ['raw CRM preview rows emitted to workflow', "name: Unsafe CRM preview\nsteps:\n  - run: |\n      echo '{\"rows\": preview.get(\"rows\")}'\n"],
   ];
   for (const [reason, text] of cases) {
     const result = scan(text);
