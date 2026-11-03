@@ -40,7 +40,7 @@ const store={
   async writeJSON(key,value,etag){
     if(etag===null&&values.has(key))return {modified:false};
     if(etag!==null&&(!values.has(key)||String(JSON.stringify(values.get(key)).length)!==etag))return {modified:false};
-    values.set(key,structuredClone(value));return {modified:true};
+    values.set(key,Array.isArray(value)?structuredClone(value):{...structuredClone(value),tenantId:'tenant-test'});return {modified:true};
   },
 };
 const event=makeLeadSourceCorrection({recordId:'INQ-TEST',before:'Google',after:'Planner',actor:'admin@example.com'});
