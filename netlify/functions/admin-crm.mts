@@ -544,7 +544,8 @@ export default async (req:Request, context:Context) => {
       return Response.json({error:error instanceof Error?error.message:'Unable to build duplicate merge preview.'},{status:409});
     }
     if(action==='duplicate-booking-preview')return Response.json({ok:true,preview},{headers:{'Cache-Control':'private, no-store'}});
-    if(!preview.canApply)return Response.json({error:'This merge is blocked until conflicting external links are resolved.',preview},{status:409});
+    if(!preview.canApply)return Response.json({error:'This merge is blocked by identity, project, or external-link conflicts.',preview},{status:409});
+    if(!body.previewRevision || body.previewRevision!==preview.previewRevision)return Response.json({error:'The merge preview is missing or outdated. Refresh the preview before approving any changes.',code:'stale_merge_preview',preview},{status:409});
     if(body.approve!==true)return Response.json({error:'Explicit merge approval is required.',preview},{status:409});
 
     const survivor=records.find((entry:any)=>entry?.id===survivorId);
