@@ -37,7 +37,8 @@
     "test:calendar-contrast": "python scripts/test_calendar_contrast.py --base-url http://127.0.0.1:4173",
     "test:stay-lodging": "node --experimental-strip-types scripts/test_stay_lodging_inquiry.mjs",
     "test:photo-booth": "node scripts/test_photo_booth_rental_contract.mjs",
-    "test:ci-privacy": "node scripts/ci_privacy_gate.mjs && node scripts/test_ci_privacy_gate_rules.mjs && node scripts/private_release_evidence.mjs --self-test"
+    "test:ci-privacy": "node scripts/ci_privacy_gate.mjs && node scripts/test_ci_privacy_gate_rules.mjs && node scripts/private_release_evidence.mjs --self-test",
+    "test:crm-grouping": "node --test scripts/test_crm_grouped_pipeline.mjs && node scripts/test_duplicate_bookings.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
