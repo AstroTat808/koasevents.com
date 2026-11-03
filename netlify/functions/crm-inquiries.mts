@@ -4,6 +4,7 @@ import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { normalizeLodgingPreference, sameStayLodgingChoice, validateStayInquiry } from './_shared/lodging-inquiry.ts';
+import { buildLeadOriginSnapshot } from './_shared/lead-provenance.mjs';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
   analyzeInquirySecurity,
@@ -888,6 +889,7 @@ export default async (req: Request, context: Context) => {
   } catch (error) {
     console.error('Automatic lead assignment failed', error);
   }
+  (record as any).leadProvenance = buildLeadOriginSnapshot(record, { mode: 'website', attribution: payload.attribution });
   await store.setJSON('records/' + id, record);
   await store.setJSON('records/index', [record, ...current].slice(0, 1500));
 
