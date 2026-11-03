@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 function clean(value, max = 500) {
   return String(value ?? '').trim().slice(0, max);
 }
@@ -24,6 +26,17 @@ function packageKey(record) {
       || record?.inquiry?.mobileBarPackage,
     120,
   ).toLowerCase();
+}
+
+function lineKey(record) {
+  const line = clean(record?.businessLine, 80).toLowerCase();
+  if (line) return line;
+  const origin = clean(record?.source, 120).toLowerCase();
+  return origin.includes('mobile-bar') ? 'mobile-bar' : origin.includes('wild-ones') ? 'wild-ones' : 'events';
+}
+
+function serviceKey(record) {
+  return clean(record?.inquiry?.service || record?.inquiry?.formName || '', 120).toLowerCase();
 }
 
 function proposalStrength(record) {
@@ -143,15 +156,32 @@ export function duplicateBookingGroups(records) {
       const qboCustomerConflicts = conflictValue(rows, (r) => r?.accounting?.quickbooks?.customerId);
       const signWellConflicts = conflictValue(rows, (r) => r?.booking?.contract?.signwell?.documentId);
       const eventDates = [...new Set(rows.map((r) => dateKey(r?.customer?.eventDate)).filter(Boolean))];
+      const packageConflicts = conflictValue(rows, packageKey);
+      const lineConflicts = conflictValue(rows, lineKey);
+      const serviceConflicts = conflictValue(rows, serviceKey);
+      const quoteConflicts = conflictValue(rows, (r) => r?.quoteId);
+      const explicitCustomerConflicts = conflictValue(rows, (r) => r?.customerId);
+      const estimateConflicts = conflictValue(rows, (r) => r?.accounting?.quickbooks?.estimateId);
+      const weakIdentity = rows.some(r => !emailKey(r?.customer?.email));
       return {
         key,
         count: rows.length,
         recommendedSurvivorId: clean(recommended?.id, 120),
-        blocked: qboCustomerConflicts.length > 1 || signWellConflicts.length > 1 || eventDates.length > 1,
+        blocked: weakIdentity || packageConflicts.length > 1 || lineConflicts.length > 1 ||
+          serviceConflicts.length > 1 || quoteConflicts.length > 1 ||
+          explicitCustomerConflicts.length > 1 || estimateConflicts.length > 1 ||
+          qboCustomerConflicts.length > 1 || signWellConflicts.length > 1 || eventDates.length > 1,
         conflicts: {
           quickBooksCustomerIds: qboCustomerConflicts,
           signWellDocumentIds: signWellConflicts,
           eventDates: eventDates.length > 1 ? eventDates : [],
+          packageIds: packageConflicts,
+          businessLines: lineConflicts,
+          services: serviceConflicts,
+          quoteIds: quoteConflicts,
+          customerIds: explicitCustomerConflicts,
+          estimateIds: estimateConflicts,
+          weakIdentity,
         },
         records: sorted.map((record) => ({
           id: clean(record?.id, 120),
@@ -218,6 +248,21 @@ export function buildDuplicateMergePreview(records, survivorId, sourceIds) {
   const qboIds = [...new Set([survivor, ...sources].map((r) => clean(r?.accounting?.quickbooks?.customerId, 100)).filter(Boolean))];
   const signwellIds = [...new Set([survivor, ...sources].map((r) => clean(r?.booking?.contract?.signwell?.documentId, 180)).filter(Boolean))];
   const blockingReasons = [];
+  if (!emailKey(survivor?.customer?.email) || sources.some(r => !emailKey(r?.customer?.email))) {
+    blockingReasons.push('A matching name and event date are not sufficient for a merge. Verify a strong customer identity first.');
+  }
+  for (const [label, getter] of [
+    ['business line', lineKey],
+    ['service', serviceKey],
+    ['package', packageKey],
+    ['quote', r => r?.quoteId],
+    ['customer identity', r => r?.customerId],
+    ['QuickBooks estimate', r => r?.accounting?.quickbooks?.estimateId],
+    ['event date', r => dateKey(r?.customer?.eventDate)],
+  ]) {
+    const differences = conflictValue([survivor, ...sources], getter);
+    if (differences.length > 1) blockingReasons.push('Conflicting ' + label + ': ' + differences.join(', '));
+  }
   if (qboIds.length > 1) blockingReasons.push('Conflicting QuickBooks customer links: ' + qboIds.join(', '));
   if (signwellIds.length > 1) blockingReasons.push('Conflicting SignWell document links: ' + signwellIds.join(', '));
 
@@ -232,6 +277,9 @@ export function buildDuplicateMergePreview(records, survivorId, sourceIds) {
   return {
     canApply: blockingReasons.length === 0,
     blockingReasons,
+    // The approval must bind to the exact inspected record content; any change
+    // since preview forces a fresh review rather than merging a stale snapshot.
+    previewRevision: createHash('sha256').update(JSON.stringify([survivor, ...sources])).digest('hex'),
     survivorId: clean(survivor?.id, 120),
     sourceIds: sources.map((r) => clean(r?.id, 120)),
     recommendedSurvivorId: group.recommendedSurvivorId,
