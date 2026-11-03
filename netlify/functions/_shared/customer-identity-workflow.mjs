@@ -162,11 +162,13 @@ export async function migrationAction({ action, planId, tenantId, actorId, recor
     const previous = entry.reviewDecisions?.[recordId];
     if (previous?.decision === decision && previous.reviewer === actor(actorId))
       return { approval: publicLedger(entry), saved: false };
+    if ((entry.reviewEvents || []).length >= 200) throw new IdentityMigrationError('review_history_full',
+      'This plan has reached its protected audit limit. Preserve the ledger and request administrator reconciliation.');
     const nextDecision = { decision, reviewer: actor(actorId), reviewedAt: now };
     const updated = await replaceLedger(crm, entry, current.etag, {
       ...entry, reviewDecisions: { ...(entry.reviewDecisions || {}), [recordId]: nextDecision },
       reviewEvents: [...(entry.reviewEvents || []), { recordId, before: previous?.decision || 'pending',
-        after: decision, actor: actor(actorId), at: now }].slice(-120),
+        after: decision, actor: actor(actorId), at: now }],
       reviewUpdatedAt: now,
     });
     const historySaved = await history(crm, updated);
