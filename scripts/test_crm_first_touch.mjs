@@ -73,4 +73,10 @@ for(const path of paths) {
   assert.match(source,/firstTouch:\s*window\.KoaFirstTouch\?\.get\?\.\(\)/);
 }
 assert.match(readFileSync(new URL('../src/layouts/BaseLayout.astro',import.meta.url),'utf8'),/koa-first-touch\.js/);
+persisted.clear();
+const unsafeCampaign = visit('https://koasevents.com/?utm_campaign=private%40example.com&utm_content=%2B18081234567&utm_term=https%3A%2F%2Fevil.example%2F%3Ftoken%3D123', '');
+assert.equal(unsafeCampaign.utmCampaign, '');
+assert.equal(unsafeCampaign.utmContent, '');
+assert.equal(unsafeCampaign.utmTerm, '');
+assert.equal(normalizeFirstTouch({...unsafeCampaign,utmSource:'sensitive@example.com'})?.utmSource,'');
 console.log('PASS | first-touch persists across public routes, expires after session/TTL, honors privacy control, and is stored separately in CRM');
