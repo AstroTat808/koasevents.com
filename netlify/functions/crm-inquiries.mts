@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant.ts';
-import { tenantStoreFor } from './_shared/tenant-storage.ts';
+import { conditionalTenantStoreFor, tenantStoreFor } from './_shared/tenant-storage.ts';
+import { findInquiryReplay, inquiryReplayFingerprint } from './_shared/crm-inquiry-replay.mjs';
 import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { normalizeLodgingPreference, sameStayLodgingChoice, validateStayInquiry } from './_shared/lodging-inquiry.ts';
@@ -610,6 +611,9 @@ export default async (req: Request, context: Context) => {
 
   const record = {
     id,
+    // Optional per-form retry key. Different data with the same key is rejected.
+    submissionId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanText(payload.submissionId,80))
+      ? cleanText(payload.submissionId,80).toLowerCase() : '',
     kind: 'inquiry',
     stage: 'inquiry',
     status: 'new',
@@ -730,6 +734,9 @@ export default async (req: Request, context: Context) => {
     } : null,
   };
 
+  const inquiryFingerprint = inquiryReplayFingerprint(record);
+  const submissionRecord:any = record;
+  submissionRecord.inquiryFingerprint = inquiryFingerprint;
   const notificationConfigured = Boolean(tenantEnv(resolveTenant(req),'RESEND_API_KEY'));
 
   if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
@@ -820,39 +827,22 @@ export default async (req: Request, context: Context) => {
     }
   }
 
-  if (['koa-event-inquiry', 'koa-wedding-inquiry', 'koa-mobile-bar-inquiry', 'koa-stay-inquiry'].includes(formName)) {
-    const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
-    const normalizedEmail = record.customer.email.toLowerCase();
-    const duplicate = existingRecords.find((entry: any) => {
-      if (!entry || entry.source !== formName) return false;
-      if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
-      if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
-      // Treat separate venue, bar and photo booth requests as distinct sales leads.
-      if (formName === 'koa-event-inquiry') {
-        if (String(entry.inquiry?.service || '') !== String(record.inquiry.service || '')) return false;
-        if (Boolean(entry.inquiry?.photoBoothRequested) !== Boolean(record.inquiry.photoBoothRequested)) return false;
-        if (String(entry.inquiry?.photoBoothPackage || '') !== String(record.inquiry.photoBoothPackage || '')) return false;
-      }
-      // Two different homes requested for the same travel dates are distinct leads.
-      if (formName === 'koa-stay-inquiry' &&
-          !sameStayLodgingChoice(entry.inquiry?.lodgingPreference, record.inquiry.lodgingPreference)) return false;
-      if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
-      const createdAt = Date.parse(String(entry.createdAt || ''));
-      return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;
+  // Exact inquiries are idempotent for a limited retry window. Changed answers,
+  // event dates and services are distinct requests; they remain reviewable.
+  const replayIndex = (await store.get('records/index', { type: 'json' })) || [];
+  const replayCheck = findInquiryReplay(replayIndex, submissionRecord, { now: now.getTime() });
+  if (replayCheck.conflict) return json(req,{
+    error: 'That submission ID was already used for different details. Submit again with a new request ID.',
+    code: 'submission_id_reused',
+  },409);
+  if (replayCheck.replay) {
+    const turnstileProof = expectedTurnstileAction
+      ? await createTurnstileProof(formName, record.customer.email) : '';
+    return json(req, {
+      ok: true, id: replayCheck.replay.id, deduplicated: true,
+      notificationConfigured,
+      ...(turnstileProof ? { turnstileProof } : {}),
     });
-
-    if (duplicate) {
-      const turnstileProof = expectedTurnstileAction
-        ? await createTurnstileProof(formName, record.customer.email)
-        : '';
-      return json(req, {
-        ok: true,
-        id: duplicate.id,
-        deduplicated: true,
-        notificationConfigured,
-        ...(turnstileProof ? { turnstileProof } : {}),
-      });
-    }
   }
 
   const qaMode =
@@ -880,16 +870,51 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const current = (await store.get('records/index', { type: 'json' })) || [];
-  try {
-    const staff = await listOperationalStaff();
-    const assignee = leastLoadedStaff(staff, current);
-    if (assignee) (record as any).assignment = assignmentFor(assignee, 'automatic-round-robin');
-  } catch (error) {
-    console.error('Automatic lead assignment failed', error);
+  // ETag compare-and-swap prevents two simultaneous inquiries from both
+  // committing the same exact payload on the canonical CRM index.
+  const indexStore = conditionalTenantStoreFor(context, tenant, 'sales');
+  let committed = false;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const snapshot = await indexStore.readJSON('records/index');
+    const current = Array.isArray(snapshot.data) ? snapshot.data : [];
+    const latestReplay = findInquiryReplay(current, submissionRecord, { now: now.getTime() });
+    if (latestReplay.conflict) return json(req,{
+      error: 'That submission ID already belongs to different inquiry details.', code:'submission_id_reused',
+    },409);
+    if (latestReplay.replay) {
+      const turnstileProof = expectedTurnstileAction
+        ? await createTurnstileProof(formName, record.customer.email) : '';
+      return json(req,{
+        ok:true,id:latestReplay.replay.id,deduplicated:true,notificationConfigured,
+        ...(turnstileProof ? { turnstileProof } : {}),
+      });
+    }
+    if (!(record as any).assignment) {
+      try {
+        const staff = await listOperationalStaff();
+        const assignee = leastLoadedStaff(staff, current);
+        if (assignee) (record as any).assignment = assignmentFor(assignee, 'automatic-round-robin');
+      } catch (error) {
+        console.error('Automatic lead assignment failed', error);
+      }
+    }
+    const written = await indexStore.writeJSON('records/index', [submissionRecord, ...current].slice(0, 1500), snapshot.etag);
+    if (written.modified) { committed = true; break; }
   }
-  await store.setJSON('records/' + id, record);
-  await store.setJSON('records/index', [record, ...current].slice(0, 1500));
+  if (!committed) return json(req,{
+    error:'The inquiry index is busy. Retry the same submission before starting another.',code:'inquiry_index_busy',
+  },503);
+  // Copies are projections of the committed index; never overwrite the index
+  // with a stale read while saving a secondary copy.
+  try {
+    await store.setJSON('records/' + id, submissionRecord);
+    if (!await indexStore.mirrorJSON('records/index')) console.warn('Inquiry index compatibility mirror pending', id);
+  } catch (error) {
+    console.error('Inquiry index committed but secondary copy synchronization is pending', id);
+    return json(req,{
+      error:'Your inquiry was received, but synchronization is pending. Retry the same submission.',code:'inquiry_copy_sync_pending',id,
+    },503);
+  }
 
   await recordSecurityEvent(context, req, {
     disposition: security.disposition,

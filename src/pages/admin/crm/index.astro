@@ -39,7 +39,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
             </label>
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Stage
               <select data-stage-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
-                <option value="all">All stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option><option value="lost">Lost</option>
+                <option value="all">Active stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option><option value="lost">Lost</option><option value="converted">Converted history</option>
               </select>
             </label>
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Business line
@@ -111,6 +111,19 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
             <div data-migration-history class="mt-4 grid gap-2"></div>
           </details>
         </section>
+        <section data-client-name-audit class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Evidence-based CRM review</p>
+          <h2 class="display mt-2 text-3xl">Audit customer records</h2>
+          <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/60">Find active matching names and related Trash/merged records. Classifications are suggestions, not authorization to delete or merge. This read-only audit does not modify customer data.</p>
+          <form data-client-name-audit-form class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label class="grid flex-1 gap-2 text-xs font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">Exact customer name
+              <input data-client-name-audit-input type="search" required minlength="2" maxlength="180" placeholder="Enter the customer's full name" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]" />
+            </label>
+            <button type="submit" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-bold uppercase tracking-[.06em] text-white">Run read-only audit</button>
+          </form>
+          <p data-client-name-audit-status role="status" aria-live="polite" class="mt-3 text-xs text-[var(--koa-ink)]/60"></p>
+          <div data-client-name-audit-results class="mt-3 grid gap-3"></div>
+        </section>
         <section data-duplicate-booking-section class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50/70 p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -127,12 +140,15 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
           <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
             <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Projects + contacts</p><h2 class="display mt-2 text-3xl">Client pipeline</h2></div><span data-project-count class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">0 shown</span></div>
             <div class="mt-4 flex flex-wrap items-center gap-2">
-              <button type="button" data-select-visible class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Select visible</button>
+              <button type="button" data-expand-customers class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Expand all</button>
+              <button type="button" data-collapse-customers class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Collapse all</button>
+              <button type="button" data-select-visible class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Select filtered projects</button>
               <button type="button" data-clear-selection class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear</button>
               <button type="button" data-approve-visible class="hidden rounded-full bg-emerald-800 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Approve visible as legitimate</button>
               <button type="button" data-bulk-trash class="hidden rounded-full bg-red-950 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Move selected to Trash</button>
               <button type="button" data-toggle-trash class="ml-auto rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Trash <span data-trash-count>0</span></button>
             </div>
+            <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/55">One verified customer group per person, with separate projects underneath. Converted inquiry/lead history remains accessible through the stage filter and customer profile.</p>
             <div data-project-list class="mt-5 grid max-h-[900px] gap-3 overflow-y-auto pr-1"></div>
             <div data-trash-panel class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
               <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">30-day recovery</p><h3 class="display mt-2 text-3xl">Trash</h3></div><button type="button" data-close-trash class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Close</button></div>
@@ -598,6 +614,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   })();
 </script>
 
+<script is:inline src="/scripts/crm-pipeline-groups.js"></script>
 <script is:inline>
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
@@ -613,6 +630,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   let selectedId='';
   const selectedProjects=new Set();
   let visibleProjectIds=[];
+  const expandedCustomerGroups=new Set();
+  let pipelineGroupKeys=[];
 
   // Reuse the existing CRM record model rather than creating a duplicate contact database.
   function publishRecordEditorContext(){
@@ -790,6 +809,26 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     const meta=$('[data-cleanup-policy-meta]'); if(meta) meta.textContent=data.cleanupSettings?.updatedAt?('Updated '+fmt(data.cleanupSettings.updatedAt)):'';
     renderProjects(); renderTrash(); renderDuplicateBookings(); renderAnalytics(); renderAudit(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
   }
+  async function auditCustomerName(){
+    const input=$('[data-client-name-audit-input]'),status=$('[data-client-name-audit-status]'),results=$('[data-client-name-audit-results]');
+    const name=String(input?.value||'').trim();if(name.length<2){if(status)status.textContent='Enter a full customer name.';return;}
+    if(status)status.textContent='Reading active, merged and trashed CRM record metadata…';
+    if(results)results.replaceChildren();
+    try{
+      const response=await fetch('/api/admin/crm?auditName='+encodeURIComponent(name),{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(30000)});
+      const report=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(report.error||'Could not retrieve the customer audit.');
+      const scope=report.auditScope||{}, totals=report.totals||{}, rows=report.records||[];
+      const incomplete=Boolean(totals.truncated||scope.archiveReadTruncated||scope.trashReadTruncated);
+      if(status)status.textContent=(totals.active||0)+' active · '+(totals.archived||0)+' merged archive · '+(totals.trash||0)+' Trash record(s)'+(incomplete?' · Some older history omitted by safety limits':'')+'. No records changed.';
+      if(!results)return;
+      results.innerHTML=rows.length?rows.map(row=>{
+        const protection=Object.entries(row.protectedLinks||{}).filter(([,value])=>value).map(([key])=>key).join(', ');
+        const color=row.classification==='possible_redundant_opportunity'?'border-amber-300 bg-amber-50':'border-[var(--koa-line)] bg-[var(--koa-sand)]';
+        return '<article class="min-w-0 rounded-xl border '+color+' p-4"><div class="flex flex-wrap items-start justify-between gap-2"><strong class="break-all text-sm text-[var(--koa-ink)]">'+esc(row.id)+'</strong><span class="text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(row.classification.replaceAll('_',' '))+'</span></div><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/70">'+esc(row.name)+' · '+esc(row.eventDate||'No event date')+' · '+esc(businessLineLabel(row.businessLine))+' · '+esc(row.stage||row.kind||'record')+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">Origin: '+esc(row.source||'unknown')+' · Created '+esc(fmt(row.createdAt))+' · '+esc(row.location)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">Linked lifecycle: '+esc((row.linkedLifecycleIds||[]).join(', ')||'none')+' · Potential duplicates: '+esc((row.potentialDuplicateIds||[]).join(', ')||'none')+'</p>'+(protection?'<p class="mt-1 text-xs font-semibold text-amber-900">Protected: '+esc(protection)+'</p>':'')+'<p class="mt-2 text-xs text-[var(--koa-ink)]/70">'+esc(row.recommendation)+'</p><a href="/admin/crm/?record='+encodeURIComponent(row.id)+'" class="mt-2 inline-block text-xs font-semibold underline text-[var(--koa-forest)]">Open record</a></article>';
+      }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm">No records found for that exact name in the audited scope.</p>';
+    }catch(error){if(status)status.textContent=error?.message||'Customer audit could not be completed.';}
+  }
   function renderCustomerIdentity(){
     const customers=data.customers||[];
     const audit=data.customerIdentityAudit||{totals:{},reviewGroups:[]};
@@ -853,7 +892,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     if(!list)return;
     list.innerHTML=groups.map((group,index)=>{
       const rows=(group.records||[]).map((row)=>'<div class="rounded-xl border border-amber-200 bg-white p-3"><div class="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between"><strong class="text-sm">'+esc(row.customer?.name||row.id)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] '+(row.id===group.recommendedSurvivorId?'text-emerald-800':'text-[var(--koa-ink)]/45')+'">'+(row.id===group.recommendedSurvivorId?'Recommended survivor':'Duplicate candidate')+'</span></div><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(duplicateRecordLabel(row))+'</p><p class="mt-1 text-[.65rem] text-[var(--koa-ink)]/42">Created '+esc(fmt(row.origin?.createdAt))+' · updated '+esc(fmt(row.origin?.updatedAt))+'</p></div>').join('');
-      return '<article class="rounded-xl border border-amber-200 bg-amber-100/45 p-4"><div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]">'+group.count+' records for one booking identity</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(group.key)+'</p></div><button type="button" data-review-duplicate="'+index+'" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Review merge</button></div><div class="mt-3 grid gap-2">'+rows+'</div>'+(group.blocked?'<p class="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-900">Merge blocked: external-link conflict requires manual resolution.</p>':'')+'</article>';
+      return '<article class="rounded-xl border border-amber-200 bg-amber-100/45 p-4"><div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]">'+group.count+' records for one booking identity</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(group.key)+'</p></div><button type="button" data-review-duplicate="'+index+'" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Review merge</button></div><div class="mt-3 grid gap-2">'+rows+'</div>'+(group.blocked?'<p class="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-900">Merge blocked: customer identity, project details or external links require review.</p>':'')+'</article>';
     }).join('');
     $$('[data-review-duplicate]').forEach((button)=>button.onclick=()=>openDuplicateMerge(groups[Number(button.dataset.reviewDuplicate)]));
   }
@@ -903,11 +942,17 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
       const reviewMatch=rf==='all' || (rf==='needs-review'&&(cleanup.disposition==='review'||cleanup.disposition==='auto_trash')) || (rf==='approved'&&cleanup.approvedLegitimate) || (rf==='clean'&&cleanup.disposition==='clean'&&!cleanup.approvedLegitimate);
       const band=qualificationBand(p);
       const complexity=String(p.qualification?.productionComplexity||'unscored').toLowerCase();
-      return (!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(line==='all'||p.businessLine===line)&&(qf==='all'||band===qf)&&(cf==='all'||complexity===cf)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0))&&reviewMatch;
+      return window.KoaCrmPipelineGroups.isPipelineProject(p,stage)&&(!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(line==='all'||p.businessLine===line)&&(qf==='all'||band===qf)&&(cf==='all'||complexity===cf)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0))&&reviewMatch;
     });
     visibleProjectIds=rows.map(p=>p.id);
-    $('[data-project-count]').textContent=rows.length+' shown';
-    $('[data-project-list]').innerHTML=rows.length?rows.map(p=>{
+    const customerGroups=window.KoaCrmPipelineGroups.groupProjects(rows,data.customers||[]);
+    pipelineGroupKeys=customerGroups.map(group=>group.key);
+    $('[data-project-count]').textContent=customerGroups.length+' clients · '+rows.length+' records';
+    $('[data-project-list]').innerHTML=customerGroups.length?customerGroups.map(group=>{
+      const open=expandedCustomerGroups.has(group.key)||Boolean(q)||group.records.some(p=>p.id===selectedId);
+      const customerLink=group.customerId?'<a href="/admin/clients/profile/?customerId='+encodeURIComponent(group.customerId)+'" class="text-xs font-bold underline underline-offset-2 text-[var(--koa-clay)]">Customer profile</a>':'';
+      return '<details data-pipeline-customer="'+esc(group.key)+'" '+(open?'open':'')+' class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white shadow-sm"><summary class="cursor-pointer list-item px-4 py-4 text-sm text-[var(--koa-ink)]"><span class="inline-flex flex-wrap items-center gap-2"><strong class="text-base">'+esc(group.name)+'</strong><span class="rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.58rem] font-bold">'+group.records.length+' record'+(group.records.length===1?'':'s')+'</span>'+(group.needsReview?'<span class="rounded-full bg-amber-50 px-2 py-1 text-[.58rem] font-bold text-amber-900">Identity review</span>':'')+'</span><span class="mt-1 block text-xs text-[var(--koa-ink)]/55">'+esc(group.email||'Contact not verified')+'</span></summary><div class="grid gap-2 px-3 pb-3"><div class="flex justify-end">'+customerLink+'</div>'+group.records.map(p=>{
+      const childTitle=p.projectName||p.inquiry?.eventType||(p.kind==='lead'?'Customer lead':(p.kind==='proposal'?'Event proposal':'Event inquiry'));
       const tasks=openTasks(p.id).length;
       const tags=(p.meta?.tags||[]).slice(0,3).map(t=>'<span class="rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.58rem] font-black uppercase tracking-[.06em]">'+esc(t)+'</span>').join('');
       const cleanup=p.cleanup||{disposition:'clean',score:0,reasons:[]};
@@ -923,8 +968,12 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
           : ['send_failed','error','bounced','declined','canceled','expired'].includes(swStatus)
             ? '<span class="rounded-full bg-red-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-red-900">SignWell '+esc(swStatus.replaceAll('_',' '))+'</span>'
             : '';
-      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><div data-project="'+esc(p.id)+'" role="button" tabindex="0" class="min-w-0 cursor-pointer text-left"><div class="flex items-start justify-between gap-3"><div><a data-client-workspace="'+esc(p.id)+'" href="/admin/clients/?id='+encodeURIComponent(p.id)+'&tab=overview" class="text-base font-bold text-[var(--koa-ink)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]">'+esc(p.customer?.name||'Unnamed client')+'</a><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.projectName||'')+(p.projectName?' - ':'')+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p><p class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/65">Source: '+esc(leadSourceLabel(p))+'<span class="mx-1">·</span>Received: '+esc(leadReceivedLabel(p))+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+lineBadge+qualificationBadge+cleanupBadge+signwellBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></div></div>';
-    }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No projects match these filters.</p>';
+      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><div data-project="'+esc(p.id)+'" role="button" tabindex="0" class="min-w-0 cursor-pointer text-left"><div class="flex items-start justify-between gap-3"><div><a data-client-workspace="'+esc(p.id)+'" href="/admin/clients/?id='+encodeURIComponent(p.id)+'&tab=overview" class="text-base font-bold text-[var(--koa-ink)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]">'+esc(childTitle)+'</a><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.customer?.eventDate||'No event date')+' · '+esc(p.packageId||'No package')+' · Created '+esc(p.createdAt?fmt(p.createdAt):'Unknown')+'</p><p class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/65">Source: '+esc(leadSourceLabel(p))+'<span class="mx-1">·</span>Received: '+esc(leadReceivedLabel(p))+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+lineBadge+qualificationBadge+cleanupBadge+signwellBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></div></div>';
+      }).join('')+'</div></details>';
+    }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No customer projects match these filters.</p>';
+    $$('[data-pipeline-customer]').forEach(group=>{
+      group.addEventListener('toggle',()=>{group.open?expandedCustomerGroups.add(group.dataset.pipelineCustomer):expandedCustomerGroups.delete(group.dataset.pipelineCustomer);});
+    });
     $$('[data-project]').forEach(b=>{b.addEventListener('click',(event)=>{if(event.target?.closest?.('[data-client-workspace]'))return;selectedId=b.dataset.project;renderProjects();renderDetail();renderAudit();});b.addEventListener('keydown',(event)=>{if((event.key==='Enter'||event.key===' ')&&!event.target?.closest?.('[data-client-workspace]')){event.preventDefault();selectedId=b.dataset.project;renderProjects();renderDetail();renderAudit();}});});
     $$('[data-project-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?selectedProjects.add(ch.dataset.projectCheck):selectedProjects.delete(ch.dataset.projectCheck);updateBulkUi();}));
     updateBulkUi();
@@ -1289,7 +1338,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     const button=$('[data-duplicate-merge-apply]'),original=button?.textContent||'Merge duplicate booking';
     if(button){button.disabled=true;button.textContent='Merging…';}
     try{
-      await post({action:'merge-duplicate-booking',survivorId,sourceIds,approve:true});
+      await post({action:'merge-duplicate-booking',survivorId,sourceIds,previewRevision:duplicateMergePreview.previewRevision,approve:true});
       if(message)message.textContent='Duplicate booking merged. Archived source records remain available in merge history.';
       const modal=$('[data-duplicate-merge-modal]');modal?.classList.add('hidden');modal?.classList.remove('flex');
       duplicateMergeGroup=null;duplicateMergePreview=null;selectedId=survivorId;await load();
@@ -1297,6 +1346,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     finally{if(button){button.disabled=false;button.textContent=original;}}
   });
 
+  $('[data-client-name-audit-form]')?.addEventListener('submit',event=>{event.preventDefault();auditCustomerName();});
   $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-business-line-filter]')?.addEventListener('change',renderProjects); $('[data-qualification-filter]')?.addEventListener('change',renderProjects); $('[data-complexity-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
   $$('[data-analytics-range]').forEach(b=>b.addEventListener('click',()=>{analyticsRange=b.dataset.analyticsRange||'7';renderAnalytics();}));
   $$('[data-trend-granularity]').forEach(b=>b.addEventListener('click',()=>{trendGranularity=b.dataset.trendGranularity||'day';renderAnalytics();}));
@@ -1332,6 +1382,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
     renderProjects();
   });
   $('[data-clear-selection]')?.addEventListener('click',()=>{selectedProjects.clear();renderProjects();});
+  $('[data-expand-customers]')?.addEventListener('click',()=>{pipelineGroupKeys.forEach(key=>expandedCustomerGroups.add(key));renderProjects();});
+  $('[data-collapse-customers]')?.addEventListener('click',()=>{expandedCustomerGroups.clear();renderProjects();});
   $('[data-bulk-trash]')?.addEventListener('click',async()=>{
     const ids=[...selectedProjects]; if(!ids.length)return;
     if(!confirm('Move '+ids.length+' selected clients to Trash?\n\nAny proposal, booking, contract, invoice, or payment-linked records will be protected and skipped.'))return;

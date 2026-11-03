@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { findInquiryReplay, inquiryReplayFingerprint } from '../netlify/functions/_shared/crm-inquiry-replay.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 
 const read = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
@@ -88,8 +89,27 @@ assert.match(crm, /photoBoothRequested: Boolean\(payload\.inquiry\?\.photoBoothR
 assert.match(crm, /photoBoothPackage: cleanText\(payload\.inquiry\?\.photoBoothPackage, 80\)/);
 assert.match(crm, /photoBoothEventLocation: cleanText\(payload\.inquiry\?\.photoBoothEventLocation, 320\)/);
 assert.match(crm, /photoBoothExtras: cleanStringList\(payload\.inquiry\?\.photoBoothExtras, 10, 160\)/);
-assert.match(crm, /String\(entry\.inquiry\?\.service \|\| ''\) !== String\(record\.inquiry\.service \|\| ''\)/);
-assert.match(crm, /Boolean\(entry\.inquiry\?\.photoBoothRequested\) !== Boolean\(record\.inquiry\.photoBoothRequested\)/);
+// Regression: distinct service and Photo Booth options are never suppressed
+// as duplicate inquiries, even for the same email, event date and form.
+assert.match(crm, /findInquiryReplay\(/);
+assert.match(crm, /conditionalTenantStoreFor\(/);
+const replayBase = {
+  id: 'KEI-TEST-ONE', source: 'koa-event-inquiry', businessLine: 'events',
+  createdAt: '2026-10-23T00:00:00Z', customer: { name: 'Synthetic Booth Inquiry', email: 'booth@example.test', eventDate: '2027-09-18' },
+  inquiry: { formName: 'koa-event-inquiry', service: 'venue', photoBoothRequested: false, photoBoothPackage: '', photoBoothExtras: [] },
+};
+const replayCopy = { ...replayBase, id: 'KEI-TEST-RETRY' };
+const replayOptions = { now: Date.parse(replayBase.createdAt) + 60_000 };
+assert.equal(inquiryReplayFingerprint(replayBase), inquiryReplayFingerprint(replayCopy));
+assert.equal(findInquiryReplay([replayBase], replayCopy, replayOptions).replay?.id, replayBase.id);
+for (const changes of [
+  { service: 'photo-booth' }, { photoBoothRequested: true },
+  { photoBoothPackage: 'signature' }, { photoBoothExtras: ['LED backdrop'] },
+]) {
+  const distinct = { ...replayCopy, inquiry: { ...replayCopy.inquiry, ...changes } };
+  assert.equal(findInquiryReplay([replayBase], distinct, replayOptions).replay, null,
+    'Distinct Photo Booth inquiry options must not be treated as exact retries');
+}
 
 assert.match(catalog, /name: 'Foto Master Mirror X Photo Booth'/);
 assert.match(catalog, /photoBoothPackages\[0\]\.price/);
