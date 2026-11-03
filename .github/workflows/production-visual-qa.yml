@@ -37,7 +37,7 @@ jobs:
   release-status-pending:
     name: Mark production release pending
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Publish fail-closed pending status
         shell: bash
@@ -66,7 +66,7 @@ jobs:
 
   source-build-audit:
     name: Source + Astro build audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Chromium and WebKit each run the full seven-viewport authenticated fixture.
     # Retain every assertion; allocate enough time for screenshots on GitHub runners.
     timeout-minutes: 60
@@ -458,7 +458,7 @@ jobs:
     name: Deploy route + asset smoke
     if: github.event_name != 'pull_request'
     needs: source-build-audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -550,7 +550,7 @@ jobs:
     name: Live Light / Dark / System audit
     if: github.event_name != 'pull_request' && always()
     needs: [source-build-audit, deployed-smoke]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -775,7 +775,7 @@ jobs:
     name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
     needs: [source-build-audit, deployed-smoke]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -811,7 +811,7 @@ jobs:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
     needs: [deployed-smoke, production-theme-audit, visual-audit]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -1035,7 +1035,7 @@ jobs:
     name: Responsive visual audit
     if: github.event_name != 'pull_request' && always()
     needs: [deployed-smoke, production-theme-audit]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -1079,7 +1079,7 @@ jobs:
       - admin-startup-audit
       - system-health-mobile-audit
       - visual-audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -1357,7 +1357,7 @@ jobs:
     name: Visual QA summary
     if: always()
     needs: [source-build-audit, deployed-smoke, production-theme-audit, admin-startup-audit, system-health-mobile-audit, visual-audit, production-release-attestation]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Publish run summary
         run: |
