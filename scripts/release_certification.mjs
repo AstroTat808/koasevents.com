@@ -19,6 +19,7 @@ const GITHUB_TOKEN=String(process.env.GITHUB_TOKEN||'').trim();
 const NETLIFY_TOKEN=String(process.env.NETLIFY_AUTH_TOKEN||'').trim();
 const NETLIFY_SITE_ID='d1f3ab06-be2a-41c4-b770-59e6a6acd1b9';
 const NETLIFY_CONTEXT='netlify/koasevents-website/deploy-preview';
+const PRODUCTION_GATE_CONTEXT='System Health production release gate';
 const REQUIRED_WORKFLOWS=['Production visual QA','Branch hygiene','VenueLoom tenant isolation CI'];
 const OUT_DIR='release-certification';
 const META_PATH=OUT_DIR+'/candidate.json';
@@ -33,6 +34,20 @@ function state(run){
   return run.conclusion==='success'
     ? {kind:'ok',reason:run.name+' passed.'}
     : {kind:'failure',reason:run.name+' finished '+String(run.conclusion||'unknown')+' in '+String(run.html_url||run.id||'unknown')+'.'};
+}
+// A green PR preview must not supersede an in-flight production attestation.
+// Failed, terminal production runs are allowed so a corrective PR is not deadlocked;
+// their non-certified state is retained in the candidate and final evidence.
+function baseReleaseState(run,status){
+  if(!run)return {kind:'pending',reason:'Current main has no production release workflow.'};
+  if(run.status!=='completed')return {kind:'pending',reason:'Current main production audit is '+run.status+'.'};
+  if(!['success','failure'].includes(run.conclusion))return {kind:'failure',reason:'Main production workflow ended '+String(run.conclusion)+'. Administrator intervention is required.'};
+  if(!status || !['success','failure'].includes(status.state))return {kind:'pending',reason:'Current main has not published a terminal signed System Health release status.'};
+  const target=String(status.target_url||'');
+  if(target!=='https://github.com/'+REPO+'/actions/runs/'+run.id)
+    return {kind:'pending',reason:'Current main health status is not bound to its latest exact-SHA production audit.'};
+  return {kind:'ok',outcome:status.state,runId:run.id,runConclusion:run.conclusion,
+    reason:status.state==='success'?'Current main certified.':'Current main completed with a failed certification; only a new certified release can clear it.'};
 }
 function mostRecent(items){
   return [...items].sort((a,b)=>
@@ -80,7 +95,17 @@ function selfTest(){
   try{validateEvidence('webkit',{...ok,results:[row('phone',390,844),row('phone',390,844)]});}
   catch{caught=true;}
   assert(caught,'Missing desktop platform proof was not rejected.');
-  console.log('PASS | release CI state and exact-browser-evidence negative tests.');
+  const prodRun={id:123,name:'Production visual QA',status:'completed',conclusion:'success'};
+  const signed={state:'success',target_url:'https://github.com/'+REPO+'/actions/runs/123'};
+  assert(baseReleaseState(prodRun,signed).kind==='ok','Signed exact-run healthy main must clear the serialization guard.');
+  assert(baseReleaseState({...prodRun,status:'in_progress'},signed).kind==='pending','In-flight main must block a second PR merge.');
+  assert(baseReleaseState(prodRun,{...signed,target_url:'https://github.com/'+REPO+'/actions/runs/999'}).kind==='pending',
+    'An unrelated or stale run status must never unlock a merge.');
+  assert(baseReleaseState(prodRun,{...signed,state:'pending'}).kind==='pending','Pending health blocks merge.');
+  assert(baseReleaseState({...prodRun,conclusion:'failure'},{...signed,state:'failure'}).kind==='ok',
+    'A completed failed release must not deadlock a corrective PR.');
+  assert(baseReleaseState(null,signed).kind==='pending','Missing main audit cannot bypass certification.');
+  console.log('PASS | release CI, exact-browser evidence and serialized-production negative tests.');
 }
 async function json(url,token){
   const response=await fetch(url,{
@@ -117,10 +142,15 @@ async function snapshot(){
   const compare=await github('/compare/'+mainSha+'...'+EXPECTED_HEAD);
   assert(compare.behind_by===0&&compare.ahead_by>0&&compare.merge_base_commit?.sha===mainSha,
     'FAIL CLOSED: PR is behind/diverged from current main '+mainSha+' (behind '+compare.behind_by+', ahead '+compare.ahead_by+').');
-  const [runData,statusData]=await Promise.all([
+  const [runData,statusData,baseRuns,baseStatuses]=await Promise.all([
     github('/actions/runs?head_sha='+EXPECTED_HEAD+'&event=pull_request&per_page=100'),
     github('/statuses/'+EXPECTED_HEAD+'?per_page=100'),
+    github('/actions/runs?head_sha='+mainSha+'&event=push&per_page=100'),
+    github('/statuses/'+mainSha+'?per_page=100'),
   ]);
+  const baseRun=mostRecent((baseRuns.workflow_runs||[]).filter(r=>r.name==='Production visual QA'&&r.head_sha===mainSha&&r.event==='push'));
+  const baseStatus=(Array.isArray(baseStatuses)?baseStatuses:[]).find(s=>s.context===PRODUCTION_GATE_CONTEXT);
+  const baseProduction=baseReleaseState(baseRun,baseStatus);
   const runs=Array.isArray(runData.workflow_runs)?runData.workflow_runs:[];
   const checkMap={};
   for(const name of REQUIRED_WORKFLOWS){
@@ -143,7 +173,7 @@ async function snapshot(){
       'FAIL CLOSED: Netlify preview '+deployId+' metadata does not match exact PR HEAD/site/review or is not ready.');
   }
   return {
-    pr:PR_NUMBER,head:EXPECTED_HEAD,main:mainSha,
+    pr:PR_NUMBER,head:EXPECTED_HEAD,main:mainSha,baseProduction,
     checks:checkMap,preview:{...preview,deployId:deployId||null,commitBinding:'GitHub Netlify status for exact HEAD',
       independentNetlifyCommitVerified:Boolean(NETLIFY_TOKEN&&preview.kind==='ok')},
     checkedAt:new Date().toISOString(),
@@ -151,11 +181,13 @@ async function snapshot(){
 }
 function failed(gate){
   return Object.entries(gate.checks).filter(([,value])=>value.kind==='failure').map(([name,x])=>name+': '+x.reason)
-    .concat(gate.preview.kind==='failure'?[gate.preview.reason]:[]);
+    .concat(gate.preview.kind==='failure'?[gate.preview.reason]:[])
+    .concat(gate.baseProduction.kind==='failure'?[gate.baseProduction.reason]:[]);
 }
 function pending(gate){
   return Object.entries(gate.checks).filter(([,value])=>value.kind==='pending').map(([name,x])=>name+': '+x.reason)
-    .concat(gate.preview.kind==='pending'?[gate.preview.reason]:[]);
+    .concat(gate.preview.kind==='pending'?[gate.preview.reason]:[])
+    .concat(gate.baseProduction.kind==='pending'?[gate.baseProduction.reason]:[]);
 }
 async function preflight(){
   const deadline=Date.now()+30*60*1000;
@@ -172,7 +204,8 @@ async function preflight(){
       if(process.env.GITHUB_OUTPUT){
         appendFileSync(process.env.GITHUB_OUTPUT,'qa_run_id='+runId+'\npreview_deploy_id='+gate.preview.deployId+'\n');
       }
-      console.log('PASS | current main '+gate.main+' is ancestor of exact PR HEAD '+gate.head+
+      console.log('PASS | current main '+gate.main+' completed production run '+gate.baseProduction.runId+
+        ' with '+gate.baseProduction.outcome+' health status; PR HEAD '+gate.head+
         '; three CI checks and Netlify preview '+gate.preview.deployId+' passed.');
       return;
     }
@@ -200,6 +233,9 @@ async function final(){
   const gate=await snapshot();
   assert(gate.head===initial.head&&gate.main===initial.main,'FAIL CLOSED: PR HEAD or main changed after initial certification.');
   assert(failed(gate).length===0&&pending(gate).length===0,'FAIL CLOSED: exact-head required checks changed status.');
+  assert(gate.baseProduction.runId===initial.baseProduction.runId &&
+    gate.baseProduction.outcome===initial.baseProduction.outcome,
+    'FAIL CLOSED: Base production certification changed during PR release approval.');
   assert(gate.checks['Production visual QA'].runId===initial.checks['Production visual QA'].runId,
     'FAIL CLOSED: QA run was replaced after evidence download.');
   assert(gate.preview.deployId===initial.preview.deployId,'FAIL CLOSED: preview deployment changed after evidence check.');
