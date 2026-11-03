@@ -16,6 +16,9 @@ const publicLedger = value => value && ({
   planId: value.planId, status: value.status, createdAt: value.createdAt,
   approvedAt: value.approvedAt || '', appliedAt: value.appliedAt || '',
   rolledBackAt: value.rolledBackAt || '', assignmentCount: value.assignments.length,
+  candidateCount: value.candidateCount || value.assignments.length,
+  reviewDecisions: value.reviewDecisions || {},
+  reviewEvents: value.reviewEvents || [],
   initiator: value.initiator, approver: value.approver || '',
   appliedRevision: value.appliedRevision || '', sourceRevision: value.sourceRevision,
   syncPending: Boolean(value.syncPending), syncWarnings: value.syncWarnings || [],
@@ -26,8 +29,12 @@ async function history(crm, entry) {
     const snapshot = await crm.readJSON(prefix + 'index');
     const rows = Array.isArray(snapshot.data) ? snapshot.data : [];
     const latest = [{ planId: entry.planId, status: entry.status, createdAt: entry.createdAt,
-      updatedAt: entry.rolledBackAt || entry.appliedAt || entry.approvedAt || entry.createdAt,
-      assignmentCount: entry.assignments.length, syncPending: Boolean(entry.syncPending) },
+      updatedAt: entry.rolledBackAt || entry.appliedAt || entry.approvedAt || entry.reviewUpdatedAt || entry.createdAt,
+      assignmentCount: entry.assignments.length, candidateCount: entry.candidateCount || entry.assignments.length,
+      reviewedCount: Object.keys(entry.reviewDecisions || {}).length,
+      reviewMode: entry.approvalMode || 'legacy',
+      approvedCount: Object.values(entry.reviewDecisions || {}).filter(row => row?.decision === 'approve').length,
+      syncPending: Boolean(entry.syncPending) },
       ...rows.filter(row => row.planId !== entry.planId)].slice(0, 75);
     const result = await crm.writeJSON(prefix + 'index', latest, snapshot.etag);
     if (result.modified) return true;
@@ -89,12 +96,25 @@ export async function migrationPreview({ tenantId, sales, crm }) {
   const records = snapshot.data ?? [];
   const plan = buildIdentityMigrationPlan(records, tenantId);
   const ledger = await readCrm(ledgerKey(plan.planId));
+  const taskSnapshot = await readCrm('tasks/index');
+  if (taskSnapshot.data != null && !Array.isArray(taskSnapshot.data)) throw new IdentityMigrationError(
+    'task_index_invalid', 'The task index requires review before orphan associations can be assessed.');
+  const ids = new Set(records.map(row => row?.id).filter(Boolean));
+  const orphanTasks = (taskSnapshot.data || []).filter(row => row?.id && !ids.has(row.recordId)).map(row => ({
+    id: String(row.id), recordId: String(row.recordId || ''), title: String(row.title || '').slice(0, 160),
+    dueDate: String(row.dueDate || ''), status: String(row.status || ''),
+    actionAllowed: false, reason: 'A verified target project and independent approval are required before task relinking.',
+  }));
   const historySnapshot = await readCrm(prefix + 'index');
   const recent = Array.isArray(historySnapshot.data) ? historySnapshot.data : [];
-  return { plan, currentApproval: publicLedger(ledger.data), recentMigrations: recent };
+  return { plan, currentApproval: publicLedger(ledger.data), recentMigrations: recent,
+    orphanTaskReviews: { count: orphanTasks.length, records: orphanTasks, readOnly: true },
+    financialAssociationReviews: { status: 'blocked_pending_authoritative_join', readOnly: true,
+      reason: 'Booking, invoice and payment links require original transaction IDs, LinkedTxn evidence and independent approvals. No automatic financial relinking is permitted.' },
+  };
 }
-export async function migrationAction({ action, planId, tenantId, actorId, sales, crm, now = new Date().toISOString() }) {
-  if (!['propose', 'approve', 'apply', 'rollback', 'reconcile'].includes(action)) {
+export async function migrationAction({ action, planId, tenantId, actorId, recordId = '', decision = '', sales, crm, now = new Date().toISOString() }) {
+  if (!['propose', 'review-record', 'approve', 'apply', 'rollback', 'reconcile'].includes(action)) {
     throw new IdentityMigrationError('invalid_action', 'Choose a supported customer migration action.', 400);
   }
   if (!/^CIM-[0-9A-F]{24}$/.test(planId)) throw new IdentityMigrationError('invalid_plan',
@@ -113,7 +133,9 @@ export async function migrationAction({ action, planId, tenantId, actorId, sales
     if (entry) return { approval: publicLedger(entry), saved: false };
     const proposed = { ...plan, status: 'proposed', initiator: actor(actorId), createdAt: now,
       approver: '', approvedAt: '', appliedAt: '', rolledBackAt: '', appliedRevision: '',
-      syncPending: false, syncWarnings: [] };
+      syncPending: false, syncWarnings: [],
+      approvalMode: 'per-record', candidateCount: plan.assignments.length,
+      reviewDecisions: {}, reviewEvents: [], reviewUpdatedAt: '' };
     const saved = await crm.writeJSON(ledgerKey(planId), proposed, null);
     if (!saved.modified) throw new IdentityMigrationError('approval_race', 'The plan was already proposed. Reload the preview.');
     const historySaved = await history(crm, proposed);
@@ -124,6 +146,34 @@ export async function migrationAction({ action, planId, tenantId, actorId, sales
   if (entry.planId !== planId || !Array.isArray(entry.assignments)) {
     throw new IdentityMigrationError('invalid_ledger', 'Migration audit metadata requires review.');
   }
+  if (action === 'review-record') {
+    if (entry.status !== 'proposed' || entry.approvalMode !== 'per-record')
+      throw new IdentityMigrationError('invalid_migration_state', 'Only pending record-level proposals may be reviewed.');
+    if (actor(actorId) === entry.initiator) throw new IdentityMigrationError('second_approver_required',
+      'A different administrator must decide each customer identity assignment.');
+    const selected = entry.assignments.find(row => row.recordId === recordId);
+    if (!selected) throw new IdentityMigrationError('record_not_in_plan', 'The requested record is not in this approved review scope.', 400);
+    if (!['approve', 'reject'].includes(decision)) throw new IdentityMigrationError('invalid_decision',
+      'Choose approve or reject for this exact record.', 400);
+    if (revision(records) !== entry.sourceRevision ||
+      buildIdentityMigrationPlan(records, tenantId).planId !== planId ||
+      recordRevision(records.find(row => row.id === recordId)) !== selected.beforeRevision)
+      throw new IdentityMigrationError('plan_changed', 'CRM records changed; generate a new read-only preview before continuing.');
+    const previous = entry.reviewDecisions?.[recordId];
+    if (previous?.decision === decision && previous.reviewer === actor(actorId))
+      return { approval: publicLedger(entry), saved: false };
+    if ((entry.reviewEvents || []).length >= 200) throw new IdentityMigrationError('review_history_full',
+      'This plan has reached its protected audit limit. Preserve the ledger and request administrator reconciliation.');
+    const nextDecision = { decision, reviewer: actor(actorId), reviewedAt: now };
+    const updated = await replaceLedger(crm, entry, current.etag, {
+      ...entry, reviewDecisions: { ...(entry.reviewDecisions || {}), [recordId]: nextDecision },
+      reviewEvents: [...(entry.reviewEvents || []), { recordId, before: previous?.decision || 'pending',
+        after: decision, actor: actor(actorId), at: now }],
+      reviewUpdatedAt: now,
+    });
+    const historySaved = await history(crm, updated);
+    return { approval: publicLedger(updated), saved: true, historySyncPending: !historySaved };
+  }
   if (action === 'approve') {
     if (entry.status !== 'proposed') throw new IdentityMigrationError('invalid_migration_state',
       'Only proposed migrations can be approved.');
@@ -133,7 +183,19 @@ export async function migrationAction({ action, planId, tenantId, actorId, sales
       'Records changed after proposal. Preview and propose a new plan.');
     const check = buildIdentityMigrationPlan(records, tenantId);
     if (check.planId !== planId) throw new IdentityMigrationError('plan_changed', 'The current plan no longer matches this proposal.');
-    const approved = await replaceLedger(crm, entry, current.etag, { ...entry, status: 'approved', approver: actor(actorId), approvedAt: now });
+    let approvedAssignments = entry.assignments;
+    if (entry.approvalMode === 'per-record') {
+      const reviews = entry.reviewDecisions || {};
+      if (entry.assignments.some(row => !reviews[row.recordId]))
+        throw new IdentityMigrationError('record_reviews_incomplete', 'Every candidate must be individually approved or rejected before final approval.');
+      approvedAssignments = entry.assignments.filter(row => reviews[row.recordId]?.decision === 'approve');
+      if (!approvedAssignments.length)
+        throw new IdentityMigrationError('no_approved_records', 'No individual identity assignments were approved.');
+      if (approvedAssignments.some(row => reviews[row.recordId]?.reviewer === entry.initiator))
+        throw new IdentityMigrationError('second_approver_required', 'An independent administrator must review each assignment.');
+    }
+    const approved = await replaceLedger(crm, entry, current.etag, { ...entry,
+      assignments: approvedAssignments, status: 'approved', approver: actor(actorId), approvedAt: now });
     const historySaved = await history(crm, approved);
     return { approval: publicLedger(approved), historySyncPending: !historySaved };
   }

@@ -85,6 +85,11 @@ test('two-admin approval and rollback retain signed records and payment history'
   };
   new Function('require','module','exports',compiled)(name=>modules[name],module,module.exports);
   const secondHandle=module.exports.default;
+  const incomplete=await secondHandle(call('approve',id),{});
+  assert.equal(incomplete.status,409);
+  assert.equal((await incomplete.json()).code,'record_reviews_incomplete');
+  const reviewed=await secondHandle(call('review-record',id,{body:{recordId:'INQ-A',decision:'approve',confirmation:'REVIEW'}}),{});
+  assert.equal(reviewed.status,200);
   assert.equal((await secondHandle(call('approve',id),{})).status,200);
   assert.equal((await secondHandle(call('apply',id),{})).status,200);
   const after=(await e.sales.readJSON('records/index')).data[0];
@@ -92,5 +97,7 @@ test('two-admin approval and rollback retain signed records and payment history'
   assert.deepEqual(after.booking,records[0].booking);
   assert.deepEqual(after.accounting,records[0].accounting);
   assert.equal((await secondHandle(call('rollback',id),{})).status,200);
+  const badDecision=await secondHandle(call('review-record',id,{body:{recordId:'INQ-A',decision:'delete',confirmation:'REVIEW'}}),{});
+  assert.equal(badDecision.status,422);
   assert.deepEqual((await e.sales.readJSON('records/index')).data,records);
 });

@@ -19,7 +19,9 @@ test('migration GET preview uses no-write storage methods and never calls writes
   assert.deepEqual(result.plan.changeType,'assign_missing_customer_id_only');
   assert.equal(result.currentApproval,null);
   assert.deepEqual(result.recentMigrations,[]);
-  assert.equal(reads.length,3);
-  assert.deepEqual(reads.map(x=>x.split(':')[0]),['sales','crm','crm']);
+  assert.equal(reads.length,4);
+  assert.deepEqual(reads.map(x=>x.split(':')[0]),['sales','crm','crm','crm']);
+  assert.equal(result.orphanTaskReviews.count,0);
+  assert.equal(result.financialAssociationReviews.readOnly,true);
   assert.equal(records[0].customerId,undefined);
 });
