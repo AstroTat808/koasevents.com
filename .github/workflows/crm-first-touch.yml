@@ -1,0 +1,25 @@
+name: CRM first-touch attribution
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  first-touch-regression:
+    name: First-touch persistence and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test client-side attribution, privacy and server validation
+        run: node scripts/test_crm_first_touch.mjs
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify compiled site and inquiry forms
+        run: npm run build

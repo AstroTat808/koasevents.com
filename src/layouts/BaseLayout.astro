@@ -320,6 +320,12 @@ const seoSchema = {
   <body class={isAdminPage ? 'koa-admin-page' : undefined}>
     <script is:inline>
       (() => {
+        if (!/^\/(?:admin|staff|bartender|booking|proposal|planning|portal|api)(?:\/|$)/i.test(window.location.pathname)) {
+          const firstTouchScript = document.createElement('script');
+          firstTouchScript.src = '/scripts/koa-first-touch.js';
+          firstTouchScript.async = true;
+          document.head.appendChild(firstTouchScript);
+        }
         const key = 'koa-theme-preference';
         const allowed = new Set(['light', 'dark', 'system']);
         const root = document.documentElement;
