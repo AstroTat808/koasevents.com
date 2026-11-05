@@ -102,7 +102,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
         <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">This browser</p>
         <p data-workspace-current-device class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">Checking…</p>
         <p data-workspace-current-device-detail class="mt-1 text-xs text-[var(--koa-ink)]/55"></p>
-        <button data-workspace-trust-current type="button" class="workspace-account-primary mt-3">Trust this browser</button>
+        <button data-workspace-trust-current type="button" class="workspace-account-primary mt-3">Trust and remember this browser</button>
+        <p class="mt-2 text-[.67rem] leading-5 text-[var(--koa-ink)]/55">On a personal device, this also enables remembered sign-in for up to 30 days while Netlify Identity remains valid. Do not use on shared computers.</p>
       </div>
 
       <div class="workspace-account-expiry mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-3">
@@ -1474,8 +1475,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 </style>
 
 <script>
-  import { logout } from '@netlify/identity';
+  import { AUTH_EVENTS, logout, onAuthChange } from '@netlify/identity';
   import { getAdminSession } from '../lib/admin-session';
+
+  // Identity performs its own refresh/rotation. Observe the documented event,
+  // never inspect, transmit, or store the refresh credential in application code.
+  onAuthChange((event,user)=>{
+    if(event!==AUTH_EVENTS.TOKEN_REFRESH||!user)return;
+    void fetch('/api/auth/session-event',{
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({event:'refresh_succeeded'}),
+    }).catch(()=>null);
+  });
 
   const nav = document.querySelector('[data-workspace-nav]');
   const bottomNav = document.querySelector('[data-workspace-bottom-nav]');
@@ -1651,8 +1663,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       :'Not trusted';
     if(currentDetail)currentDetail.textContent=data?.currentDevice?.device||'Current browser';
     if(trustButton instanceof HTMLButtonElement){
-      trustButton.disabled=Boolean(data?.currentDevice?.trusted);
-      trustButton.textContent=data?.currentDevice?.trusted?'Browser trusted':'Trust this browser';
+      trustButton.disabled=false;
+      trustButton.textContent=data?.currentDevice?.trusted?'Remember this trusted browser':'Trust and remember this browser';
     }
     if(!(list instanceof HTMLElement))return;
     list.innerHTML='';
@@ -2585,13 +2597,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
   });
 
-  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
-    await logout();
+  async function secureSignOut(){
+    const response=await fetch('/api/auth/bound-logout',{method:'POST',credentials:'same-origin'});
+    if(!response.ok)throw new Error('Could not revoke this browser session. Retry sign out.');
+    await logout().catch(()=>null);
     window.location.assign('/staff/');
+  }
+  nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async()=>{
+    try{await secureSignOut();}
+    catch{window.alert('Unable to revoke this session. Sign out again when the connection is available.');}
   });
-  nav?.querySelector('[data-workspace-account-logout]')?.addEventListener('click', async () => {
-    await logout();
-    window.location.assign('/staff/');
+  nav?.querySelector('[data-workspace-account-logout]')?.addEventListener('click', async()=>{
+    try{await secureSignOut();}
+    catch{window.alert('Unable to revoke this session. Sign out again when the connection is available.');}
   });
 
   async function showWorkspaceNav() {

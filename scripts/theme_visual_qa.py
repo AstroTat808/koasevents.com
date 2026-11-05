@@ -426,6 +426,61 @@ def main():
    if detail:failures.append(row)
    page.close();ctx.close()
 
+  # Synthetic browser session lifecycle (not a substitute for live 30-day credential tests).
+  for viewport,width,height,dpr in VIEWPORTS:
+   ctx=browser.new_context(viewport={"width":width,"height":height},device_scale_factor=dpr,
+     is_mobile=width<768,has_touch=width<768,reduced_motion="reduce")
+   session_state={"revoked":False}
+   ctx.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   def session_lifecycle_response(route):
+    if session_state["revoked"]:
+     route.fulfill(status=401,content_type="application/json",body=json.dumps({"code":"session_revoked"}))
+    else:
+     route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture))
+   ctx.route("**/api/admin/session**",session_lifecycle_response)
+   ctx.route("**/api/session-lifecycle-probe**",
+     lambda route:route.fulfill(status=401,content_type="application/json",body=json.dumps({"code":"endpoint_specific"})))
+   page=ctx.new_page()
+   def record_lifecycle(case,detail):
+    row={"route":"/admin/health/","preference":"session-lifecycle","viewport":viewport,
+     "width":width,"height":height,"case":case,"synthetic":True,"failure":detail}
+    results.append(row)
+    if detail:failures.append(row)
+   try:
+    response=page.goto(base+"/admin/health/",wait_until="domcontentloaded",timeout=30000)
+    if not response or response.status>=400:
+     raise RuntimeError("Synthetic admin health document unavailable.")
+    page.wait_for_timeout(200)
+    status=page.evaluate("async () => (await fetch('/api/session-lifecycle-probe')).status")
+    page.wait_for_timeout(150)
+    detail="" if status==401 and "/admin/health/" in page.url else "Unrelated API 401 unexpectedly redirected the workspace."
+    record_lifecycle("unrelated-api-401",detail)
+
+    page.reload(wait_until="domcontentloaded",timeout=30000)
+    page.wait_for_timeout(250)
+    detail="" if "/admin/health/" in page.url else "Healthy synthetic session was lost on same-context reload."
+    record_lifecycle("page-reload",detail)
+
+    second=ctx.new_page()
+    second.goto(base+"/admin/health/",wait_until="domcontentloaded",timeout=30000)
+    second.wait_for_timeout(250)
+    detail="" if "/admin/health/" in second.url else "Healthy synthetic session was lost across browser tabs."
+    record_lifecycle("second-tab",detail)
+    second.close()
+
+    session_state["revoked"]=True
+    page.reload(wait_until="domcontentloaded",timeout=30000)
+    page.wait_for_url("**/admin/?reason=session_expired*",timeout=6000)
+    detail="" if "reason=session_expired" in page.url and "returnTo=" in page.url else "Revoked synthetic session did not redirect with return path."
+    record_lifecycle("canonical-session-revoked",detail)
+   except Exception as exc:
+    # Missing cases are explicit failures so incomplete runs never certify.
+    done={row["case"] for row in results if row.get("preference")=="session-lifecycle" and row.get("viewport")==viewport}
+    for case in ("unrelated-api-401","page-reload","second-tab","canonical-session-revoked"):
+     if case not in done:record_lifecycle(case,"Session lifecycle QA incomplete: "+str(exc)[:240])
+   finally:
+    page.close();ctx.close()
+
   browser.close()
 
  contrast_findings=[]

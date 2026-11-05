@@ -8,14 +8,14 @@ import {
   requestDeviceFingerprint,
   requestUserAgent,
   sendSuspiciousLoginAlert,
-  TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
 } from './_shared/auth-security';
 import { ipFingerprint } from './_shared/security';
 
 function clean(v:unknown,max=300){return String(v||'').trim().slice(0,max);}
 function sameOrigin(req:Request){
   const origin=clean(req.headers.get('origin'),300);
-  return !origin||origin==='https://koasevents.com'||origin==='https://www.koasevents.com';
+  try{return Boolean(origin&&new URL(origin).origin===new URL(req.url).origin);}
+  catch{return false;}
 }
 
 export default async(req:Request,context:Context)=>{
@@ -59,6 +59,9 @@ export default async(req:Request,context:Context)=>{
       deviceFingerprint,
     });
     const session=await registerManagedSession(req,user);
+    // A prior Identity JWT cannot enroll itself after a device was revoked.
+    if(!session)return Response.json({error:'Fresh sign-in required.',code:'session_binding_required'},
+      {status:401,headers:{'Cache-Control':'private, no-store'}});
     const createdAt=new Date().toISOString();
 
     let alert:{sent:boolean;suppressed:boolean;error?:string;reason?:string;lastSentAt?:string}={
@@ -113,9 +116,8 @@ export default async(req:Request,context:Context)=>{
       reasons:risk.reasons,
       trustedDevice:risk.trustedDevice,
       alert:{sent:alert.sent,suppressed:alert.suppressed,reason:alert.reason||''},
-      session,
-    });
-    if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
+      session:{tracked:true},
+    },{headers:{'Cache-Control':'private, no-store'}});
     return response;
   }
 

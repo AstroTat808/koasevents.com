@@ -19,7 +19,7 @@ const GITHUB_TOKEN=String(process.env.GITHUB_TOKEN||'').trim();
 const NETLIFY_TOKEN=String(process.env.NETLIFY_AUTH_TOKEN||'').trim();
 const NETLIFY_SITE_ID='d1f3ab06-be2a-41c4-b770-59e6a6acd1b9';
 const NETLIFY_CONTEXT='netlify/koasevents-website/deploy-preview';
-const REQUIRED_WORKFLOWS=['Production visual QA','Branch hygiene','VenueLoom tenant isolation CI'];
+const REQUIRED_WORKFLOWS=['Production visual QA','Branch hygiene','VenueLoom tenant isolation CI','Identity live session QA'];
 const OUT_DIR='release-certification';
 const META_PATH=OUT_DIR+'/candidate.json';
 const SHA=/^[a-f0-9]{40}$/i;
@@ -40,6 +40,19 @@ function mostRecent(items){
     || Number(b.run_attempt||0)-Number(a.run_attempt||0)
     || Date.parse(b.created_at||0)-Date.parse(a.created_at||0))[0]||null;
 }
+// GitHub marks a workflow successful when its jobs were skipped. A live Identity
+// certification requires BOTH exact-head preview proof and an executed QA job.
+function validateIdentityRunJobs(jobs){
+  const results=Array.isArray(jobs)?jobs:[];
+  for(const name of ['Verify exact-SHA Identity test preview','Authenticated Identity browser QA']){
+    const matches=results.filter(row=>row?.name===name);
+    assert(matches.length===1 && matches[0]?.status==='completed' && matches[0]?.conclusion==='success',
+      'Identity live session QA missing or not successful: '+name+'.');
+  }
+  return {providerBacked:true,runner:'chromium+webkit',browserRestart:'storage-restore-simulation',
+    physicalIphoneSafariVerified:false};
+}
+
 function validateEvidence(browser,report){
   assert(report&&report.browser===browser,'Missing or wrong '+browser+' report.');
   assert(Number.isInteger(report.routes)&&report.routes>0,'No '+browser+' routes.');
@@ -53,7 +66,20 @@ function validateEvidence(browser,report){
       &&row.width===width&&row.height===height&&row.failure==='');
     assert(matches.length===1,browser+' /admin/platform/ Dark Mode missing/failed at '+width+'x'+height+'.');
   }
-  return {browser,routes:report.routes,cases:report.cases,failures:0,platform:{phone:'passed',desktop:'passed'}};
+  // Require independently recorded synthetic login lifecycle cases on both engines
+  // and both form factors; a missing/malformed report blocks certification.
+  const lifecycleCases=['unrelated-api-401','page-reload','second-tab','canonical-session-revoked'];
+  for(const [viewport,width,height] of [['phone',390,844],['desktop',1440,900]]){
+    for(const testCase of lifecycleCases){
+      const matches=report.results.filter(row=>
+        row.route==='/admin/health/'&&row.preference==='session-lifecycle'
+        &&row.viewport===viewport&&row.width===width&&row.height===height
+        &&row.case===testCase&&row.synthetic===true&&row.failure==='');
+      assert(matches.length===1,browser+' missing or failed synthetic session lifecycle '+testCase+' at '+width+'x'+height+'.');
+    }
+  }
+  return {browser,routes:report.routes,cases:report.cases,failures:0,
+    platform:{phone:'passed',desktop:'passed'},sessionLifecycle:{cases:8,formFactors:2,synthetic:true,status:'passed'}};
 }
 function assertHealthCode(){
   const code=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
@@ -70,7 +96,14 @@ function selfTest(){
   assert(state({name:'QA',status:'completed',conclusion:'failure'}).kind==='failure','CI fail test');
   assert(state({name:'QA',status:'queued'}).kind==='pending','CI pending test');
   const row=(viewport,w,h)=>({route:'/admin/platform/',preference:'dark',viewport,width:w,height:h,failure:''});
-  const ok={browser:'webkit',routes:1,cases:2,results:[row('phone',390,844),row('desktop',1440,900)],failures:[]};
+  const lifecycle=['unrelated-api-401','page-reload','second-tab','canonical-session-revoked'];
+  const synthetic=[];
+  for(const [viewport,width,height] of [['phone',390,844],['desktop',1440,900]]){
+    for(const testCase of lifecycle)synthetic.push({route:'/admin/health/',preference:'session-lifecycle',
+      viewport,width,height,case:testCase,synthetic:true,failure:''});
+  }
+  const ok={browser:'webkit',routes:1,cases:2+synthetic.length,
+    results:[row('phone',390,844),row('desktop',1440,900),...synthetic],failures:[]};
   validateEvidence('webkit',ok);
   let caught=false;
   try{validateEvidence('webkit',{...ok,results:[row('phone',390,844),{...row('desktop',1440,900),failure:'contrast failed'}],failures:[{route:'/admin/platform/'}]});}
@@ -80,7 +113,25 @@ function selfTest(){
   try{validateEvidence('webkit',{...ok,results:[row('phone',390,844),row('phone',390,844)]});}
   catch{caught=true;}
   assert(caught,'Missing desktop platform proof was not rejected.');
-  console.log('PASS | release CI state and exact-browser-evidence negative tests.');
+  caught=false;
+  try{validateEvidence('webkit',{...ok,cases:ok.cases-1,results:ok.results.filter(r=>r.case!=='second-tab'||r.viewport!=='phone')});}
+  catch{caught=true;}
+  assert(caught,'Missing synthetic browser lifecycle evidence was not rejected.');
+  caught=false;
+  try{validateEvidence('webkit',{...ok,results:ok.results.map(r=>r.case==='unrelated-api-401'&&r.viewport==='phone'?{...r,failure:'Unexpected redirect'}:r)});}
+  catch{caught=true;}
+  assert(caught,'Unexpected logout lifecycle evidence was not rejected.');
+  const livePass=['Verify exact-SHA Identity test preview','Authenticated Identity browser QA'].map(name=>({name,status:'completed',conclusion:'success'}));
+  assert(validateIdentityRunJobs(livePass).providerBacked,'Actual Identity QA jobs not recognized.');
+  caught=false;
+  try{validateIdentityRunJobs([{...livePass[0]},{...livePass[1],conclusion:'skipped'}]);}
+  catch{caught=true;}
+  assert(caught,'Skipped live Identity QA was accepted.');
+  caught=false;
+  try{validateIdentityRunJobs([{...livePass[0]}]);}
+  catch{caught=true;}
+  assert(caught,'Missing live Identity QA was accepted.');
+  console.log('PASS | release CI state, live Identity QA negative cases and browser evidence tests.');
 }
 async function json(url,token){
   const response=await fetch(url,{
@@ -126,7 +177,13 @@ async function snapshot(){
   for(const name of REQUIRED_WORKFLOWS){
     const run=mostRecent(runs.filter(r=>r.name===name&&r.head_sha===EXPECTED_HEAD&&r.event==='pull_request'));
     const result=state(run);
-    checkMap[name]={...result,runId:run?.id||null,runUrl:run?.html_url||null};
+    if(name==='Identity live session QA'&&result.kind==='ok'){
+      const data=await github('/actions/runs/'+run.id+'/jobs?per_page=100');
+      checkMap[name]={...result,runId:run.id,runUrl:run.html_url,
+        evidence:validateIdentityRunJobs(data.jobs)};
+    }else{
+      checkMap[name]={...result,runId:run?.id||null,runUrl:run?.html_url||null};
+    }
   }
   const statuses=(Array.isArray(statusData)?statusData:[]).filter(x=>x.context===NETLIFY_CONTEXT);
   const latest=statuses[0];
@@ -173,7 +230,7 @@ async function preflight(){
         appendFileSync(process.env.GITHUB_OUTPUT,'qa_run_id='+runId+'\npreview_deploy_id='+gate.preview.deployId+'\n');
       }
       console.log('PASS | current main '+gate.main+' is ancestor of exact PR HEAD '+gate.head+
-        '; three CI checks and Netlify preview '+gate.preview.deployId+' passed.');
+        '; four CI checks and Netlify preview '+gate.preview.deployId+' passed.');
       return;
     }
     if(Date.now()>=deadline)throw new Error('Release certification timed out: '+remaining.join(' | '));
@@ -200,6 +257,8 @@ async function final(){
   const gate=await snapshot();
   assert(gate.head===initial.head&&gate.main===initial.main,'FAIL CLOSED: PR HEAD or main changed after initial certification.');
   assert(failed(gate).length===0&&pending(gate).length===0,'FAIL CLOSED: exact-head required checks changed status.');
+  assert(gate.checks['Identity live session QA'].runId===initial.checks['Identity live session QA'].runId,
+    'FAIL CLOSED: live Identity QA run was replaced after preflight.');
   assert(gate.checks['Production visual QA'].runId===initial.checks['Production visual QA'].runId,
     'FAIL CLOSED: QA run was replaced after evidence download.');
   assert(gate.preview.deployId===initial.preview.deployId,'FAIL CLOSED: preview deployment changed after evidence check.');

@@ -3,7 +3,11 @@ import { admin, getUser } from '@netlify/identity';
 import { readAuthSecurityPolicy } from './_shared/admin';
 import {
   isTrustedDevice,
+  listManagedSessions,
+  readAuthEvents,
+  revokeManagedSession,
   managedSessionStatus,
+  rememberCurrentBoundSession,
   readTrustedDeviceSettings,
   readTrustedDevices,
   registerManagedSession,
@@ -13,7 +17,6 @@ import {
   saveTrustedDeviceSettings,
   trustKnownDevice,
   trustedDeviceHandle,
-  TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
   untrustKnownDevice,
 } from './_shared/auth-security';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -82,6 +85,12 @@ export default async (req:Request, context:Context) => {
   }
 
   const actor=clean(current.email,240).toLowerCase();
+  // An Identity JWT alone must not permit security mutations on a revoked
+  // tracked browser. Preserve server-side revocation until a fresh sign-in.
+  const signedInSession=await managedSessionStatus(req,current.id);
+  if(signedInSession.revoked)
+    return Response.json({error:'This session has been revoked.',code:'session_revoked'},
+      {status:401,headers:{'Cache-Control':'private, no-store'}});
 
   if(req.method==='GET'){
     const [policy,trustedDeviceSettings,trustedDevices,currentFingerprint,currentStatus]=await Promise.all([
@@ -95,6 +104,21 @@ export default async (req:Request, context:Context) => {
     const currentTrusted=Boolean(currentFingerprint&&await isTrustedDevice(current.id,currentFingerprint));
     const currentTrustedRow=currentTrusted?trustedDevices.find((row)=>row.fingerprint===currentFingerprint):null;
     const devices=await Promise.all(trustedDevices.map((row)=>deviceView(row,currentFingerprint)));
+    const managedSessions=await listManagedSessions(current.id,req);
+    const refreshEvents=(await readAuthEvents(500)).filter((event)=>event.userId===current.id&&event.type==='session_refreshed');
+    const sessionHealth=await Promise.all(managedSessions.map(async (row:any)=>({
+      handle:await trustedDeviceHandle(row.id),
+      device:clean(row.trustedName||row.device||'Browser',120),
+      current:Boolean(row.current),
+      active:Boolean(row.active),
+      trusted:Boolean(row.trusted),
+      createdAt:clean(row.createdAt,80),
+      lastSeenAt:clean(row.lastSeenAt,80),
+      expiresAt:clean(row.expiresAt,80),
+      boundUntil:clean(row.boundUntil,80),
+      revokedAt:clean(row.revokedAt,80),
+      reason:row.revokedAt?'revoked':(!row.active?'binding_expired':'active'),
+    })));
     return Response.json({
       forcePasswordChange:meta?.forcePasswordChange===true,
       passwordChangedAt:clean(meta?.passwordChangedAt,80),
@@ -106,6 +130,15 @@ export default async (req:Request, context:Context) => {
         name:clean(currentTrustedRow?.name,120),
         device:clean(currentStatus?.session?.device||'Current browser',160),
         tracked:Boolean(currentStatus?.session),
+      },
+      sessionHealth:{
+        sessions:sessionHealth,
+        activeCount:sessionHealth.filter((row)=>row.active).length,
+        trustedCount:devices.length,
+        refreshStatus:'client_reported',
+        lastRefreshAt:refreshEvents[0]?.createdAt||'',
+        refreshEventCount:refreshEvents.length,
+        note:'Refresh timestamps are client-reported after a verified Identity session refresh; they do not independently prove refresh-token rotation.',
       },
       trustedDevices:devices.sort((a,b)=>Number(b.current)-Number(a.current)||Date.parse(b.lastSeenAt||'')-Date.parse(a.lastSeenAt||'')),
     },{headers:{'Cache-Control':'private, no-store'}});
@@ -121,9 +154,11 @@ export default async (req:Request, context:Context) => {
     const session=await registerManagedSession(req,current);
     if(!session?.id)return Response.json({error:'Current browser session could not be identified.'},{status:409});
     if(session.revokedAt)return Response.json({error:'This browser session has been revoked. Sign in again before trusting it.'},{status:409});
+    const currentFingerprint=await requestDeviceFingerprint(req);
+    if(!currentFingerprint)return Response.json({error:'Browser identifier unavailable.'},{status:409});
     const trusted=await trustKnownDevice(
       current.id,
-      session.id,
+      currentFingerprint,
       actor,
       context,
       actor,
@@ -137,12 +172,13 @@ export default async (req:Request, context:Context) => {
       detail:'Trusted the current browser as '+trusted.name+'.',
       metadata:{device:trusted.device,name:trusted.name},
     });
+    const persistenceCookie=await rememberCurrentBoundSession(req,current.id);
     const response=Response.json({
       ok:true,
-      message:trusted.name+' is now trusted.',
-      device:await deviceView(trusted,session.id),
+      message:trusted.name+' is trusted and this browser is remembered for up to 30 days while Identity credentials remain valid.',
+      device:await deviceView(trusted,currentFingerprint),
     },{headers:{'Cache-Control':'private, no-store'}});
-    response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
+    response.headers.append('Set-Cookie',persistenceCookie);
     return response;
   }
 
@@ -210,6 +246,24 @@ export default async (req:Request, context:Context) => {
       ok:true,
       message:'Trusted-device status revoked.',
     },{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='revoke-session'){
+    const handle=clean(body.handle,80);
+    if(!/^[A-Za-z0-9_-]{32}$/.test(handle))return Response.json({error:'Invalid session handle.'},{status:400});
+    const sessions=await listManagedSessions(current.id,req);
+    let match:any=null;
+    for(const session of sessions){
+      if(await trustedDeviceHandle(session.id)===handle){match=session;break;}
+    }
+    if(!match)return Response.json({error:'Session not found.'},{status:404});
+    if(match.revokedAt)return Response.json({ok:true,revoked:true});
+    await revokeManagedSession(current.id,match.id,actor,context,actor);
+    await appendStaffAudit(context,{
+      actor,action:'self_session_revoked',subjectId:clean(current.id,120),subjectEmail:actor,
+      detail:'Revoked a tracked browser session.',metadata:{current:Boolean(match.current)},
+    });
+    return Response.json({ok:true,revoked:true,current:Boolean(match.current)},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='change-password'){

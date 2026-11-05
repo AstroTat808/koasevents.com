@@ -38,6 +38,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <label class="grid gap-2 text-sm font-semibold">Password
               <span class="relative block"><input data-login-password name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 pr-24" /><button data-toggle-login-password type="button" class="absolute inset-y-0 right-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Show</button></span>
             </label>
+            <label class="flex items-start gap-3 text-sm text-[var(--koa-ink)]"><input name="remember" type="checkbox" class="mt-1 size-4" /><span><strong>Keep me signed in on this browser</strong><span class="block text-xs opacity-65">Up to 30 days, subject to Identity session expiry and device revocation. Leave unchecked on shared devices.</span></span></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
             <p data-auth-error class="hidden text-sm text-red-700"></p>
             <div class="flex flex-wrap gap-4"><button data-show-recovery-request type="button" class="text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Forgot password?</button><button data-show-bootstrap type="button" class="text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Create or repair an approved admin account</button></div>
@@ -179,7 +180,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { acceptInvite, getUser, handleAuthCallback, login, logout, recoverPassword, requestPasswordRecovery, updateUser } from '@netlify/identity';
+    import { acceptInvite, getUser, handleAuthCallback, login, logout, refreshSession, recoverPassword, requestPasswordRecovery, updateUser } from '@netlify/identity';
     import { getAdminSession } from '../../lib/admin-session';
 
     const loginForm = document.querySelector('[data-login-form]');
@@ -802,9 +803,26 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           return;
         }
 
-        const user = await getUser();
-        if (returnAfterLogin(user)) return;
-        showAuthState(user);
+        let user = await getUser();
+        // Use Netlify Identity's supported refresh flow; never authenticate with koa_sid.
+        if (!user) {
+          try {
+            await refreshSession();
+            user = await getUser();
+            if(user)void fetch('/api/auth/session-event',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({event:'refresh_succeeded'}),
+            }).catch(()=>null);
+          } catch {
+            // Missing, expired or revoked Identity refresh cookie requires sign-in.
+          }
+        }
+        // Identity alone is not sufficient: a deleted/revoked Koa binding
+        // must show the password sign-in instead of claiming the user is active.
+        const canonical=user?await fetch('/api/admin/session',{cache:'no-store'}).catch(()=>null):null;
+        const verifiedUser=canonical?.ok?user:null;
+        if (returnAfterLogin(verifiedUser)) return;
+        showAuthState(verifiedUser);
       } catch (err) {
         if (authError) {
           authError.textContent = err instanceof Error ? err.message : 'Unable to process the sign-in link.';
@@ -836,11 +854,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           submitButton.textContent = 'Creating account…';
         }
         const user = await acceptInvite(inviteToken, password);
+        await establishBoundLogin(String(user?.email||submittedEmail).trim().toLowerCase(),password);
         inviteToken = '';
         inviteEmail = '';
         history.replaceState(null, '', '/admin/');
         if (inviteError) inviteError.classList.add('hidden');
-        showAuthState(user);
+        window.location.assign('/admin/');
       } catch (err) {
         const raw = err instanceof Error ? err.message : '';
         const status = Number(err?.status || err?.cause?.status || 0);
@@ -957,16 +976,29 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }
     });
 
+    async function establishBoundLogin(email,password,remember=false){
+      const response=await fetch('/api/auth/bound-login',{
+        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email,password,remember}),
+      });
+      if(!response.ok){
+        const body=await response.json().catch(()=>({}));
+        throw Object.assign(new Error(body.error||'Unable to sign in.'),{status:response.status});
+      }
+      await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'success'})}).catch(()=>null);
+    }
+
     loginForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const data = new FormData(loginForm);
       const email = String(data.get('email') || '').trim().toLowerCase();
       try {
-        const user = await login(email, String(data.get('password')));
-        await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'success',email})}).catch(()=>null);
+        await establishBoundLogin(email,String(data.get('password')||''),data.get('remember')==='on');
         if (authError) authError.classList.add('hidden');
-        if (returnAfterLogin(user)) return;
-        showAuthState(user);
+        // A full navigation hydrates the freshly server-set Identity and binding cookies.
+        const target=requestedReturnTo||'/admin/';
+        window.location.assign(target);
       } catch (err) {
         await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'failure',email})}).catch(()=>null);
         if (authError) {
@@ -1033,12 +1065,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           const recoveredUser = await recoverPassword(recoveryToken, password);
           const email = String(recoveredUser?.email || '').trim().toLowerCase();
           if (!email) throw new Error('Password updated, but the administrator session could not be established. Sign in with the new password.');
-          user = await login(email, password);
+          await establishBoundLogin(email,password);
+          user=recoveredUser;
         } else {
           await updateUser({ password });
           const currentUser = await getUser();
           const email = String(currentUser?.email || '').trim().toLowerCase();
-          user = email ? await login(email, password) : currentUser;
+          if(!email)throw new Error('Sign in with the new password to continue.');
+          await establishBoundLogin(email,password);
+          user=currentUser;
         }
         recoveryToken = '';
         recoveryMode = false;
@@ -1055,7 +1090,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
 
     async function signOut() {
-      await logout();
+      const response=await fetch('/api/auth/bound-logout',{method:'POST',credentials:'same-origin'});
+      if(!response.ok)throw new Error('Unable to revoke the current browser session.');
+      await logout().catch(()=>null);
       showAuthState(null);
     }
 
