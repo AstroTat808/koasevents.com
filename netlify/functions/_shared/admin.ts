@@ -155,6 +155,7 @@ export const PAGE_CAPABILITIES = {
   '/admin/seo/': 'seo.view',
   '/admin/security/': 'security.view',
   '/admin/health/': 'health.view',
+  '/admin/releases/': 'health.view',
 } as const;
 
 export type AuthSecurityPolicy = {

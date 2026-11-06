@@ -168,6 +168,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <a data-admin-module data-module-id="platform-admin" data-capability="admin.dashboard.view" href="/admin/platform/" class="rounded-[1.3rem] bg-stone-950 p-6 text-white shadow-sm"><span class="display text-3xl">VenueLoom Super Admin</span><span class="mt-2 block text-sm text-white/65">Platform-wide organizations, subscriptions, health, domains, integrations, migration status and audited read-only support mode.</span></a>
                 <a data-admin-module data-module-id="user-management" data-capability="users.manage" href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Create users, assign roles and permissions, deactivate or remove accounts, reset or set passwords, and review security activity.</span></a>
                 <a data-admin-module data-module-id="system-health" data-capability="health.view" href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)]"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
+                <a data-admin-module data-module-id="release-command-center" data-capability="health.view" href="/admin/releases/" class="rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Release Command Center</span><span class="mt-2 block text-sm text-white/65">Executive GitHub and Netlify release certification, Dark Mode browser evidence, and production System Health.</span></a>
                 <a data-admin-module data-module-id="security" data-capability="security.view" href="/admin/security/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/65">Review blocked attempts, suspicious inquiry flags, rate limits, and legitimate inquiry volume.</span></a>
               </div>
             </section>
@@ -222,7 +223,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         operations:['event-ops','calendar','vendor-crm','insurance'],
         accounting:['quickbooks'],
         content:['email-preview','seo','blog','gallery'],
-        administration:['user-management','system-health','security'],
+        administration:['user-management','system-health','release-command-center','security'],
       },
     };
     const ADMIN_HOME_SECTION_LABELS={
@@ -249,6 +250,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       gallery:'Gallery',
       'user-management':'User Management',
       'system-health':'System Health',
+      'release-command-center':'Release Command Center',
       security:'Security + Spam',
     };
     let savedAdminHomeLayout=structuredClone(ADMIN_HOME_DEFAULT_LAYOUT);
