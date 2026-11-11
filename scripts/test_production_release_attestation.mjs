@@ -83,12 +83,12 @@ const server=readFileSync('netlify/functions/github-main-health-signal.ts','utf8
 const healthShared=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
 const healthPage=readFileSync('src/pages/admin/health/index.astro','utf8');
 const gateContextOccurrences=(workflow.match(/System Health production release gate/g)||[]).length;
-assert(gateContextOccurrences===4
+assert(gateContextOccurrences===6
   &&workflow.includes('Verify actual certified PDF and JSON serializer bytes')
   &&workflow.includes('fail_export_proof()')
   &&workflow.includes('node scripts/verify_live_certified_export_bytes.mjs')
   &&workflow.includes('Certified PDF/JSON byte-level security evidence verification failed.'),
-  'Production release gate must have exactly four authorized publishers: initial pending, final attestation, history failure override and certified PDF/JSON byte-proof failure override; found '+gateContextOccurrences+'.');
+  'Production release gate must have exactly six authorized publishers: initial pending, pre-attestation decision, history failure override, PDF/JSON byte-proof failure override, finalization failure override, and final certified success; found '+gateContextOccurrences+'.');
 assert(workflow.includes("import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';"),
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
@@ -120,7 +120,7 @@ assert(persistShell.includes('trap fail_history ERR')
   'Release-history persistence must preserve fail-closed status publication and durable recorder enforcement.');
 const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes',shellEnd);
 const bytesShellStart=workflow.indexOf('        run: |\n',bytesStep);
-const bytesShellEnd=workflow.indexOf('\n  qa-summary:',bytesShellStart);
+const bytesShellEnd=workflow.indexOf('\n      - name: Publish certified production gate after durable attestation and export bytes',bytesShellStart);
 assert(bytesStep>shellEnd&&bytesShellStart>bytesStep&&bytesShellEnd>bytesShellStart,
   'Certified PDF/JSON byte-proof shell step was not found.');
 const bytesShell=workflow.slice(bytesShellStart+'        run: |\n'.length,bytesShellEnd)
@@ -130,7 +130,27 @@ assert(bytesSyntax.status===0,
   'Certified export-byte fail-closed shell must pass bash -n: '+String(bytesSyntax.stderr||'').slice(0,350));
 assert(bytesShell.includes('trap fail_export_proof ERR')
   &&bytesShell.includes('node scripts/verify_live_certified_export_bytes.mjs'),
-  'PDF/JSON byte-proof failure must immediately revoke a green production release status.');
+  'PDF/JSON byte-proof failure must immediately block production release certification.');
+const finalStep=workflow.indexOf('      - name: Publish certified production gate after durable attestation and export bytes');
+const finalShellStart=workflow.indexOf('        run: |\n',finalStep);
+const finalShellEnd=workflow.indexOf('\n  qa-summary:',finalShellStart);
+assert(finalStep>bytesStep&&finalShellStart>finalStep&&finalShellEnd>finalShellStart,
+  'Final success must be published only after certified release history and PDF/JSON bytes.');
+const finalShell=workflow.slice(finalShellStart+'        run: |\n'.length,finalShellEnd)
+  .split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
+const finalSyntax=spawnSync('bash',['-n'],{input:finalShell,encoding:'utf8'});
+assert(finalSyntax.status===0,
+  'Final signed release success shell must pass bash -n: '+String(finalSyntax.stderr||'').slice(0,350));
+assert(finalShell.includes('trap fail_closed ERR')
+    &&finalShell.includes('koa-final-gate-failure-status.json')
+    &&finalShell.includes('koa-final-gate-success-status.json')
+    &&finalShell.includes('/branches/main')
+    &&finalShell.includes('verify-production-release-attestation')
+    &&finalShell.includes("live.get('deployId')==live.get('liveDeployId')"),
+  'Final status publishing must fail closed and revalidate current GitHub main and exact live Netlify deploy.');
+assert(workflow.includes("state:decision.ok?'pending':'failure'")
+  &&workflow.includes("process.exit(x.decision.ok?0:1)"),
+  'Successful preliminary release checks must remain pending until durable evidence passes.');
 assert(server.includes("body?.action==='record-production-release-attestation'"),
   'The OIDC control plane must expose exact-release attestation persistence.');
 assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|null')
