@@ -30,6 +30,35 @@ requireMatch(
   !section.includes('current.get("failed")<=') &&
   !section.includes('current.get("failed")<'),
   'Never dilute the exact zero-failure release gate');
+
+// Certified production status must never be published by a scheduled run
+// before durable release history and signed PDF/JSON evidence are verified.
+const signedMainGate="(github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'";
+const certifiedStep=workflow.indexOf('      - name: Publish certified production gate after durable attestation and export bytes');
+const historyStep=workflow.indexOf('      - name: Persist certified release attestation history');
+const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes');
+const decisionStep=workflow.indexOf('      - name: Publish final fail-closed production release status');
+requireMatch(workflow.includes('    if: always() && '+signedMainGate),
+  'Signed final gate must run for main push/schedule but never untrusted alternate URLs');
+requireMatch(workflow.includes('    name: Mark production release pending\n    if: '+signedMainGate),
+  'Main push/schedule must mark release pending');
+requireMatch(decisionStep>=0 && decisionStep<historyStep && historyStep<bytesStep && bytesStep<certifiedStep,
+  'Release gate success must be published only after durable history and PDF/JSON byte verification');
+const preCertification=workflow.slice(decisionStep,historyStep);
+const finalCertification=workflow.slice(certifiedStep);
+requireMatch(preCertification.includes("state:decision.ok?'pending':'failure'"),
+  'Successful pre-certification evaluation must publish pending, not success');
+requireMatch(preCertification.includes('process.exit(x.decision.ok?0:1)'),
+  'Only a successful policy decision may advance to durable attestation');
+for (const marker of [
+  "'decision',{}",
+  "koa-release-history-response.json",
+  "koa-final-main.json",
+  "koa-final-deploy-recheck.json",
+  "live.get('deployId')==live.get('liveDeployId')",
+  "'state':'success'",
+]) requireMatch(finalCertification.includes(marker),'Missing fail-closed final signed proof: '+marker);
+
 if(failures.length){
   failures.forEach(message=>console.error('FAIL | '+message));
   process.exit(1);
