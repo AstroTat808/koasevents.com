@@ -36,7 +36,7 @@ env:
 jobs:
   release-status-pending:
     name: Mark production release pending
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - name: Publish fail-closed pending status
@@ -532,7 +532,7 @@ jobs:
           rm -f "$verification_file"
           test "$http_status" = "200"
       - name: Verify live uncertified PDF and JSON exports are rejected
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
         run: node scripts/verify_live_certified_export_rejections.mjs
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
@@ -1070,7 +1070,7 @@ jobs:
         run: node scripts/publish_responsive_release_evidence.mjs
   production-release-attestation:
     name: Final production release attestation
-    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
     needs:
       - release-status-pending
       - source-build-audit
@@ -1282,10 +1282,10 @@ jobs:
           decision.ok=decision.ok && mainOk;
           decision.state=decision.ok?'success':'failure';
           const payload={
-            state:decision.state,
+            state:decision.ok?'pending':'failure',
             context:'System Health production release gate',
             description:(decision.ok
-              ? 'Exact production SHA, Netlify deploy, deploy ID, System Health, and visual QA verified.'
+              ? 'QA passed; awaiting durable release history and PDF/JSON byte verification.'
               : 'Production release blocked: required verification did not complete successfully.').slice(0,140),
             target_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
           };
@@ -1301,7 +1301,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/koa-production-release-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
+          node -e "const x=require('/tmp/koa-production-release-decision.json'); process.exit(x.decision.ok?0:1)"
 
       - name: Persist certified release attestation history
         if: success()
@@ -1411,6 +1411,95 @@ jobs:
           }
           trap fail_export_proof ERR
           node scripts/verify_live_certified_export_bytes.mjs
+          trap - ERR
+
+      - name: Publish certified production gate after durable attestation and export bytes
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail_closed() {
+            trap - ERR
+            python - <<'PY'
+          import json,os
+          payload={
+            "state":"failure",
+            "context":"System Health production release gate",
+            "description":"Final exact-SHA certified release verification did not complete.",
+            "target_url":"https://github.com/{}/actions/runs/{}".format(os.environ["GITHUB_REPOSITORY"],os.environ["GITHUB_RUN_ID"]),
+          }
+          open("/tmp/koa-final-gate-failure-status.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+            curl -sS --connect-timeout 10 --max-time 30 -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/koa-final-gate-failure-status.json \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null || true
+            exit 1
+          }
+          trap fail_closed ERR
+          python - <<'PY'
+          import json,os
+          result=json.load(open('/tmp/koa-production-release-decision.json'))
+          history=json.load(open('/tmp/koa-release-history-response.json'))
+          assert result.get('decision',{}).get('ok') is True
+          assert result.get('decision',{}).get('mainOk') is True
+          assert history.get('ok') is True and history.get('recorded') is True
+          assert history.get('expectedSha')==os.environ['GITHUB_SHA']
+          assert history.get('deployId')==history.get('liveDeployId')==result.get('deployId')
+          att=history.get('releaseAttestation') or {}
+          assert att.get('status')=='verified'
+          assert att.get('productionGateState')=='success'
+          assert att.get('matchingDeployId') is True
+          PY
+          curl -fsS --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main" \
+            -o /tmp/koa-final-main.json
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS --connect-timeout 15 --max-time 60 \
+            -o /tmp/koa-final-deploy-recheck.json -w '%{http_code}' \
+            -X POST -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"verify-production-release-attestation"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json,os
+          sha=os.environ["GITHUB_SHA"]
+          main=json.load(open('/tmp/koa-final-main.json'))
+          live=json.load(open('/tmp/koa-final-deploy-recheck.json'))
+          history=json.load(open('/tmp/koa-release-history-response.json'))
+          assert main.get('name')=='main' and (main.get('commit') or {}).get('sha')==sha
+          assert live.get('ok') is True and live.get('expectedSha')==sha
+          assert live.get('deployCommit')==live.get('liveCommit')==sha
+          assert live.get('deployId')==live.get('liveDeployId')==history.get('deployId')
+          assert live.get('deployContext')=='production'
+          assert live.get('deployState') in ('ready','current') and live.get('publishedAt')
+          assert live.get('matchingDeployId') is True
+          print('Signed exact-SHA and durable release-history verification passed.')
+          PY
+          python - <<'PY'
+          import json,os
+          payload={
+            'state':'success',
+            'context':'System Health production release gate',
+            'description':'Certified exact-SHA production QA, health, release history and PDF/JSON bytes.',
+            'target_url':'https://github.com/{}/actions/runs/{}'.format(os.environ['GITHUB_REPOSITORY'],os.environ['GITHUB_RUN_ID']),
+          }
+          open('/tmp/koa-final-gate-success-status.json','w').write(json.dumps(payload,separators=(',',':')))
+          PY
+          curl -fsS --connect-timeout 10 --max-time 30 -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-final-gate-success-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null
           trap - ERR
 
   qa-summary:
