@@ -36,7 +36,7 @@ env:
 jobs:
   release-status-pending:
     name: Mark production release pending
-    if: github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - name: Publish fail-closed pending status
@@ -532,7 +532,7 @@ jobs:
           rm -f "$verification_file"
           test "$http_status" = "200"
       - name: Verify live uncertified PDF and JSON exports are rejected
-        if: github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: node scripts/verify_live_certified_export_rejections.mjs
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
@@ -1070,7 +1070,7 @@ jobs:
         run: node scripts/publish_responsive_release_evidence.mjs
   production-release-attestation:
     name: Final production release attestation
-    if: github.event_name == 'push' && always()
+    if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs:
       - release-status-pending
       - source-build-audit
@@ -1207,6 +1207,28 @@ jobs:
           assert current.get("checkedAt")
           PY
 
+      - name: Recheck current GitHub main before final release decision
+        id: current-main
+        if: steps.workflow-gates.outputs.ok == 'true' && steps.netlify-attestation.outcome == 'success' && steps.final-health.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          http_status="$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o /tmp/koa-main-before-gate.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main")"
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          ref=json.load(open('/tmp/koa-main-before-gate.json'))
+          assert ref.get('name')=='main'
+          assert (ref.get('commit') or {}).get('sha')==os.environ['GITHUB_SHA'], 'Main changed during release QA'
+          print('Exact-main release gate SHA recheck passed.')
+          PY
+
       - name: Publish final fail-closed production release status
         if: always()
         shell: bash
@@ -1219,6 +1241,7 @@ jobs:
           ADMIN_RESULT: ${{ needs.admin-startup-audit.result }}
           MOBILE_RESULT: ${{ needs.system-health-mobile-audit.result }}
           VISUAL_RESULT: ${{ needs.visual-audit.result }}
+          MAIN_CHECK_RESULT: ${{ steps.current-main.outcome }}
         run: |
           set -euo pipefail
           node --input-type=module - <<'NODE'
@@ -1254,6 +1277,10 @@ jobs:
               checkedAt:current.checkedAt,
             },
           });
+          const mainOk=process.env.MAIN_CHECK_RESULT==='success';
+          decision.mainOk=mainOk;
+          decision.ok=decision.ok && mainOk;
+          decision.state=decision.ok?'success':'failure';
           const payload={
             state:decision.state,
             context:'System Health production release gate',
@@ -1297,6 +1324,19 @@ jobs:
             exit 1
           }
           trap fail_history ERR
+          # A branch change after final status evaluation must prevent history persistence.
+          curl -fsS --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main" \
+            -o /tmp/koa-main-before-history.json
+          python - <<'PY'
+          import json, os
+          ref=json.load(open('/tmp/koa-main-before-history.json'))
+          assert ref.get('name')=='main'
+          assert (ref.get('commit') or {}).get('sha')==os.environ['GITHUB_SHA']
+          print('Exact-main SHA remains unchanged before durable release-history persistence.')
+          PY
           python - <<'PY'
           import json, os
           att=json.load(open("/tmp/koa-production-attestation.json"))
