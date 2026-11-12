@@ -2,6 +2,7 @@
 // Recovery fault injection: a successful Blob mutation can lose its response.
 // No production calls or customer data; all storage is an isolated fake.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {casMergeReleaseHistory} from '../netlify/functions/_shared/release-history-cas.mjs';
 
 function fake({interrupt='none'}={}){
@@ -73,5 +74,43 @@ const recovered=await casMergeReleaseHistory(last,key,merger);
 assert.equal(recovered.evidence.chromium.passed,true);
 assert.equal(recovered.evidence.webkit.passed,true,
   'Recovery merges must preserve independent evidence written previously.');
+
+// The rolling dashboard must never advertise a release before the durable
+// immutable per-deploy record is committed. Simulate an interruption between
+// the two distinct CAS keys and then an idempotent recovery.
+const source=readFileSync(new URL('../netlify/functions/_shared/system-health.ts',import.meta.url),'utf8');
+const durableStage=source.indexOf("const durable=await casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId");
+const visibleStage=source.indexOf("const rows=await casMergeReleaseHistory(conditional,'deployments/releases'");
+assert(durableStage>0&&visibleStage>durableStage,
+  'Durable exact-deploy attestation must commit before the dashboard index can expose it.');
+const records=new Map();
+let seq=0;
+const twoKeyStore={
+  async readJSON(name){
+    const item=records.get(name);
+    return {data:structuredClone(item?.data??null),etag:item?.etag??null};
+  },
+  async writeJSON(name,value,previousEtag){
+    const current=records.get(name);
+    if((current?.etag??null)!==previousEtag)return {modified:false};
+    records.set(name,{data:structuredClone(value),etag:String(++seq)});
+    return {modified:true};
+  },
+};
+const writeBoth=async(interrupt)=>{
+  await casMergeReleaseHistory(twoKeyStore,key,merger);
+  if(interrupt)throw new Error('simulated crash between immutable and visible writes');
+  await casMergeReleaseHistory(twoKeyStore,'deployments/releases',rows=>[
+    ...Array.isArray(rows)?rows.filter(row=>row.deployId!=='deploy-1'):[],
+    records.get(key).data,
+  ]);
+};
+await assert.rejects(writeBoth(true),/simulated crash/);
+assert.equal((await twoKeyStore.readJSON('deployments/releases')).data,null,
+  'An interrupted immutable write must not fabricate a visible green release.');
+assert.equal((await twoKeyStore.readJSON(key)).data.deployId,'deploy-1');
+await writeBoth(false);
+assert.equal((await twoKeyStore.readJSON('deployments/releases')).data.length,1,
+  'An idempotent recovery must safely publish the already-committed release.');
 
 console.log('PASS | Release History interrupted pre/post-commit write recovery, exactly-once post-commit recognition, conflict merge and fail-closed exhaustion.');
