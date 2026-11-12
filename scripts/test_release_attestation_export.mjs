@@ -29,6 +29,7 @@ const release={
 const newerPending={...release,deployId:'c'.repeat(24),releaseAttestation:null};
 const exported=buildCertifiedReleaseExport([newerPending,release],{productionCommit:sha,productionDeployId:deploy});
 assert.equal(exported.release.deployId,deploy,'Must choose latest fully certified release, not newest pending.');
+assert.equal(exported.exportedAt,release.releaseAttestation.verifiedAt,'Release serialization timestamp must be stable across downloads.');
 assert.equal(exported.certification.status,'verified');
 assert.equal(exported.certification.productionGate,'success');
 assert.equal(exported.certification.systemHealth.failed,0);
@@ -151,6 +152,8 @@ for(const broken of [
 ])assert.throws(()=>buildCertifiedReleaseExport([broken]),/certified/,'Incomplete or mismatched release evidence must be rejected.');
 const mismatch=buildCertifiedReleaseExport([release],{productionCommit:'f'.repeat(40),productionDeployId:'f'.repeat(24)});
 assert.equal(mismatch.currentProduction.matchesCertifiedRelease,false,'Historical certified releases must never be described as live.');
+assert.throws(()=>buildCertifiedReleaseExport([release],{productionCommit:'f'.repeat(40),productionDeployId:'f'.repeat(24),requireCurrentProduction:true}),/certified/,'A stale archived release must never be offered as a current production certificate.');
+assert.throws(()=>buildCertifiedReleaseExport([release],{productionCommit:'',productionDeployId:deploy,requireCurrentProduction:true}),/Current production identity/,'A missing live SHA must fail closed.');
 assert.equal(JSON.parse(JSON.stringify(mismatch)).currentProduction.matchesCertifiedRelease,false);
 const mismatchedPdf=new TextDecoder().decode(certifiedReleasePdf(mismatch));
 assert(mismatchedPdf.includes('NO / NOT VERIFIED'),'PDF must disclose live deployment mismatch.');
