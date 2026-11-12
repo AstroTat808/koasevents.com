@@ -193,11 +193,14 @@ assert(previousResponsiveForSameRun(oldResponsive,olderRun)===oldResponsive,
 const durableStore=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
 assert(durableStore.includes("if(runOrder===null||runOrder<0)throw new Error('STALE_RESPONSIVE_RUN_ID')"),
   'A stale responsive run must be rejected before writing Release History.');
-assert(durableStore.includes("const sameRun=previous?.commit===commit&&previous?.deployId===deployId")
-    &&durableStore.includes("previousResponsiveForSameRun(previous,runId)")
-    &&durableStore.includes("sameRun?.chromium||null")
-    &&durableStore.includes("sameRun?.webkit||null"),
-  'A new run must not silently inherit an old Chromium or WebKit result.');
+assert(durableStore.includes('persistIndependentResponsiveBrowserEvidence(healthStore(context)')
+    &&durableStore.includes('if(!stored.complete)')
+    &&durableStore.includes('readIndependentResponsiveBrowserEvidence(healthStore(context),input)'),
+  'Chromium and WebKit evidence must be stored independently and aggregated only for the exact run.');
+const endpoint=readFileSync('netlify/functions/github-main-health-signal.ts','utf8');
+assert(endpoint.includes('const signedResponsive=await readCurrentRunResponsiveEvidence(context')
+  &&endpoint.includes('signedResponsive.complete'),
+  'Final release attestation must re-read both signed browser records independently.');
 assert(durableStore.includes("if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID')"),
   'Stale visual, responsive, protected-admin and attestation records must fail closed.');
 console.log('PASS | stale run IDs rejected; newer runs and same-run browser evidence accepted.');
