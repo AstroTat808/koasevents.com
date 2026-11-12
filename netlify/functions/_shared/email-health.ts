@@ -166,7 +166,12 @@ function statusCounts(rows: any[], cutoffMs: number) {
 
 async function checkLogo() {
   const tenant=resolveTenant();
-  const logo=String(tenant.brand.logoPath||'').trim();
+  const sourceLogo=String(tenant.brand.logoPath||'').trim();
+  // Koa emails embed an opaque, white-backed CID logo distinct from the
+  // transparent web mark. Monitor the image recipients actually receive.
+  const logo=sourceLogo==='/brand/koa-mark.png'
+    ? '/brand/koa-email-white-medallion.png'
+    : sourceLogo;
   const url=/^https?:\/\//i.test(logo) ? logo : (tenantOrigin()+ (logo.startsWith('/')?logo:'/'+logo));
   const started = Date.now();
   try {
@@ -184,7 +189,7 @@ async function checkLogo() {
       ms: Date.now() - started,
       contentType,
       contentLength: Number.isFinite(contentLength) ? contentLength : 0,
-      detail: ok ? 'Koa source logo asset is reachable as PNG; sent emails embed this PNG inline via CID.' : 'Koa source logo asset did not return a healthy PNG response.',
+      detail: ok ? 'Email logo PNG is reachable; outgoing emails embed the corresponding white-backed image via CID.' : 'Email logo asset did not return a healthy PNG response.',
     };
   } catch (error) {
     return {
