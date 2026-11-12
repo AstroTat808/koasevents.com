@@ -22,7 +22,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
-import { isSuccessfulNetlifyState, productionDeployMatchesAttestation, verifiedSignedProductionDeploymentIdentity } from './_shared/production-release-policy.mjs';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation, productionReleaseRunOrder, verifiedSignedProductionDeploymentIdentity } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { auditLiveCrmReadOnly } from './_shared/crm-readonly-production-source.mjs';
 import { runBrandedEmailProductionVerification } from './_shared/email-health';
@@ -904,7 +904,8 @@ export default async (req:Request,context:Context) => {
         return Response.json({
           ok:false,error:error instanceof Error?error.message:'Unable to persist responsive production QA.',
           sha:expectedSha,deployId,source:'github-actions-oidc',
-        },{status:500,headers:{'Cache-Control':'no-store'}});
+        },{status:error instanceof Error&&error.message==='STALE_RESPONSIVE_RUN_ID'?409:500,
+          headers:{'Cache-Control':'no-store'}});
       }
     }
 
@@ -1192,6 +1193,12 @@ export default async (req:Request,context:Context) => {
         const existingRelease=(await readProductionReleases(context,100))
           .find((row:any)=>row?.deployId===deployId&&row?.commit===String(claims.sha||''))||null;
         const previousVisual:any=existingRelease?.visualQuality||null;
+        const signedRunId=cleanText(claims?.run_id||claims?.run_number,80);
+        const visualRunOrder=productionReleaseRunOrder(signedRunId,previousVisual?.runId||'');
+        if(visualRunOrder===null||visualRunOrder<0){
+          return Response.json({ok:false,code:'STALE_VISUAL_QA_RUN_ID'},
+            {status:409,headers:{'Cache-Control':'no-store'}});
+        }
         const previousExactPassed=Boolean(
           previousVisual?.status==='passed'
           &&cleanText(previousVisual?.commit,80)===String(claims.sha||'')
