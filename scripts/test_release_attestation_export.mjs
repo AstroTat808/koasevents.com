@@ -121,6 +121,21 @@ assert(route.includes('status:403'),'Unauthorized export must return 403.');
 assert(route.includes("format!=='pdf'&&format!=='json'"),'Only PDF and JSON are supported.');
 assert(route.includes('buildCertifiedReleaseExport(releases'),'Both formats must share certified-only evidence validation.');
 assert(route.includes('status:409'),'Uncertified or missing evidence must return conflict, not certified output.');
+assert(route.includes('verifyCurrentCertifiedProduction(providerInput)'),
+  'A signed export must reverify current GitHub main and published Netlify production, not archived history.');
+assert(route.includes('requireCurrentProduction:true')
+  &&route.includes('requireSignedExportEvidence:true'),
+  'Only the exact currently published and fully byte-verified release can be signed.');
+assert(route.includes('serializedCertifiedReleaseArtifacts(attestation,certifiedReleasePdf)')
+  &&route.includes('signCertifiedReleaseArtifacts({pdfBytes,jsonBytes},attestation,key)'),
+  'PDF and JSON must be byte-signed under the same Ed25519 manifest.');
+assert(route.includes("format!=='pdf'&&format!=='json'&&format!=='signature'")
+  &&route.includes("if(format==='signature')"),
+  'Detached signature manifest must be downloadable alongside both artifacts.');
+assert(route.includes('X-Koa-Signing-Key-Id')
+  &&route.includes('KOA_CERTIFICATION_SIGNING_PRIVATE_KEY_PEM'),
+  'The exported signing key ID must be traceable and the private key loaded only from runtime secrets.');
+
 assert(route.includes("private, no-store")&&route.includes('nosniff'),'Download cache and MIME sniffing must be disabled.');
 assert(route.indexOf("if(format==='json')")>route.indexOf('buildCertifiedReleaseExport'),'JSON must not bypass validation.');
 assert(route.indexOf('certifiedReleasePdf(attestation)')>route.indexOf('buildCertifiedReleaseExport'),'PDF must not bypass validation.');
