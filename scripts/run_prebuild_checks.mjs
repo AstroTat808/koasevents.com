@@ -10,6 +10,7 @@ const checks=[
   ['ci-privacy','CI privacy regression','npm',['run','test:ci-privacy']],
   ['release-gate-regression','Release gate regression','npm',['run','test:release-gate']],
   ['release-health-504-retry','Exact-production final health 504 retry and zero-failure guard','node',['scripts/test_final_health_transport_retry.mjs']],
+  ['responsive-release-concurrency','Two simultaneous exact-run Chromium/WebKit durable evidence writes','node',['scripts/test_responsive_release_concurrency.mjs']],
   ['deploy-recovery-regression','Deploy recovery regression','npm',['run','test:deploy-recovery']],
   ['signed-prod-identity-regression','Signed exact-production runtime identity regression','node',['--test','scripts/test_signed_production_deploy_identity.mjs']],
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
