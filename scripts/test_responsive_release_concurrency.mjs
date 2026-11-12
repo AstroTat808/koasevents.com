@@ -94,7 +94,7 @@ assert.equal(partial.responsiveQuality.webkit,null,
 
 // Two CAS merges deliberately read the SAME initial ETag. One loses the
 // compare-and-swap and must retry against the winner's freshly written state.
-let current=null,version=0,reads=0,attempts=0,unblock;
+let current=null,version=0,reads=0,casAttempts=0,unblock;
 const firstReadBarrier=new Promise(resolve=>{unblock=resolve;});
 const casStore={
   async readJSON(key){
@@ -109,7 +109,7 @@ const casStore={
   },
   async writeJSON(key,value,etag){
     assert.equal(key,'deployments/releases');
-    attempts++;
+    casAttempts++;
     if(etag!==(version?String(version):null))return {modified:false};
     current=structuredClone(value);
     version++;
@@ -127,7 +127,7 @@ const merged=await Promise.all([
 assert.equal(merged.length,2);
 assert.equal(current.chromium.passed,true,'CAS must retain Chromium update.');
 assert.equal(current.webkit.passed,true,'CAS must retain WebKit update.');
-assert(attempts>=3,'Test must exercise at least one real CAS conflict and retry.');
+assert(casAttempts>=3,'Test must exercise at least one real CAS conflict and retry.');
 await assert.rejects(
   casMergeReleaseHistory({
     async readJSON(){return {data:null,etag:null};},
