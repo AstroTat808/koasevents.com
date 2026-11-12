@@ -45,7 +45,7 @@ const endpoint=read('../netlify/functions/github-main-health-signal.ts');
 const workflow=read('../.github/workflows/production-visual-qa.yml');
 const page=read('../src/pages/admin/health/index.astro');
 assert(storage.includes('protectedAdminQa:input?.protectedAdminQa||previous?.protectedAdminQa||null'));
-assert(storage.includes("store.setJSON('deployments/releases/by-id/'+deployId,record)"));
+assert(storage.includes("casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId"));
 assert(endpoint.includes("if(body?.action==='record-protected-admin-qa')"));
 assert(endpoint.includes('productionDeployMatchesAttestation('));
 assert(endpoint.includes('const persisted=Boolean('));
