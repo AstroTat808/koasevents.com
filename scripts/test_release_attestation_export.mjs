@@ -120,7 +120,7 @@ assert(route.indexOf('if(!admin)')>=0&&route.indexOf('if(!admin)')<route.indexOf
 assert(route.includes('status:403'),'Unauthorized export must return 403.');
 assert(route.includes("format!=='pdf'&&format!=='json'"),'Only PDF and JSON are supported.');
 assert(route.includes('buildCertifiedReleaseExport(releases'),'Both formats must share certified-only evidence validation.');
-assert(route.includes('status:409'),'Uncertified or missing evidence must return conflict, not certified output.');
+assert(route.includes('unavailable?503:409'),'Missing or stale evidence must return 409, while unavailable identity/signing dependencies fail 503.');
 assert(route.includes('verifyCurrentCertifiedProduction(providerInput)'),
   'A signed export must reverify current GitHub main and published Netlify production, not archived history.');
 assert(route.includes('requireCurrentProduction:true')
@@ -138,7 +138,7 @@ assert(route.includes('X-Koa-Signing-Key-Id')
 
 assert(route.includes("private, no-store")&&route.includes('nosniff'),'Download cache and MIME sniffing must be disabled.');
 assert(route.indexOf("if(format==='json')")>route.indexOf('buildCertifiedReleaseExport'),'JSON must not bypass validation.');
-assert(route.indexOf('certifiedReleasePdf(attestation)')>route.indexOf('buildCertifiedReleaseExport'),'PDF must not bypass validation.');
+assert(route.indexOf('serializedCertifiedReleaseArtifacts(attestation,certifiedReleasePdf)')>route.indexOf('buildCertifiedReleaseExport'),'PDF and JSON byte serialization must not bypass certified-only validation.');
 for(const rows of [[],null,[newerPending]])assert.throws(()=>buildCertifiedReleaseExport(rows),/certified/,'Missing or pending evidence fails closed.');
 for(const broken of [
  {...release,releaseAttestation:{...release.releaseAttestation,expectedSha:'f'.repeat(40)}},
