@@ -25,7 +25,7 @@ const liveTest=read('./verify_live_certified_export_rejections.mjs');
 const certifiedBytes=read('./verify_live_certified_export_bytes.mjs');
 for(const needle of [
   'certifiedExportSecurity:input?.certifiedExportSecurity||previous?.certifiedExportSecurity||null',
-  "store.setJSON('deployments/releases/by-id/'+deployId,record)",
+  "casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId",
 ])assert(backend.includes(needle),'Durable per-deploy evidence contract changed.');
 for(const needle of [
   "if(body?.action==='verify-certified-export-rejections')",
