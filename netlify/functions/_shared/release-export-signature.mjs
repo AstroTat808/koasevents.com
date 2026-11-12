@@ -39,7 +39,7 @@ export function signCertifiedReleaseArtifacts({pdfBytes,jsonBytes},document,priv
     documentType:'koa-certified-production-release-detached-signature',
     signatureAlgorithm:'Ed25519',
     keyId,
-    signedAt:document.exportedAt,
+    attestedAt:document.exportedAt,
     release:{
       commit:document.release?.commit,
       deployId:document.release?.deployId,
@@ -109,7 +109,7 @@ export function verifySignedCertifiedReleaseArtifacts({pdfBytes,jsonBytes,manife
     ||document.release?.deployId!==payload.release.deployId
     ||document.themeQA?.runId!==payload.release.githubRunId
     ||document.currentProduction?.matchesCertifiedRelease!==true
-    ||document.exportedAt!==payload.signedAt
+    ||document.exportedAt!==payload.attestedAt
     ||!String(document.certification?.verifiedAt||'').trim()){
     throw new Error('CERTIFIED_EXPORT_DOCUMENT_IDENTITY_MISMATCH');
   }
