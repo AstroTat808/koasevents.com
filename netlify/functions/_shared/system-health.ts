@@ -3985,6 +3985,14 @@ export async function recordProductionRelease(context:Context,input:any) {
       protectedAdminQa:input?.protectedAdminQa||latest?.protectedAdminQa||null,
     };
   };
+  // Publish the immutable, exact-deploy audit object FIRST. A lost response
+  // or interruption cannot leave the UI index advertising an attestation
+  // that never reached the durable per-deploy record.
+  const durable=await casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId,
+    (current:any)=>mergeLatest((current||null) as ProductionRelease|null));
+  // Only after the durable by-ID commit succeeds may the rolling dashboard
+  // history advertise the attestation. Both writes re-validate run identity
+  // against their respective latest ETags.
   const rows=await casMergeReleaseHistory(conditional,'deployments/releases',(current:any)=>{
     const all:ProductionRelease[]=Array.isArray(current)?current:[];
     const latest=all.find(row=>row.deployId===deployId)||null;
@@ -3994,10 +4002,6 @@ export async function recordProductionRelease(context:Context,input:any) {
       .slice(0,100);
   });
   const committed=rows.find((row:ProductionRelease)=>row.deployId===deployId) as ProductionRelease;
-  // The per-deploy immutable-history lookup is updated with the same CAS
-  // contract. It cannot be overwritten by a slower callback from an old run.
-  const durable=await casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId,
-    (current:any)=>mergeLatest((current||null) as ProductionRelease|null));
   const currentAuditIndex=((await store.get(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,{type:'json'}).catch(()=>[]))||[]) as string[];
   const nextAuditIndex=[deployId,...currentAuditIndex.map((id)=>clean(id,120)).filter((id)=>id&&id!==deployId)];
   await store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex);
