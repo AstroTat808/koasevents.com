@@ -16,6 +16,7 @@ import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases }
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
+import { productionReleaseRunOrder, previousResponsiveForSameRun } from './production-release-policy.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -3262,6 +3263,12 @@ export async function recordProductionResponsiveQuality(context:Context,input:an
 
   const existing=(await readProductionReleases(context,100)).find((row)=>row.deployId===deployId)||null;
   const previous=existing?.responsiveQuality||null;
+  const runOrder=productionReleaseRunOrder(runId,previous?.runId||'');
+  if(runOrder===null||runOrder<0)throw new Error('STALE_RESPONSIVE_RUN_ID');
+  // A newer run must earn both browser results itself. Never borrow the
+  // other browser's previously passed report for the new run.
+  const sameRun=previous?.commit===commit&&previous?.deployId===deployId
+    ? previousResponsiveForSameRun(previous,runId):null;
   const viewportNames=(Array.isArray(input?.viewportNames)?input.viewportNames:[])
     .map((value:any)=>clean(value,80))
     .filter(Boolean)
@@ -3275,8 +3282,8 @@ export async function recordProductionResponsiveQuality(context:Context,input:an
     designCount:Math.max(0,Math.floor(Number(input?.designCount||0))),
     reportMissing:Boolean(input?.reportMissing)||viewportNames.length===0||Number(input?.cases||0)<=0,
   };
-  const chromium=browser==='chromium'?summary:(previous?.chromium||null);
-  const webkit=browser==='webkit'?summary:(previous?.webkit||null);
+  const chromium=browser==='chromium'?summary:(sameRun?.chromium||null);
+  const webkit=browser==='webkit'?summary:(sameRun?.webkit||null);
   const complete=Boolean(chromium&&webkit);
   const failed=Boolean(
     chromium?.reportMissing||webkit?.reportMissing
@@ -3767,6 +3774,31 @@ export async function recordProductionRelease(context:Context,input:any) {
   const store=healthStore(context);
   const existing=await readProductionReleases(context,100);
   const previous=existing.find(row=>row.deployId===deployId);
+
+  // Every signed QA record is scoped to its immutable deploy/commit and
+  // monotonically increasing GitHub workflow run. A late retry from an
+  // older run can never replace a newer browser or admin evidence set.
+  const signedEvidence=[
+    ['visualQuality',input?.visualQuality,previous?.visualQuality],
+    ['responsiveQuality',input?.responsiveQuality,previous?.responsiveQuality],
+    ['protectedAdminQa',input?.protectedAdminQa,previous?.protectedAdminQa],
+    ['certifiedExportSecurity',input?.certifiedExportSecurity,previous?.certifiedExportSecurity],
+    ['releaseAttestation',input?.releaseAttestation,previous?.releaseAttestation],
+  ] as const;
+  for(const [kind,incoming,recorded] of signedEvidence){
+    if(!incoming)continue;
+    const proposed:any=incoming;
+    const stored:any=recorded;
+    const incomingRunId=kind==='releaseAttestation'?proposed.visualQaRunId:proposed.runId;
+    const recordedRunId=kind==='releaseAttestation'?stored?.visualQaRunId:stored?.runId;
+    const order=productionReleaseRunOrder(incomingRunId,recordedRunId||'');
+    if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID');
+    if((proposed.commit&&proposed.commit!==commit)
+      ||(proposed.expectedSha&&proposed.expectedSha!==commit)
+      ||(proposed.deployId&&proposed.deployId!==deployId)){
+      throw new Error('RELEASE_EVIDENCE_DEPLOY_IDENTITY_MISMATCH');
+    }
+  }
 
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   const githubHeaders:Record<string,string>={
