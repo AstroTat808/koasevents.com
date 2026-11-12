@@ -4,6 +4,8 @@ import {
   evaluateProductionReleaseGate,
   isSuccessfulNetlifyState,
   productionDeployMatchesAttestation,
+  productionReleaseRunOrder,
+  previousResponsiveForSameRun,
 } from '../netlify/functions/_shared/production-release-policy.mjs';
 
 function assert(condition,message){
@@ -161,5 +163,43 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
+
+// A replay of an older push attempt must never inherit a newer scheduled
+// audit's browser evidence, even when commit and deployed Netlify ID match.
+const olderRun='41683703455';
+const newerRun='43108656869';
+assert(productionReleaseRunOrder(newerRun,olderRun)===1,
+  'A valid newer GitHub run should be accepted.');
+assert(productionReleaseRunOrder(newerRun,newerRun)===0,
+  'A second browser in the same run should be accepted.');
+assert(productionReleaseRunOrder(olderRun,newerRun)===-1,
+  'An older re-run must not overwrite more recent audit evidence.');
+assert(productionReleaseRunOrder(olderRun,'')===1,
+  'The first valid run should not require pre-existing evidence.');
+for(const bad of ['', '1', '-1', 'not-an-id', '041683703455', '123.5']){
+  assert(productionReleaseRunOrder(bad,newerRun)===null,
+    'Malformed signed run ID must fail closed: '+JSON.stringify(bad));
+}
+assert(productionReleaseRunOrder(newerRun,'bad-previous-run')===null,
+  'Malformed durable run IDs must not be silently ignored.');
+assert(productionReleaseRunOrder('99999999999999999999',newerRun)===1,
+  'Full-width GitHub run IDs must be compared without floating-point loss.');
+const oldResponsive={runId:olderRun,chromium:{browser:'chromium'},webkit:{browser:'webkit'}};
+assert(previousResponsiveForSameRun(oldResponsive,newerRun)===null,
+  'A new production run must start without browser reports inherited from an old run.');
+assert(previousResponsiveForSameRun(oldResponsive,olderRun)===oldResponsive,
+  'Both browser reports from the same valid run must be reusable during aggregation.');
+
+const durableStore=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
+assert(durableStore.includes("if(runOrder===null||runOrder<0)throw new Error('STALE_RESPONSIVE_RUN_ID')"),
+  'A stale responsive run must be rejected before writing Release History.');
+assert(durableStore.includes("const sameRun=previous?.commit===commit&&previous?.deployId===deployId")
+    &&durableStore.includes("previousResponsiveForSameRun(previous,runId)")
+    &&durableStore.includes("sameRun?.chromium||null")
+    &&durableStore.includes("sameRun?.webkit||null"),
+  'A new run must not silently inherit an old Chromium or WebKit result.');
+assert(durableStore.includes("if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID')"),
+  'Stale visual, responsive, protected-admin and attestation records must fail closed.');
+console.log('PASS | stale run IDs rejected; newer runs and same-run browser evidence accepted.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');
