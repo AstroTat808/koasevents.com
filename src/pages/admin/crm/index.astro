@@ -123,6 +123,19 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
           </form>
           <p data-client-name-audit-status role="status" aria-live="polite" class="mt-3 text-xs text-[var(--koa-ink)]/60"></p>
           <div data-client-name-audit-results class="mt-3 grid gap-3"></div>
+          <details class="mt-5 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4">
+            <summary class="cursor-pointer text-sm font-bold text-[var(--koa-forest)]">Batch lead-origin investigation and evidence export</summary>
+            <p class="mt-3 text-xs text-[var(--koa-ink)]/65">Enter up to 20 exact customer names, one per line. This audit reads only the authenticated tenant's active CRM sales records. It does not infer an unrecorded source or modify any customer data.</p>
+            <label class="mt-3 grid gap-2 text-xs font-semibold text-[var(--koa-clay)]">Customer names
+              <textarea data-batch-lead-names rows="4" maxlength="4000" placeholder="One full customer name per line" class="w-full rounded-xl border border-[var(--koa-line)] bg-white p-3 text-sm font-normal text-[var(--koa-ink)]"></textarea>
+            </label>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" data-run-batch-lead-audit class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-bold text-white">Audit listed leads</button>
+              <button type="button" data-export-batch-lead-audit disabled class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-xs font-bold text-[var(--koa-forest)] disabled:opacity-45">Download evidence JSON</button>
+            </div>
+            <p data-batch-lead-status class="mt-3 text-xs text-[var(--koa-ink)]/65" role="status" aria-live="polite"></p>
+            <div data-batch-lead-results class="mt-3 grid gap-3"></div>
+          </details>
         </section>
         <section data-duplicate-booking-section class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50/70 p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -791,6 +804,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   function leadOriginAuditCard(record){
     const origin=record.origin||{}, attribution=origin.attribution||{}, initial=origin.initialInquiry||{};
     const recorded=origin.reliability==='saved_at_intake';
+    const firstTouch=origin.firstTouch||null;
+    const firstCampaign=firstTouch?[firstTouch.utmSource&&('source: '+firstTouch.utmSource),firstTouch.utmMedium&&('medium: '+firstTouch.utmMedium),firstTouch.utmCampaign&&('campaign: '+firstTouch.utmCampaign),firstTouch.utmContent&&('content: '+firstTouch.utmContent),firstTouch.utmTerm&&('term: '+firstTouch.utmTerm)].filter(Boolean).join(' · '):'';
     const utm=[attribution.utmSource&&('source: '+attribution.utmSource),attribution.utmMedium&&('medium: '+attribution.utmMedium),attribution.utmCampaign&&('campaign: '+attribution.utmCampaign),attribution.utmContent&&('content: '+attribution.utmContent),attribution.utmTerm&&('term: '+attribution.utmTerm)].filter(Boolean).join(' · ');
     const rows=[
       ['Evidence',recorded?'Saved at original intake':'Legacy record fields; original capture not independently established'],
@@ -799,7 +814,10 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
       ['Received',leadReceivedLabel({createdAt:origin.capturedAt})],
       ['Submitted discovery source',origin.discoverySource||'Not provided'],
       ['Submitted referral',origin.referralSource||'Not provided'],
-      ['Campaign (browser-reported)',utm||'Not captured'],
+      ['First visit (browser-reported)',firstTouch?.entryPage?(firstTouch.entryPage+' · '+leadReceivedLabel({createdAt:firstTouch.capturedAt})):'Not captured'],
+      ['Original referring host',firstTouch?.referringHost||'Direct / not captured'],
+      ['First-touch campaign',firstCampaign||'Not captured'],
+      ['Submission-page campaign',utm||'Not captured'],
       ['Referring host (browser-reported)',attribution.referringHost||'Not captured'],
       ['Original inquiry', [initial.service,initial.eventType,initial.guestCount?initial.guestCount+' guests':'',initial.budget,initial.priorities].filter(Boolean).join(' · ')||'Not recorded']
     ];
@@ -873,6 +891,55 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
         return '<article class="min-w-0 rounded-xl border '+color+' p-4"><div class="flex flex-wrap items-start justify-between gap-2"><strong class="break-all text-sm text-[var(--koa-ink)]">'+esc(row.id)+'</strong><span class="text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(row.classification.replaceAll('_',' '))+'</span></div><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/70">'+esc(row.name)+' · '+esc(row.eventDate||'No event date')+' · '+esc(businessLineLabel(row.businessLine))+' · '+esc(row.stage||row.kind||'record')+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">Origin: '+esc(row.source||'unknown')+' · Created '+esc(fmt(row.createdAt))+' · '+esc(row.location)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/60">Linked lifecycle: '+esc((row.linkedLifecycleIds||[]).join(', ')||'none')+' · Potential duplicates: '+esc((row.potentialDuplicateIds||[]).join(', ')||'none')+'</p>'+(protection?'<p class="mt-1 text-xs font-semibold text-amber-900">Protected: '+esc(protection)+'</p>':'')+'<p class="mt-2 text-xs text-[var(--koa-ink)]/70">'+esc(row.recommendation)+'</p><a href="/admin/crm/?record='+encodeURIComponent(row.id)+'" class="mt-2 inline-block text-xs font-semibold underline text-[var(--koa-forest)]">Open record</a></article>';
       }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm">No records found for that exact name in the audited scope.</p>';
     }catch(error){if(status)status.textContent=error?.message||'Customer audit could not be completed.';}
+  }
+  let latestBatchLeadAudit=null;
+  async function runBatchLeadAudit(){
+    const textarea=$('[data-batch-lead-names]'),status=$('[data-batch-lead-status]'),results=$('[data-batch-lead-results]'),download=$('[data-export-batch-lead-audit]');
+    const names=[...new Set(String(textarea?.value||'').split(/\r?\n/).map(v=>v.trim()).filter(Boolean))];
+    latestBatchLeadAudit=null;
+    if(download)download.disabled=true;
+    if(results)results.replaceChildren();
+    if(names.length<1||names.length>20){if(status)status.textContent='Enter 1–20 full customer names, one per line.';return;}
+    if(status)status.textContent='Reading source and original inquiry evidence from the protected CRM index…';
+    try{
+      const response=await fetch('/api/admin/crm/lead-audit',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({names}),
+        signal:AbortSignal.timeout(30000)
+      });
+      const report=await response.json().catch(()=>({}));
+      if(!response.ok||report.ok!==true)throw new Error(report.error||'Lead-origin audit could not be completed.');
+      latestBatchLeadAudit=report;
+      if(download)download.disabled=false;
+      if(status)status.textContent=(report.summary?.matchingRecords||0)+' matching CRM record(s) across '+names.length+' name(s); '+(report.summary?.namesNotFound||0)+' not found in active sales records. Evidence is read-only and browser attribution is self-reported.';
+      if(results)results.innerHTML=(report.reports||[]).map(group=>{
+        const cards=(group.records||[]).map(record=>{
+          const first=record.firstTouch||{},submit=record.submissionAttribution||{};
+          const marker=record.originReliability==='saved_at_intake'?'Original intake snapshot':'Historical record fields';
+          const info=[
+            'Source: '+(record.originalChannel||record.source||'Unknown'),
+            'Form: '+(record.originalFormName||record.formName||'Not recorded'),
+            'Received: '+(record.originalCapturedAt||record.createdAt||'Not recorded'),
+            'Discovery: '+(record.customerReportedSource||'Not provided'),
+            'Referral: '+(record.customerReportedReferral||'Not provided'),
+            'First visit: '+(first.entryPage||'Not captured'),
+            'First campaign: '+(first.utmCampaign||'Not captured'),
+            'Referring host: '+(first.referringHost||'Not captured'),
+            'Form page: '+(submit.pagePath||'Not recorded')
+          ];
+          return '<div class="mt-2 rounded-lg border border-[var(--koa-line)] bg-white p-3"><p class="text-xs font-bold text-[var(--koa-forest)]">'+esc(record.recordId)+' · '+esc(marker)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/65">'+esc(record.classification||'needs_review')+' · '+esc(record.stage||record.kind||'record')+'</p><div class="mt-2 grid gap-1">'+info.map(item=>'<p class="break-words text-xs text-[var(--koa-ink)]/70">'+esc(item)+'</p>').join('')+'</div></div>';
+        }).join('');
+        return '<section class="rounded-xl border border-[var(--koa-line)] p-3"><h4 class="text-sm font-bold text-[var(--koa-forest)]">'+esc(group.name)+'</h4><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+Number(group.matchCount||0)+' matching record(s) · '+esc(group.sourceStatus||'unclassified')+(group.truncated?' · Results truncated':'')+'</p>'+ (cards||'<p class="mt-2 text-xs">No matching records in active sales index.</p>')+'</section>';
+      }).join('');
+    }catch(error){if(status)status.textContent=error?.message||'Unable to retrieve lead evidence.';}
+  }
+  function exportBatchLeadAudit(){
+    if(!latestBatchLeadAudit)return;
+    const blob=new Blob([JSON.stringify(latestBatchLeadAudit,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+    anchor.href=url;anchor.download='koa-lead-origin-audit.json';anchor.hidden=true;
+    document.body.append(anchor);anchor.click();anchor.remove();
+    queueMicrotask(()=>URL.revokeObjectURL(url));
   }
   function renderCustomerIdentity(){
     const customers=data.customers||[];
@@ -1393,6 +1460,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   });
 
   $('[data-client-name-audit-form]')?.addEventListener('submit',event=>{event.preventDefault();auditCustomerName();});
+  $('[data-run-batch-lead-audit]')?.addEventListener('click',runBatchLeadAudit);
+  $('[data-export-batch-lead-audit]')?.addEventListener('click',exportBatchLeadAudit);
   $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-business-line-filter]')?.addEventListener('change',renderProjects); $('[data-qualification-filter]')?.addEventListener('change',renderProjects); $('[data-complexity-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
   $$('[data-analytics-range]').forEach(b=>b.addEventListener('click',()=>{analyticsRange=b.dataset.analyticsRange||'7';renderAnalytics();}));
   $$('[data-trend-granularity]').forEach(b=>b.addEventListener('click',()=>{trendGranularity=b.dataset.trendGranularity||'day';renderAnalytics();}));

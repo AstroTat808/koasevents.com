@@ -133,6 +133,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
           headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
           keepalive: true,
           body: JSON.stringify({
+          firstTouch: window.KoaFirstTouch?.get?.() || null,
           attribution: {
             pagePath: window.location.pathname,
             referringHost: (() => { try { return new URL(document.referrer).hostname; } catch { return ''; } })(),
