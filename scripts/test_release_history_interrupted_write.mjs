@@ -101,7 +101,7 @@ const writeBoth=async(interrupt)=>{
   await casMergeReleaseHistory(twoKeyStore,key,merger);
   if(interrupt)throw new Error('simulated crash between immutable and visible writes');
   await casMergeReleaseHistory(twoKeyStore,'deployments/releases',rows=>[
-    ...Array.isArray(rows)?rows.filter(row=>row.deployId!=='deploy-1'):[],
+    ...(Array.isArray(rows)?rows.filter(row=>row.deployId!=='deploy-1'):[]),
     records.get(key).data,
   ]);
 };
