@@ -46,8 +46,8 @@ export function signCertifiedReleaseArtifacts({pdfBytes,jsonBytes},document,priv
       githubRunId:document.themeQA?.runId,
     },
     artifacts:{
-      pdf:{name:'koa-certified-release.pdf',...digest(pdfBytes)},
-      json:{name:'koa-certified-release.json',...digest(jsonBytes)},
+      pdf:{name:'koa-certified-release-'+document.release.deployId+'.pdf',...digest(pdfBytes)},
+      json:{name:'koa-certified-release-'+document.release.deployId+'.json',...digest(jsonBytes)},
     },
     // Signed status proves what the deployment was at issuance, not that it
     // remains deployed forever. Live/current status must be checked online.
