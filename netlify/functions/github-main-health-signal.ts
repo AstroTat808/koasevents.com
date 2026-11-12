@@ -8,6 +8,7 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
+  readCurrentRunResponsiveEvidence,
   recordGithubMainSignal,
   recordNetlifyRecoveryCredentialVerification,
   readNetlifyRecoveryCredentialVerification,
@@ -1020,9 +1021,15 @@ export default async (req:Request,context:Context) => {
           &&visualQaRunId===runId
           &&body?.visualQaConclusion==='success'
         );
-        const responsive:any=release?.responsiveQuality||null;
+        // Durable proof is the pair of independent signed, per-browser
+        // records for THIS exact run, not a mutable shared release summary.
+        const signedResponsive=await readCurrentRunResponsiveEvidence(context,{
+          deployId,commit:expectedSha,runId,
+        });
+        const responsive:any=signedResponsive.responsiveQuality||null;
         const responsiveOk=Boolean(
-          responsive
+          signedResponsive.complete
+          &&responsive
           &&responsive?.status==='passed'
           &&cleanText(responsive?.commit,80)===expectedSha
           &&cleanText(responsive?.deployId,120)===deployId
