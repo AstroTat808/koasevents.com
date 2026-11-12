@@ -92,7 +92,22 @@ function isCertified(row,options={}){
 }
 export function buildCertifiedReleaseExport(releases,options={}){
   const rows=Array.isArray(releases)?releases:[];
-  const latest=rows.filter(row=>isCertified(row,options)).sort((a,b)=>
+  // Public/current exports require the exact presently published release.
+  // Historical releases may still be viewed as historical records, but must
+  // never silently substitute for a new, not-yet-certified deployment.
+  const requiredCommit=cleaned(options.productionCommit,80);
+  const requiredDeployId=cleaned(options.productionDeployId,80);
+  if(options.requireCurrentProduction===true
+    &&(!sha40.test(requiredCommit)||!deploy24.test(requiredDeployId))){
+    throw new Error('Current production identity is unverified for certified export.');
+  }
+  const latest=rows.filter(row=>
+    isCertified(row,options)
+    &&(options.requireCurrentProduction!==true
+      ||(row?.commit===requiredCommit&&row?.deployId===requiredDeployId))
+    &&(options.requireSignedExportEvidence!==true
+      ||Boolean(row?.certifiedExportSecurity))
+  ).sort((a,b)=>
     Date.parse(b.releaseAttestation.verifiedAt)-Date.parse(a.releaseAttestation.verifiedAt)
   )[0];
   if(!latest)throw new Error('No complete, independently certified production release is available for export.');
@@ -130,7 +145,9 @@ export function buildCertifiedReleaseExport(releases,options={}){
   return {
     schemaVersion:1,
     documentType:'koa-certified-production-release',
-    exportedAt:new Date().toISOString(),
+    // Stable bytes: separately downloaded PDF, JSON and detached signatures
+    // must hash the same document across requests for an immutable release.
+    exportedAt:timestamp(a.verifiedAt),
     source:'System Health immutable certified release history',
     release:{
       commit,deployId,
