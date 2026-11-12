@@ -1,6 +1,6 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
-import { controlPlaneDeployStore, controlPlaneStore, tenantStoreFor } from './tenant-storage';
+import { conditionalTenantStoreFor, controlPlaneDeployStore, controlPlaneStore, tenantStoreFor } from './tenant-storage';
 import { resolveTenant } from './tenant';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
@@ -16,6 +16,9 @@ import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases }
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
+import { persistIndependentResponsiveBrowserEvidence, readIndependentResponsiveBrowserEvidence } from './responsive-browser-evidence.mjs';
+import { casMergeReleaseHistory } from './release-history-cas.mjs';
+import { productionReleaseRunOrder, previousResponsiveForSameRun } from './production-release-policy.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -3262,6 +3265,12 @@ export async function recordProductionResponsiveQuality(context:Context,input:an
 
   const existing=(await readProductionReleases(context,100)).find((row)=>row.deployId===deployId)||null;
   const previous=existing?.responsiveQuality||null;
+  const runOrder=productionReleaseRunOrder(runId,previous?.runId||'');
+  if(runOrder===null||runOrder<0)throw new Error('STALE_RESPONSIVE_RUN_ID');
+  // A newer run must earn both browser results itself. Never borrow the
+  // other browser's previously passed report for the new run.
+  const sameRun=previous?.commit===commit&&previous?.deployId===deployId
+    ? previousResponsiveForSameRun(previous,runId):null;
   const viewportNames=(Array.isArray(input?.viewportNames)?input.viewportNames:[])
     .map((value:any)=>clean(value,80))
     .filter(Boolean)
@@ -3275,25 +3284,29 @@ export async function recordProductionResponsiveQuality(context:Context,input:an
     designCount:Math.max(0,Math.floor(Number(input?.designCount||0))),
     reportMissing:Boolean(input?.reportMissing)||viewportNames.length===0||Number(input?.cases||0)<=0,
   };
-  const chromium=browser==='chromium'?summary:(previous?.chromium||null);
-  const webkit=browser==='webkit'?summary:(previous?.webkit||null);
-  const complete=Boolean(chromium&&webkit);
-  const failed=Boolean(
-    chromium?.reportMissing||webkit?.reportMissing
-    || Number(chromium?.criticalCount||0)>0
-    || Number(webkit?.criticalCount||0)>0
-  );
-  const responsiveQuality:ProductionResponsiveQuality={
-    checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
-    status:failed?'failed':complete?'passed':'partial',
-    source:'production-responsive-qa',
-    runId,
-    commit,
-    deployId,
-    chromium,
-    webkit,
-  };
-  return recordProductionRelease(context,{deployId,commit,checkedAt:responsiveQuality.checkedAt,responsiveQuality});
+  // Each signed browser writer commits to an independent strongly consistent
+  // Netlify Blob key. The first browser cannot overwrite the other browser.
+  const stored=await persistIndependentResponsiveBrowserEvidence(healthStore(context),{
+    deployId,commit,runId,browser,checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
+    report:summary,
+  });
+  const responsiveQuality=stored.responsiveQuality as ProductionResponsiveQuality;
+  if(!stored.complete){
+    return {deployId,commit,responsiveQuality};
+  }
+  // An aggregate is only published when BOTH current-run browser keys can
+  // be strongly read back. No previous-run result is ever inherited.
+  const release=await recordProductionRelease(context,{
+    deployId,commit,checkedAt:responsiveQuality.checkedAt,responsiveQuality,
+  });
+  return release;
+}
+
+/** Signed final gate reads both independent exact-run browser proofs. */
+export async function readCurrentRunResponsiveEvidence(context:Context,input:{
+  deployId:string;commit:string;runId:string;
+}){
+  return readIndependentResponsiveBrowserEvidence(healthStore(context),input);
 }
 
 function productionVisualThumbnailStorageKey(deployId:string,key:string){
@@ -3768,6 +3781,31 @@ export async function recordProductionRelease(context:Context,input:any) {
   const existing=await readProductionReleases(context,100);
   const previous=existing.find(row=>row.deployId===deployId);
 
+  // Every signed QA record is scoped to its immutable deploy/commit and
+  // monotonically increasing GitHub workflow run. A late retry from an
+  // older run can never replace a newer browser or admin evidence set.
+  const signedEvidence=[
+    ['visualQuality',input?.visualQuality,previous?.visualQuality],
+    ['responsiveQuality',input?.responsiveQuality,previous?.responsiveQuality],
+    ['protectedAdminQa',input?.protectedAdminQa,previous?.protectedAdminQa],
+    ['certifiedExportSecurity',input?.certifiedExportSecurity,previous?.certifiedExportSecurity],
+    ['releaseAttestation',input?.releaseAttestation,previous?.releaseAttestation],
+  ] as const;
+  for(const [kind,incoming,recorded] of signedEvidence){
+    if(!incoming)continue;
+    const proposed:any=incoming;
+    const stored:any=recorded;
+    const incomingRunId=kind==='releaseAttestation'?proposed.visualQaRunId:proposed.runId;
+    const recordedRunId=kind==='releaseAttestation'?stored?.visualQaRunId:stored?.runId;
+    const order=productionReleaseRunOrder(incomingRunId,recordedRunId||'');
+    if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID');
+    if((proposed.commit&&proposed.commit!==commit)
+      ||(proposed.expectedSha&&proposed.expectedSha!==commit)
+      ||(proposed.deployId&&proposed.deployId!==deployId)){
+      throw new Error('RELEASE_EVIDENCE_DEPLOY_IDENTITY_MISMATCH');
+    }
+  }
+
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   const githubHeaders:Record<string,string>={
     'Accept':'application/vnd.github+json',
@@ -3910,20 +3948,67 @@ export async function recordProductionRelease(context:Context,input:any) {
     summary:plainEnglishReleaseSummary(commitTitle,featureLabelsForFiles(changedFiles)),
     recordedAt:new Date().toISOString(),
   };
-  const next=[record,...existing.filter(row=>row.deployId!==deployId)]
-    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
-    .slice(0,100);
+  const conditional=conditionalTenantStoreFor(context,resolveTenant(),'systemHealth');
+  const mergeLatest=(latest:ProductionRelease|null):ProductionRelease=>{
+    if(latest?.commit&&latest.commit!==commit){
+      throw new Error('RELEASE_DEPLOY_IDENTITY_MISMATCH');
+    }
+    // This validation MUST execute inside every CAS retry using the newly
+    // read version. Checking only the initial snapshot allows stale writes.
+    const signedChanges=[
+      ['visualQuality',input?.visualQuality,latest?.visualQuality],
+      ['responsiveQuality',input?.responsiveQuality,latest?.responsiveQuality],
+      ['protectedAdminQa',input?.protectedAdminQa,latest?.protectedAdminQa],
+      ['certifiedExportSecurity',input?.certifiedExportSecurity,latest?.certifiedExportSecurity],
+      ['releaseAttestation',input?.releaseAttestation,latest?.releaseAttestation],
+    ] as const;
+    for(const [kind,incoming,stored] of signedChanges){
+      if(!incoming)continue;
+      const proposed:any=incoming;
+      const previousEvidence:any=stored;
+      const incomingRun=kind==='releaseAttestation'?proposed.visualQaRunId:proposed.runId;
+      const storedRun=kind==='releaseAttestation'?previousEvidence?.visualQaRunId:previousEvidence?.runId;
+      const order=productionReleaseRunOrder(incomingRun,storedRun||'');
+      if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID');
+    }
+    return {
+      ...record,
+      // Never replace a concurrently written field with the older snapshot.
+      verification:input?.verification||latest?.verification||null,
+      syntheticProbeVerification:input?.syntheticProbeVerification||latest?.syntheticProbeVerification||null,
+      accountingVerification:input?.accountingVerification||latest?.accountingVerification||null,
+      visualQuality:input?.visualQuality||latest?.visualQuality||null,
+      responsiveQuality:input?.responsiveQuality||latest?.responsiveQuality||null,
+      rollbackProtection:input?.rollbackProtection||latest?.rollbackProtection||null,
+      releaseAttestation:input?.releaseAttestation||latest?.releaseAttestation||null,
+      certifiedExportSecurity:input?.certifiedExportSecurity||latest?.certifiedExportSecurity||null,
+      protectedAdminQa:input?.protectedAdminQa||latest?.protectedAdminQa||null,
+    };
+  };
+  // Publish the immutable, exact-deploy audit object FIRST. A lost response
+  // or interruption cannot leave the UI index advertising an attestation
+  // that never reached the durable per-deploy record.
+  const durable=await casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId,
+    (current:any)=>mergeLatest((current||null) as ProductionRelease|null));
+  // Only after the durable by-ID commit succeeds may the rolling dashboard
+  // history advertise the attestation. Both writes re-validate run identity
+  // against their respective latest ETags.
+  const rows=await casMergeReleaseHistory(conditional,'deployments/releases',(current:any)=>{
+    const all:ProductionRelease[]=Array.isArray(current)?current:[];
+    const latest=all.find(row=>row.deployId===deployId)||null;
+    const merged=mergeLatest(latest);
+    return [merged,...all.filter(row=>row.deployId!==deployId)]
+      .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
+      .slice(0,100);
+  });
+  const committed=rows.find((row:ProductionRelease)=>row.deployId===deployId) as ProductionRelease;
   const currentAuditIndex=((await store.get(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,{type:'json'}).catch(()=>[]))||[]) as string[];
   const nextAuditIndex=[deployId,...currentAuditIndex.map((id)=>clean(id,120)).filter((id)=>id&&id!==deployId)];
-  await Promise.all([
-    store.setJSON('deployments/releases',next),
-    store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex),
-    // Durable per-deploy audit records are never trimmed when the dashboard's rolling
-    // release list is capped. This preserves the exact synthetic probe evidence for
-    // every production deploy by its immutable Netlify deploy id.
-    store.setJSON('deployments/releases/by-id/'+deployId,record),
-  ]);
-  return record;
+  await store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex);
+  if(durable.commit!==commit||durable.deployId!==deployId){
+    throw new Error('RELEASE_HISTORY_DURABLE_IDENTITY_READBACK_FAILED');
+  }
+  return committed;
 }
 
 export async function rollbackFailedProductionRelease(

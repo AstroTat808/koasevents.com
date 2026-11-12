@@ -4,6 +4,8 @@ import {
   evaluateProductionReleaseGate,
   isSuccessfulNetlifyState,
   productionDeployMatchesAttestation,
+  productionReleaseRunOrder,
+  previousResponsiveForSameRun,
 } from '../netlify/functions/_shared/production-release-policy.mjs';
 
 function assert(condition,message){
@@ -83,12 +85,12 @@ const server=readFileSync('netlify/functions/github-main-health-signal.ts','utf8
 const healthShared=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
 const healthPage=readFileSync('src/pages/admin/health/index.astro','utf8');
 const gateContextOccurrences=(workflow.match(/System Health production release gate/g)||[]).length;
-assert(gateContextOccurrences===4
+assert(gateContextOccurrences===6
   &&workflow.includes('Verify actual certified PDF and JSON serializer bytes')
   &&workflow.includes('fail_export_proof()')
   &&workflow.includes('node scripts/verify_live_certified_export_bytes.mjs')
   &&workflow.includes('Certified PDF/JSON byte-level security evidence verification failed.'),
-  'Production release gate must have exactly four authorized publishers: initial pending, final attestation, history failure override and certified PDF/JSON byte-proof failure override; found '+gateContextOccurrences+'.');
+  'Production release gate must have exactly six authorized publishers: initial pending, pre-attestation decision, history failure override, PDF/JSON byte-proof failure override, finalization failure override, and final certified success; found '+gateContextOccurrences+'.');
 assert(workflow.includes("import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';"),
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
@@ -120,7 +122,7 @@ assert(persistShell.includes('trap fail_history ERR')
   'Release-history persistence must preserve fail-closed status publication and durable recorder enforcement.');
 const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes',shellEnd);
 const bytesShellStart=workflow.indexOf('        run: |\n',bytesStep);
-const bytesShellEnd=workflow.indexOf('\n  qa-summary:',bytesShellStart);
+const bytesShellEnd=workflow.indexOf('\n      - name: Publish certified production gate after durable attestation and export bytes',bytesShellStart);
 assert(bytesStep>shellEnd&&bytesShellStart>bytesStep&&bytesShellEnd>bytesShellStart,
   'Certified PDF/JSON byte-proof shell step was not found.');
 const bytesShell=workflow.slice(bytesShellStart+'        run: |\n'.length,bytesShellEnd)
@@ -130,7 +132,27 @@ assert(bytesSyntax.status===0,
   'Certified export-byte fail-closed shell must pass bash -n: '+String(bytesSyntax.stderr||'').slice(0,350));
 assert(bytesShell.includes('trap fail_export_proof ERR')
   &&bytesShell.includes('node scripts/verify_live_certified_export_bytes.mjs'),
-  'PDF/JSON byte-proof failure must immediately revoke a green production release status.');
+  'PDF/JSON byte-proof failure must immediately block production release certification.');
+const finalStep=workflow.indexOf('      - name: Publish certified production gate after durable attestation and export bytes');
+const finalShellStart=workflow.indexOf('        run: |\n',finalStep);
+const finalShellEnd=workflow.indexOf('\n  qa-summary:',finalShellStart);
+assert(finalStep>bytesStep&&finalShellStart>finalStep&&finalShellEnd>finalShellStart,
+  'Final success must be published only after certified release history and PDF/JSON bytes.');
+const finalShell=workflow.slice(finalShellStart+'        run: |\n'.length,finalShellEnd)
+  .split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
+const finalSyntax=spawnSync('bash',['-n'],{input:finalShell,encoding:'utf8'});
+assert(finalSyntax.status===0,
+  'Final signed release success shell must pass bash -n: '+String(finalSyntax.stderr||'').slice(0,350));
+assert(finalShell.includes('trap fail_closed ERR')
+    &&finalShell.includes('koa-final-gate-failure-status.json')
+    &&finalShell.includes('koa-final-gate-success-status.json')
+    &&finalShell.includes('/branches/main')
+    &&finalShell.includes('verify-production-release-attestation')
+    &&finalShell.includes("live.get('deployId')==live.get('liveDeployId')"),
+  'Final status publishing must fail closed and revalidate current GitHub main and exact live Netlify deploy.');
+assert(workflow.includes("state:decision.ok?'pending':'failure'")
+  &&workflow.includes("process.exit(x.decision.ok?0:1)"),
+  'Successful preliminary release checks must remain pending until durable evidence passes.');
 assert(server.includes("body?.action==='record-production-release-attestation'"),
   'The OIDC control plane must expose exact-release attestation persistence.');
 assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|null')
@@ -141,5 +163,46 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
+
+// A replay of an older push attempt must never inherit a newer scheduled
+// audit's browser evidence, even when commit and deployed Netlify ID match.
+const olderRun='41683703455';
+const newerRun='43108656869';
+assert(productionReleaseRunOrder(newerRun,olderRun)===1,
+  'A valid newer GitHub run should be accepted.');
+assert(productionReleaseRunOrder(newerRun,newerRun)===0,
+  'A second browser in the same run should be accepted.');
+assert(productionReleaseRunOrder(olderRun,newerRun)===-1,
+  'An older re-run must not overwrite more recent audit evidence.');
+assert(productionReleaseRunOrder(olderRun,'')===1,
+  'The first valid run should not require pre-existing evidence.');
+for(const bad of ['', '1', '-1', 'not-an-id', '041683703455', '123.5']){
+  assert(productionReleaseRunOrder(bad,newerRun)===null,
+    'Malformed signed run ID must fail closed: '+JSON.stringify(bad));
+}
+assert(productionReleaseRunOrder(newerRun,'bad-previous-run')===null,
+  'Malformed durable run IDs must not be silently ignored.');
+assert(productionReleaseRunOrder('99999999999999999999',newerRun)===1,
+  'Full-width GitHub run IDs must be compared without floating-point loss.');
+const oldResponsive={runId:olderRun,chromium:{browser:'chromium'},webkit:{browser:'webkit'}};
+assert(previousResponsiveForSameRun(oldResponsive,newerRun)===null,
+  'A new production run must start without browser reports inherited from an old run.');
+assert(previousResponsiveForSameRun(oldResponsive,olderRun)===oldResponsive,
+  'Both browser reports from the same valid run must be reusable during aggregation.');
+
+const durableStore=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
+assert(durableStore.includes("if(runOrder===null||runOrder<0)throw new Error('STALE_RESPONSIVE_RUN_ID')"),
+  'A stale responsive run must be rejected before writing Release History.');
+assert(durableStore.includes('persistIndependentResponsiveBrowserEvidence(healthStore(context)')
+    &&durableStore.includes('if(!stored.complete)')
+    &&durableStore.includes('readIndependentResponsiveBrowserEvidence(healthStore(context),input)'),
+  'Chromium and WebKit evidence must be stored independently and aggregated only for the exact run.');
+const endpoint=readFileSync('netlify/functions/github-main-health-signal.ts','utf8');
+assert(endpoint.includes('const signedResponsive=await readCurrentRunResponsiveEvidence(context')
+  &&endpoint.includes('signedResponsive.complete'),
+  'Final release attestation must re-read both signed browser records independently.');
+assert(durableStore.includes("if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID')"),
+  'Stale visual, responsive, protected-admin and attestation records must fail closed.');
+console.log('PASS | stale run IDs rejected; newer runs and same-run browser evidence accepted.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');

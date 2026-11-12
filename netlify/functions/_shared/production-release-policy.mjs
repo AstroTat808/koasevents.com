@@ -26,6 +26,28 @@ export function productionDeployMatchesAttestation(input={}){
   );
 }
 
+/**
+ * GitHub Actions run IDs advance monotonically. Reject stale signed release
+ * evidence without treating an older rerun attempt as a new release run.
+ * A missing prior run permits a fresh valid run; invalid IDs fail closed.
+ */
+export function productionReleaseRunOrder(incomingRunId,recordedRunId=''){
+  const incoming=String(incomingRunId??'').trim();
+  const recorded=String(recordedRunId??'').trim();
+  const valid=/^[1-9][0-9]{3,19}$/;
+  if(!valid.test(incoming))return null;
+  if(!recorded)return 1;
+  if(!valid.test(recorded))return null;
+  const a=BigInt(incoming),b=BigInt(recorded);
+  return a===b?0:a>b?1:-1;
+}
+
+/** Browser results from a prior run never count for a new run. */
+export function previousResponsiveForSameRun(previous,incomingRunId){
+  return previous&&productionReleaseRunOrder(incomingRunId,previous.runId)===0
+    ? previous : null;
+}
+
 export function productionWorkflowGatesSucceeded(results={}){
   const required=['pending','source','smoke','theme','admin','mobile','visual'];
   return required.every((name)=>String(results?.[name]||'')==='success');

@@ -1,6 +1,8 @@
 import type { Config, Context } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { buildCertifiedReleaseExport, certifiedReleasePdf } from './_shared/release-attestation-export.mjs';
+import {verifyCurrentCertifiedProduction} from './_shared/current-certified-release.mjs';
+import {serializedCertifiedReleaseArtifacts,signCertifiedReleaseArtifacts} from './_shared/release-export-signature.mjs';
 import { resolveTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
@@ -972,36 +974,74 @@ export default async (req:Request,context:Context) => {
   if(url.searchParams.get('export')==='certified-release'){
     if(!admin)return Response.json({error:'System Health management permission required.'},{status:403,headers:{'Cache-Control':'private, no-store'}});
     const format=String(url.searchParams.get('format')||'pdf').toLowerCase();
-    if(format!=='pdf'&&format!=='json'){
-      return Response.json({error:'Certified release exports support PDF or JSON.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+    if(format!=='pdf'&&format!=='json'&&format!=='signature'){
+      return Response.json({error:'Certified release exports support PDF, JSON or a detached signature manifest.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
     }
     try{
-      // Exact stored, signed release evidence; never regenerate a green status
-      // from a currently pending production workflow or untrusted UI fields.
       const releases=await readProductionReleases(context,100);
-      const attestation=buildCertifiedReleaseExport(releases,{
+      // Select only signed and complete evidence, then separately check that
+      // its exact SHA and deploy are STILL the live published GitHub/Netlify
+      // production release. Never certify the latest archived green row.
+      const candidate=buildCertifiedReleaseExport(releases,{
         productionCommit:String(Netlify.env.get('COMMIT_REF')||''),
         productionDeployId:String(context.deploy?.id||''),
+        requireSignedExportEvidence:true,
       });
-      const filename='koa-certified-release-'+attestation.release.deployId+'.'+format;
+      const providerInput={
+        netlifyToken:String(Netlify.env.get('NETLIFY_AUTH_TOKEN')||''),
+        githubToken:String(Netlify.env.get('KOA_GITHUB_READ_TOKEN')||''),
+        siteId:String(context.site?.id||Netlify.env.get('SITE_ID')||''),
+        servingDeployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+        runtimeCommit:String(Netlify.env.get('COMMIT_REF')||''),
+        expectedCommit:candidate.release.commit,
+        expectedDeployId:candidate.release.deployId,
+      };
+      const live=await verifyCurrentCertifiedProduction(providerInput);
+      const attestation=buildCertifiedReleaseExport(releases,{
+        productionCommit:live.commit,
+        productionDeployId:live.deployId,
+        requireCurrentProduction:true,
+        requireSignedExportEvidence:true,
+      });
+      if(attestation.currentProduction.matchesCertifiedRelease!==true)
+        throw new Error('CURRENT_RELEASE_STALE_DEPLOYMENT');
+      const {pdfBytes,jsonBytes}=serializedCertifiedReleaseArtifacts(attestation,certifiedReleasePdf);
+      // The Ed25519 private key exists only as a secret, Functions-scoped
+      // Netlify environment variable. Never use a committed or default key.
+      const key=String(Netlify.env.get('KOA_CERTIFICATION_SIGNING_PRIVATE_KEY_PEM')||'').replace(/\\n/g,'\n');
+      const manifest=signCertifiedReleaseArtifacts({pdfBytes,jsonBytes},attestation,key);
+      // Protect against a new deployment or main branch update during
+      // signature generation; the second live provider read must still agree.
+      await verifyCurrentCertifiedProduction(providerInput);
+      const filename='koa-certified-release-'+attestation.release.deployId+'.'+(format==='signature'?'sig.json':format);
       const headers={
         'Content-Disposition':'attachment; filename="'+filename+'"',
         'Cache-Control':'private, no-store',
         'X-Content-Type-Options':'nosniff',
+        'X-Koa-Signing-Key-Id':manifest.keyId,
+        'X-Koa-Signature-Format':'detached-ed25519-manifest',
       };
-      if(format==='json'){
-        return new Response(JSON.stringify(attestation,null,2)+'\\n',{
-          status:200,
-          headers:{...headers,'Content-Type':'application/json; charset=utf-8'},
+      if(format==='signature'){
+        return new Response(JSON.stringify(manifest,null,2)+'\n',{
+          status:200,headers:{...headers,'Content-Type':'application/json; charset=utf-8'},
         });
       }
-      return new Response(certifiedReleasePdf(attestation),{
+      if(format==='json'){
+        return new Response(jsonBytes,{
+          status:200,headers:{...headers,'Content-Type':'application/json; charset=utf-8'},
+        });
+      }
+      return new Response(pdfBytes,{
         status:200,headers:{...headers,'Content-Type':'application/pdf'},
       });
-    }catch{
+    }catch(error){
+      const detail=String(error instanceof Error?error.message:'');
+      const unavailable=/PROVIDER_UNAVAILABLE|PROVIDER_INVALID|SIGNING_KEY_UNAVAILABLE/.test(detail);
       return Response.json({
-        error:'No complete, independently certified release is available for export.',
-      },{status:409,headers:{'Cache-Control':'private, no-store'}});
+        error:unavailable
+          ?'Current production identity or the trusted release signing key is unavailable.'
+          :'No complete, currently deployed, independently certified and cryptographically signed release is available.',
+      },{status:unavailable?503:409,headers:{'Cache-Control':'private, no-store'}});
     }
   }
   if(url.searchParams.get('export')==='critical-integrations'){

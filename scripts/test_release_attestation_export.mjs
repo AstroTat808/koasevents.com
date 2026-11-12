@@ -29,6 +29,7 @@ const release={
 const newerPending={...release,deployId:'c'.repeat(24),releaseAttestation:null};
 const exported=buildCertifiedReleaseExport([newerPending,release],{productionCommit:sha,productionDeployId:deploy});
 assert.equal(exported.release.deployId,deploy,'Must choose latest fully certified release, not newest pending.');
+assert.equal(exported.exportedAt,release.releaseAttestation.verifiedAt,'Release serialization timestamp must be stable across downloads.');
 assert.equal(exported.certification.status,'verified');
 assert.equal(exported.certification.productionGate,'success');
 assert.equal(exported.certification.systemHealth.failed,0);
@@ -120,10 +121,25 @@ assert(route.indexOf('if(!admin)')>=0&&route.indexOf('if(!admin)')<route.indexOf
 assert(route.includes('status:403'),'Unauthorized export must return 403.');
 assert(route.includes("format!=='pdf'&&format!=='json'"),'Only PDF and JSON are supported.');
 assert(route.includes('buildCertifiedReleaseExport(releases'),'Both formats must share certified-only evidence validation.');
-assert(route.includes('status:409'),'Uncertified or missing evidence must return conflict, not certified output.');
+assert(route.includes('unavailable?503:409'),'Missing or stale evidence must return 409, while unavailable identity/signing dependencies fail 503.');
+assert(route.includes('verifyCurrentCertifiedProduction(providerInput)'),
+  'A signed export must reverify current GitHub main and published Netlify production, not archived history.');
+assert(route.includes('requireCurrentProduction:true')
+  &&route.includes('requireSignedExportEvidence:true'),
+  'Only the exact currently published and fully byte-verified release can be signed.');
+assert(route.includes('serializedCertifiedReleaseArtifacts(attestation,certifiedReleasePdf)')
+  &&route.includes('signCertifiedReleaseArtifacts({pdfBytes,jsonBytes},attestation,key)'),
+  'PDF and JSON must be byte-signed under the same Ed25519 manifest.');
+assert(route.includes("format!=='pdf'&&format!=='json'&&format!=='signature'")
+  &&route.includes("if(format==='signature')"),
+  'Detached signature manifest must be downloadable alongside both artifacts.');
+assert(route.includes('X-Koa-Signing-Key-Id')
+  &&route.includes('KOA_CERTIFICATION_SIGNING_PRIVATE_KEY_PEM'),
+  'The exported signing key ID must be traceable and the private key loaded only from runtime secrets.');
+
 assert(route.includes("private, no-store")&&route.includes('nosniff'),'Download cache and MIME sniffing must be disabled.');
 assert(route.indexOf("if(format==='json')")>route.indexOf('buildCertifiedReleaseExport'),'JSON must not bypass validation.');
-assert(route.indexOf('certifiedReleasePdf(attestation)')>route.indexOf('buildCertifiedReleaseExport'),'PDF must not bypass validation.');
+assert(route.indexOf('serializedCertifiedReleaseArtifacts(attestation,certifiedReleasePdf)')>route.indexOf('buildCertifiedReleaseExport'),'PDF and JSON byte serialization must not bypass certified-only validation.');
 for(const rows of [[],null,[newerPending]])assert.throws(()=>buildCertifiedReleaseExport(rows),/certified/,'Missing or pending evidence fails closed.');
 for(const broken of [
  {...release,releaseAttestation:{...release.releaseAttestation,expectedSha:'f'.repeat(40)}},
@@ -136,6 +152,8 @@ for(const broken of [
 ])assert.throws(()=>buildCertifiedReleaseExport([broken]),/certified/,'Incomplete or mismatched release evidence must be rejected.');
 const mismatch=buildCertifiedReleaseExport([release],{productionCommit:'f'.repeat(40),productionDeployId:'f'.repeat(24)});
 assert.equal(mismatch.currentProduction.matchesCertifiedRelease,false,'Historical certified releases must never be described as live.');
+assert.throws(()=>buildCertifiedReleaseExport([release],{productionCommit:'f'.repeat(40),productionDeployId:'f'.repeat(24),requireCurrentProduction:true}),/certified/,'A stale archived release must never be offered as a current production certificate.');
+assert.throws(()=>buildCertifiedReleaseExport([release],{productionCommit:'',productionDeployId:deploy,requireCurrentProduction:true}),/Current production identity/,'A missing live SHA must fail closed.');
 assert.equal(JSON.parse(JSON.stringify(mismatch)).currentProduction.matchesCertifiedRelease,false);
 const mismatchedPdf=new TextDecoder().decode(certifiedReleasePdf(mismatch));
 assert(mismatchedPdf.includes('NO / NOT VERIFIED'),'PDF must disclose live deployment mismatch.');
