@@ -7,7 +7,7 @@ import { migrationPreview, migrationAction } from './_shared/customer-identity-w
 
 const headers = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers });
-const allowedActions = new Set(['propose', 'approve', 'apply', 'rollback', 'reconcile']);
+const allowedActions = new Set(['propose', 'review-record', 'approve', 'apply', 'rollback', 'reconcile']);
 export default async (request: Request, context: Context) => {
   if (!['GET', 'POST'].includes(request.method)) return new Response('Method not allowed', {
     status: 405, headers: { ...headers, Allow: 'GET, POST' },
@@ -33,15 +33,23 @@ export default async (request: Request, context: Context) => {
       if (new TextEncoder().encode(raw).byteLength > 2048) return json({ error: 'Request is too large.', code: 'payload_too_large' }, 413);
       let input: any;
       try { input = JSON.parse(raw); } catch { return json({ error: 'Invalid migration request.', code: 'invalid_json' }, 400); }
-      if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'planId', 'confirmation'].includes(key))) {
-        return json({ error: 'Only migration action, plan ID and confirmation are accepted.', code: 'invalid_request' }, 400);
+      if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'planId', 'confirmation', 'recordId', 'decision'].includes(key))) {
+        return json({ error: 'Unrecognized migration request field.', code: 'invalid_request' }, 400);
       }
       const action = String(input.action || '');
       if (!allowedActions.has(action)) return json({ error: 'Unknown migration action.', code: 'invalid_action' }, 400);
-      const requiredConfirmation = ({ propose: 'PROPOSE', approve: 'APPROVE', apply: 'APPLY', rollback: 'ROLLBACK', reconcile: 'RECONCILE' } as Record<string,string>)[action];
+      const requiredConfirmation = ({ propose: 'PROPOSE', 'review-record': 'REVIEW', approve: 'APPROVE', apply: 'APPLY', rollback: 'ROLLBACK', reconcile: 'RECONCILE' } as Record<string,string>)[action];
       if (input.confirmation !== requiredConfirmation) return json({ error: 'Explicit migration confirmation is required.', code: 'confirmation_required' }, 422);
+      if (action !== 'review-record' && ('recordId' in input || 'decision' in input)) {
+        return json({ error: 'Record decisions are accepted only by the individual review operation.', code: 'invalid_request' }, 400);
+      }
+      if (action === 'review-record' && (
+        !/^[a-zA-Z0-9_-]{1,120}$/.test(String(input.recordId || '')) ||
+        !['approve', 'reject'].includes(String(input.decision || ''))
+      )) return json({ error: 'A valid record and an explicit approve/reject decision are required.', code: 'invalid_record_review' }, 422);
       const actorId = String(auth.user?.id || auth.user?.email || '');
-      const result = await migrationAction({ action, planId: String(input.planId || ''), tenantId: tenant.id, actorId, sales, crm });
+      const result = await migrationAction({ action, planId: String(input.planId || ''), tenantId: tenant.id,
+        actorId, recordId: String(input.recordId || ''), decision: String(input.decision || ''), sales, crm });
       return json({ ok: true, ...result });
     } catch (error) {
       if (error instanceof IdentityMigrationError) return json({ error: error.message, code: error.code }, error.status);

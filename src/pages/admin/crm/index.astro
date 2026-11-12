@@ -101,7 +101,7 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
         </section>
         <section data-customer-migration-section class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-wrap items-start justify-between gap-4">
-            <div><p class="eyebrow text-[var(--koa-clay)]">Controlled data migration</p><h2 class="display mt-2 text-3xl">Link legacy customer identities</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60">Preview verified, conflict-free customer links without changing projects or financial records. Propose a small batch, obtain approval from a second administrator, then apply. Each batch has a reversible customer-ID-only change set.</p></div>
+            <div><p class="eyebrow text-[var(--koa-clay)]">Controlled data migration</p><h2 class="display mt-2 text-3xl">Link legacy customer identities</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60">Preview verified customer links, then propose a small batch. A second administrator must approve or reject each record individually before a customer-ID-only apply. Rejected records are untouched; the approved change set has a guarded rollback. Orphan tasks and financial associations remain read-only until independently reconciled.</p></div>
             <button data-migration-preview type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-bold text-white">Preview migration</button>
           </div>
           <p data-migration-status role="status" aria-live="polite" class="mt-3 text-sm text-[var(--koa-clay)]"></p>
@@ -891,24 +891,66 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   function renderMigrationHistory(rows){
     const holder=$('[data-migration-history]');
     if(!holder)return;
-    holder.innerHTML=rows.length?rows.map(row=>'<article class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--koa-line)] p-3"><div><strong class="text-xs">'+esc(row.planId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(row.status)+' · '+Number(row.assignmentCount||0)+' identity links · '+esc(row.updatedAt||'')+(row.syncPending?' · Synchronization pending':'')+'</p></div><div class="flex flex-wrap gap-2">'+(['proposed','approved'].includes(row.status)?'<button type="button" data-migrate-action="'+(row.status==='proposed'?'approve':'apply')+'" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">'+(row.status==='proposed'?'Approve (second admin)':'Apply approved batch')+'</button>':'')+(row.status==='applied'?'<button type="button" data-migrate-action="'+(row.syncPending?'reconcile':'rollback')+'" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">'+(row.syncPending?'Reconcile records':'Rollback batch')+'</button>':'')+(row.status==='rolled_back'&&row.syncPending?'<button type="button" data-migrate-action="reconcile" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Reconcile rollback</button>':'')+'</div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/55">No migrations proposed.</p>';
+    holder.innerHTML=rows.length?rows.map(row=>{
+      const canApprove=row.status==='proposed'&&(
+        row.reviewMode==='legacy' || (Number(row.reviewedCount||0)===Number(row.candidateCount||0)&&Number(row.approvedCount||0)>0));
+      const buttons=(canApprove?'<button type="button" data-migrate-action="approve" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Finalize reviewed assignments</button>':'')
+        +(row.status==='approved'?'<button type="button" data-migrate-action="apply" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Apply approved IDs only</button>':'')
+        +(row.status==='applied'?'<button type="button" data-migrate-action="'+(row.syncPending?'reconcile':'rollback')+'" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">'+(row.syncPending?'Reconcile projections':'Rollback approved ID changes')+'</button>':'')
+        +(row.status==='rolled_back'&&row.syncPending?'<button type="button" data-migrate-action="reconcile" data-migrate-id="'+esc(row.planId)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Reconcile rollback</button>':'');
+      return '<article class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--koa-line)] p-3"><div><strong class="break-all text-xs">'+esc(row.planId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(row.status)+' · '+Number(row.assignmentCount||0)+' assignments · '+Number(row.reviewedCount||0)+'/'+Number(row.candidateCount||row.assignmentCount||0)+' individually reviewed'+(row.syncPending?' · Synchronization pending':'')+'</p></div><div class="flex flex-wrap gap-2">'+buttons+'</div></article>';
+    }).join(''):'<p class="text-sm text-[var(--koa-ink)]/55">No migrations proposed.</p>';
   }
   async function refreshMigration(){
-    const status=$('[data-migration-status]');if(status)status.textContent='Checking the current CRM index and migration audit…';
+    const status=$('[data-migration-status]');
+    if(status)status.textContent='Reading authoritative customer IDs, task exceptions and approval history…';
     try{
       const response=await fetch('/api/admin/crm-customer-migration',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(25000)});
-      const body=await response.json();
+      const body=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(body.error||'Unable to load the migration preview.');
-      const plan=body.plan;identityMigrationPlan=plan;
+      const plan=body.plan;
+      identityMigrationPlan=plan;
+      const approval=body.currentApproval?.planId===plan.planId?body.currentApproval:null;
+      const decisions=approval?.reviewDecisions||{};
+      const rows=(plan.assignments||[]).map(row=>{
+        const customer=(plan.customers||[]).find(item=>item.id===row.afterCustomerId);
+        const decision=decisions[row.recordId];
+        const decisionText=decision?decision.decision+' by '+decision.reviewer:'Awaiting independent review';
+        const controls=approval?.status==='proposed'
+          ?'<div class="mt-3 flex flex-wrap gap-2"><button type="button" data-migrate-review="approve" data-migrate-review-record="'+esc(row.recordId)+'" data-migrate-id="'+esc(plan.planId)+'" class="rounded-full border border-emerald-600 px-3 py-2 text-xs font-bold text-emerald-800">Approve this record</button><button type="button" data-migrate-review="reject" data-migrate-review-record="'+esc(row.recordId)+'" data-migrate-id="'+esc(plan.planId)+'" class="rounded-full border border-amber-700 px-3 py-2 text-xs font-bold text-amber-900">Reject this record</button></div>'
+          :'';
+        return '<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-start justify-between gap-2"><strong class="break-all text-sm">'+esc(row.recordId)+'</strong><span class="text-xs font-bold text-[var(--koa-clay)]">'+esc(decisionText)+'</span></div><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/70">Customer: '+esc(customer?.name||row.afterCustomerId)+' · Current ID: '+esc(row.beforeCustomerId||'(missing)')+' · Proposed ID: '+esc(row.afterCustomerId)+'</p><p class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/50">Immutable source record revision '+esc(row.beforeRevision)+'</p>'+controls+'</article>';
+      }).join('');
+      const taskRows=(body.orphanTaskReviews?.records||[]).map(task=>'<article class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs"><strong>'+esc(task.id)+'</strong> · '+esc(task.title||'Untitled task')+'<p class="mt-1">Previous project reference: '+esc(task.recordId||'missing')+'. No target has been verified; relinking is disabled.</p></article>').join('');
+      const head='<div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-sm font-bold">'+Number(plan.assignmentCount)+' candidate records · '+Number(plan.remainingAfterBatch)+' eligible in later batches</p><p class="mt-2 text-xs">Plan '+esc(plan.planId)+' · '+Number(plan.conflicts?.length||0)+' ambiguous identity groups excluded · '+Number(plan.skipped?.unverified||0)+' unverified records held</p><p class="mt-2 text-xs font-semibold">'+(approval?'Review status: '+esc(approval.status)+' · '+Object.keys(decisions).length+'/'+Number(approval.candidateCount||plan.assignmentCount)+' decisions':'Read-only preview: no proposal or approval exists')+'</p></div>';
+      const propose=!approval&&plan.assignmentCount?'<button type="button" data-migrate-action="propose" data-migrate-id="'+esc(plan.planId)+'" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-bold text-white">Propose for individual administrator decisions</button>':'';
+      const taskPanel='<details class="rounded-xl border border-amber-200 p-4"><summary class="cursor-pointer text-sm font-bold">Orphaned tasks · '+Number(body.orphanTaskReviews?.count||0)+' · investigation only</summary><div class="mt-3 grid gap-2">'+(taskRows||'<p class="text-xs">No orphaned tasks identified.</p>')+'</div></details>';
+      const financePanel='<p class="rounded-xl border border-[var(--koa-line)] p-4 text-xs leading-5"><strong>Booking–invoice–payment review:</strong> Original external transaction IDs and LinkedTxn evidence must be verified before any association changes. Financial relinking, deletion, amount changes and task relinking are disabled here.</p>';
       const holder=$('[data-migration-preview-detail]');
-      if(holder)holder.innerHTML='<div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-sm font-bold">'+Number(plan.assignmentCount)+' ready for review · '+Number(plan.remainingAfterBatch)+' in subsequent batches</p><p class="mt-2 text-xs text-[var(--koa-ink)]/60">Safe links only: '+Number(plan.audit.customers)+' customer identities assessed · '+Number(plan.conflicts.length)+' unresolved identity review groups · '+Number(plan.skipped.unverified)+' unverified records excluded.</p><p class="mt-2 break-all text-[.7rem] text-[var(--koa-ink)]/55">Plan '+esc(plan.planId)+'</p></div>'+(plan.customers||[]).map(customer=>'<div class="rounded-lg border border-[var(--koa-line)] p-3 text-xs">'+esc(customer.name)+' · '+customer.recordIds.length+' records to link</div>').join('')+(plan.assignmentCount?'<button type="button" data-migrate-action="propose" data-migrate-id="'+esc(plan.planId)+'" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-bold text-white">Propose this batch for independent approval</button>':'');
+      if(holder)holder.innerHTML=head+'<div class="grid gap-2">'+rows+'</div>'+propose+taskPanel+financePanel;
       renderMigrationHistory(body.recentMigrations||[]);
-      if(status)status.textContent='Preview is read-only. Applying a migration requires a second administrator’s approval.';
+      if(status)status.textContent='Preview is read-only. Only individually approved IDs can enter the guarded apply/rollback workflow.';
     }catch(error){if(status)status.textContent=error?.message||'Could not load migration audit.';}
+  }
+  async function submitRecordMigrationDecision(recordId,decision,planId){
+    if(!identityMigrationPlan || identityMigrationPlan.planId!==planId)return;
+    if(!confirm((decision==='approve'?'Approve':'Reject')+' customer-ID assignment for '+recordId+'? This decision is stored in the immutable review history.'))return;
+    const status=$('[data-migration-status]');
+    if(status)status.textContent='Checking signed-in administrator and exact index revision…';
+    try{
+      const response=await fetch('/api/admin/crm-customer-migration',{method:'POST',credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          action:'review-record',planId,recordId,decision,confirmation:'REVIEW',
+        }),signal:AbortSignal.timeout(30000)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Record decision was not saved.');
+      await refreshMigration();
+      if(status)status.textContent='Recorded '+decision+' for '+recordId+'. No customer data was changed.';
+    }catch(error){if(status)status.textContent=error?.message||'Record review not confirmed. Refresh before retrying.';}
   }
   async function submitMigration(action,planId){
     const status=$('[data-migration-status]');
-    const prompts={propose:'Propose this identity-linking batch? No CRM records will change until approved.',approve:'Approve the exact proposed customer-identity batch? The proposer cannot approve their own plan.',apply:'Apply approved customer-ID links only? Existing projects, bookings and financials will be preserved.',rollback:'Rollback customer-ID assignments? This will be blocked if any record changed since the migration.',reconcile:'Repair pending CRM record projections without altering customer identities?'};
+    const prompts={propose:'Propose this identity-linking batch? No CRM records will change until approved.',approve:'Finalize only the individually approved customer-ID records? Rejected records stay unchanged. The proposer cannot approve their own plan.',apply:'Apply approved customer-ID links only? Existing projects, bookings and financials will be preserved.',rollback:'Rollback customer-ID assignments? This will be blocked if any record changed since the migration.',reconcile:'Repair pending CRM record projections without altering customer identities?'};
     if(!confirm(prompts[action]||'Confirm migration operation?'))return;
     if(status)status.textContent='Verifying migration and storage revisions…';
     try{
@@ -922,6 +964,8 @@ import CrmRecordEditor from '../../../components/admin/CrmRecordEditor.astro';
   document.addEventListener('click',event=>{
     if(!(event.target instanceof Element))return;
     if(event.target.closest('[data-migration-preview]'))refreshMigration();
+    const reviewButton=event.target.closest('[data-migrate-review]');
+    if(reviewButton)submitRecordMigrationDecision(reviewButton.dataset.migrateReviewRecord,reviewButton.dataset.migrateReview,reviewButton.dataset.migrateId);
     const button=event.target.closest('[data-migrate-action]');
     if(button)submitMigration(button.dataset.migrateAction,button.dataset.migrateId);
   });

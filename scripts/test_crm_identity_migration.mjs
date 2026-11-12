@@ -36,12 +36,14 @@ const fixture = (records = [record('INQ-SYNT-1'), record('INQ-SYNT-2')]) => ({
   crm: new Memory(),
   tenantId,
 });
-async function execute(s, action, planId, actorId='second-admin', now=baseDate) {
-  return migrationAction({ action, planId, tenantId, actorId, now, sales:s.sales, crm:s.crm });
+async function execute(s, action, planId, actorId='second-admin', now=baseDate, extra={}) {
+  return migrationAction({ action, planId, tenantId, actorId, now, sales:s.sales, crm:s.crm, ...extra });
 }
 async function ready(s) {
   const {plan} = await migrationPreview(s);
   await execute(s,'propose',plan.planId,'first-admin');
+  for (const row of plan.assignments)
+    await execute(s,'review-record',plan.planId,'second-admin',baseDate,{recordId:row.recordId,decision:'approve'});
   await execute(s,'approve',plan.planId,'second-admin');
   return plan;
 }
@@ -87,6 +89,13 @@ test('proposal requires a distinct approving administrator', async () => {
   await assert.rejects(execute(s,'approve',plan.planId,'first-admin'),error=>error.code==='second_approver_required');
   await assert.rejects(execute(s,'apply',plan.planId),error=>error.code==='approval_required');
   assert.equal(recordIndexRevision((await s.sales.readJSON('records/index')).data),plan.sourceRevision);
+  await assert.rejects(execute(s,'approve',plan.planId,'second-admin'),error=>error.code==='record_reviews_incomplete');
+  await assert.rejects(execute(s,'review-record',plan.planId,'first-admin',baseDate,{
+    recordId:plan.assignments[0].recordId,decision:'approve'
+  }),error=>error.code==='second_approver_required');
+  for(const row of plan.assignments)await execute(s,'review-record',plan.planId,'second-admin',baseDate,{
+    recordId:row.recordId,decision:'approve'
+  });
   await execute(s,'approve',plan.planId,'second-admin');
 });
 test('approved migration writes only customer IDs and rollback restores exact original index', async () => {
@@ -167,4 +176,54 @@ test('small batches preserve additional eligible records for later approved plan
   assert.equal(plan.remainingAfterBatch,4);
   const next=buildIdentityMigrationPlan(migrateIdentityRows(rows,plan.assignments),tenantId);
   assert.equal(next.assignmentCount,4);
+});
+
+test('each record decision is immutable in the ledger, rejected rows are untouched, and approved rows roll back', async () => {
+  const s=fixture();
+  const original=structuredClone((await s.sales.readJSON('records/index')).data);
+  const plan=(await migrationPreview(s)).plan;
+  assert.equal(plan.assignments.length,2);
+  await execute(s,'propose',plan.planId,'first-admin');
+  const first=plan.assignments[0],second=plan.assignments[1];
+  const approved=await execute(s,'review-record',plan.planId,'second-admin',baseDate,{
+    recordId:first.recordId,decision:'approve'
+  });
+  assert.equal(approved.approval.reviewDecisions[first.recordId].reviewer,'second-admin');
+  const rejected=await execute(s,'review-record',plan.planId,'second-admin',baseDate,{
+    recordId:second.recordId,decision:'reject'
+  });
+  assert.equal(rejected.approval.reviewDecisions[second.recordId].decision,'reject');
+  assert.equal(rejected.approval.reviewEvents.length,2);
+  await assert.rejects(execute(s,'review-record',plan.planId,'second-admin',baseDate,{
+    recordId:'INQ-OTHER',decision:'approve'
+  }),err=>err.code==='record_not_in_plan');
+  const finalized=await execute(s,'approve',plan.planId,'second-admin');
+  assert.equal(finalized.approval.assignmentCount,1);
+  assert.equal(finalized.approval.candidateCount,2);
+  await execute(s,'apply',plan.planId,'first-admin');
+  const changed=(await s.sales.readJSON('records/index')).data;
+  const applied=changed.find(row=>row.id===first.recordId);
+  const untouched=changed.find(row=>row.id===second.recordId);
+  assert.equal(applied.customerId,first.afterCustomerId);
+  assert.deepEqual(untouched,original.find(row=>row.id===second.recordId));
+  assert.deepEqual(changed.map(row=>row.booking),original.map(row=>row.booking));
+  assert.deepEqual(changed.map(row=>row.accounting),original.map(row=>row.accounting));
+  await execute(s,'rollback',plan.planId,'second-admin');
+  assert.deepEqual((await s.sales.readJSON('records/index')).data,original);
+});
+test('orphan-task review is read-only and never approves relinking or financial mutations',async()=>{
+  const s=fixture();
+  await s.crm.writeJSON('tasks/index',[
+    {id:'TASK-MISSING',recordId:'INQ-NOT-FOUND',title:'Synthetic unmatched task',status:'open'},
+    {id:'TASK-OK',recordId:'INQ-SYNT-1',title:'Synthetic linked task',status:'open'}
+  ],null);
+  const before=(await s.crm.readJSON('tasks/index')).data;
+  const preview=await migrationPreview(s);
+  assert.equal(preview.orphanTaskReviews.count,1);
+  assert.equal(preview.orphanTaskReviews.records[0].id,'TASK-MISSING');
+  assert.equal(preview.orphanTaskReviews.records[0].actionAllowed,false);
+  assert.equal(preview.financialAssociationReviews.readOnly,true);
+  const plan=await ready(s);
+  await execute(s,'apply',plan.planId);
+  assert.deepEqual((await s.crm.readJSON('tasks/index')).data,before);
 });
