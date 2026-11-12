@@ -8,6 +8,8 @@ import {
   responsiveBrowserEvidenceKey,
 } from '../netlify/functions/_shared/responsive-browser-evidence.mjs';
 
+import { casMergeReleaseHistory } from '../netlify/functions/_shared/release-history-cas.mjs';
+
 const sha='a'.repeat(40), deployId='b'.repeat(24);
 const runId='43128521395', oldRunId='41683703455';
 const identity={commit:sha,deployId,runId};
@@ -89,5 +91,50 @@ assert.equal(partial.complete,false);
 assert.equal(partial.responsiveQuality.status,'partial');
 assert.equal(partial.responsiveQuality.webkit,null,
   'A missing WebKit report can never be filled from a previous run.');
+
+// Two CAS merges deliberately read the SAME initial ETag. One loses the
+// compare-and-swap and must retry against the winner's freshly written state.
+let current=null,version=0,reads=0,attempts=0,unblock;
+const firstReadBarrier=new Promise(resolve=>{unblock=resolve;});
+const casStore={
+  async readJSON(key){
+    assert.equal(key,'deployments/releases');
+    const snapshot={data:structuredClone(current),etag:version?String(version):null};
+    reads++;
+    if(reads<=2){
+      if(reads===2)unblock();
+      await firstReadBarrier;
+    }
+    return snapshot;
+  },
+  async writeJSON(key,value,etag){
+    assert.equal(key,'deployments/releases');
+    attempts++;
+    if(etag!==(version?String(version):null))return {modified:false};
+    current=structuredClone(value);
+    version++;
+    return {modified:true};
+  },
+};
+const merged=await Promise.all([
+  casMergeReleaseHistory(casStore,'deployments/releases',row=>({
+    ...(row||{}),chromium:{browser:'chromium',passed:true},
+  })),
+  casMergeReleaseHistory(casStore,'deployments/releases',row=>({
+    ...(row||{}),webkit:{browser:'webkit',passed:true},
+  })),
+]);
+assert.equal(merged.length,2);
+assert.equal(current.chromium.passed,true,'CAS must retain Chromium update.');
+assert.equal(current.webkit.passed,true,'CAS must retain WebKit update.');
+assert(attempts>=3,'Test must exercise at least one real CAS conflict and retry.');
+await assert.rejects(
+  casMergeReleaseHistory({
+    async readJSON(){return {data:null,etag:null};},
+    async writeJSON(){return {modified:false};},
+  },'deployments/releases',()=>({}),{maxAttempts:2}),
+  /RELEASE_HISTORY_CONCURRENT_WRITE_EXHAUSTED/,
+  'CAS exhaustion must fail closed rather than losing a write.');
+console.log('PASS | two simultaneous CAS updates preserve both browser fields after a forced ETag collision.');
 
 console.log('PASS | two simultaneous signed browser audits retain independent durable proofs; current-run aggregate is complete with zero critical findings; stale run and missing browser fail closed.');
