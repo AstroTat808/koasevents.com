@@ -16,6 +16,7 @@ import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases }
 import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
+import { persistIndependentResponsiveBrowserEvidence, readIndependentResponsiveBrowserEvidence } from './responsive-browser-evidence.mjs';
 import { productionReleaseRunOrder, previousResponsiveForSameRun } from './production-release-policy.mjs';
 
 export type HealthIssueType =
@@ -3282,25 +3283,29 @@ export async function recordProductionResponsiveQuality(context:Context,input:an
     designCount:Math.max(0,Math.floor(Number(input?.designCount||0))),
     reportMissing:Boolean(input?.reportMissing)||viewportNames.length===0||Number(input?.cases||0)<=0,
   };
-  const chromium=browser==='chromium'?summary:(sameRun?.chromium||null);
-  const webkit=browser==='webkit'?summary:(sameRun?.webkit||null);
-  const complete=Boolean(chromium&&webkit);
-  const failed=Boolean(
-    chromium?.reportMissing||webkit?.reportMissing
-    || Number(chromium?.criticalCount||0)>0
-    || Number(webkit?.criticalCount||0)>0
-  );
-  const responsiveQuality:ProductionResponsiveQuality={
-    checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
-    status:failed?'failed':complete?'passed':'partial',
-    source:'production-responsive-qa',
-    runId,
-    commit,
-    deployId,
-    chromium,
-    webkit,
-  };
-  return recordProductionRelease(context,{deployId,commit,checkedAt:responsiveQuality.checkedAt,responsiveQuality});
+  // Each signed browser writer commits to an independent strongly consistent
+  // Netlify Blob key. The first browser cannot overwrite the other browser.
+  const stored=await persistIndependentResponsiveBrowserEvidence(healthStore(context),{
+    deployId,commit,runId,browser,checkedAt:clean(input?.checkedAt,80)||new Date().toISOString(),
+    report:summary,
+  });
+  const responsiveQuality=stored.responsiveQuality as ProductionResponsiveQuality;
+  if(!stored.complete){
+    return {deployId,commit,responsiveQuality};
+  }
+  // An aggregate is only published when BOTH current-run browser keys can
+  // be strongly read back. No previous-run result is ever inherited.
+  const release=await recordProductionRelease(context,{
+    deployId,commit,checkedAt:responsiveQuality.checkedAt,responsiveQuality,
+  });
+  return release;
+}
+
+/** Signed final gate reads both independent exact-run browser proofs. */
+export async function readCurrentRunResponsiveEvidence(context:Context,input:{
+  deployId:string;commit:string;runId:string;
+}){
+  return readIndependentResponsiveBrowserEvidence(healthStore(context),input);
 }
 
 function productionVisualThumbnailStorageKey(deployId:string,key:string){
