@@ -38,6 +38,40 @@ function matches(identity,row,browser){
 }
 
 /**
+ * Read the two independent browser keys and build a non-persistent aggregate.
+ * Only reports from one exact deployment, commit and GitHub run can combine.
+ */
+export async function readIndependentResponsiveBrowserEvidence(store,input={}){
+  const identity={
+    deployId:String(input.deployId||''),
+    commit:String(input.commit||'').toLowerCase(),
+    runId:String(input.runId||''),
+  };
+  const [chromium,webkit]=await Promise.all(BROWSERS.map(async(name)=>{
+    const key=responsiveBrowserEvidenceKey({...identity,browser:name});
+    const value=await store.get(key,{type:'json',consistency:'strong'});
+    return matches(identity,value,name)?value:null;
+  }));
+  const complete=Boolean(chromium&&webkit);
+  const failed=complete&&(
+    chromium.report.criticalCount>0||webkit.report.criticalCount>0
+  );
+  const checkedAt=[chromium?.checkedAt,webkit?.checkedAt].filter(Boolean).sort().at(-1)
+    ||'';
+  return {
+    complete,
+    responsiveQuality:{
+      checkedAt,
+      status:!complete?'partial':failed?'failed':'passed',
+      source:'production-responsive-qa',
+      ...identity,
+      chromium:chromium?.report||null,
+      webkit:webkit?.report||null,
+    },
+  };
+}
+
+/**
  * Adapter contract: store.setJSON(key, value), store.get(key, {type:'json',
  * consistency:'strong'}). Never writes a composite release record here.
  * Concurrent browser invocations can only write distinct keys.
@@ -61,27 +95,6 @@ export async function persistIndependentResponsiveBrowserEvidence(store,input={}
      ||JSON.stringify(own.report)!==JSON.stringify(report)){
     throw new Error('RESPONSIVE_EVIDENCE_DURABLE_READBACK_FAILED');
   }
-  const [chromium,webkit]=await Promise.all(BROWSERS.map(async(name)=>{
-    const key=responsiveBrowserEvidenceKey({...identity,browser:name});
-    const value=await store.get(key,{type:'json',consistency:'strong'});
-    return matches(identity,value,name)?value:null;
-  }));
-  const complete=Boolean(chromium&&webkit);
-  const failed=complete&&(
-    chromium.report.criticalCount>0||webkit.report.criticalCount>0
-  );
-  const lastCheckedAt=[chromium?.checkedAt,webkit?.checkedAt,checkedAt]
-    .filter(Boolean).sort().at(-1);
-  return {
-    stored:true,
-    complete,
-    responsiveQuality:{
-      checkedAt:lastCheckedAt,
-      status:!complete?'partial':failed?'failed':'passed',
-      source:'production-responsive-qa',
-      ...identity,
-      chromium:chromium?.report||null,
-      webkit:webkit?.report||null,
-    },
-  };
+  const combined=await readIndependentResponsiveBrowserEvidence(store,identity);
+  return {stored:true,...combined};
 }
