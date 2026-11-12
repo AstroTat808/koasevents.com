@@ -1,6 +1,6 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
-import { controlPlaneDeployStore, controlPlaneStore, tenantStoreFor } from './tenant-storage';
+import { conditionalTenantStoreFor, controlPlaneDeployStore, controlPlaneStore, tenantStoreFor } from './tenant-storage';
 import { resolveTenant } from './tenant';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
@@ -17,6 +17,7 @@ import { authenticationSecurityHealthSummary } from './auth-security';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 import { recoveryCredentialDiagnostic } from './netlify-published-identity.mjs';
 import { persistIndependentResponsiveBrowserEvidence, readIndependentResponsiveBrowserEvidence } from './responsive-browser-evidence.mjs';
+import { casMergeReleaseHistory } from './release-history-cas.mjs';
 import { productionReleaseRunOrder, previousResponsiveForSameRun } from './production-release-policy.mjs';
 
 export type HealthIssueType =
@@ -3947,20 +3948,63 @@ export async function recordProductionRelease(context:Context,input:any) {
     summary:plainEnglishReleaseSummary(commitTitle,featureLabelsForFiles(changedFiles)),
     recordedAt:new Date().toISOString(),
   };
-  const next=[record,...existing.filter(row=>row.deployId!==deployId)]
-    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
-    .slice(0,100);
+  const conditional=conditionalTenantStoreFor(context,resolveTenant(),'systemHealth');
+  const mergeLatest=(latest:ProductionRelease|null):ProductionRelease=>{
+    if(latest?.commit&&latest.commit!==commit){
+      throw new Error('RELEASE_DEPLOY_IDENTITY_MISMATCH');
+    }
+    // This validation MUST execute inside every CAS retry using the newly
+    // read version. Checking only the initial snapshot allows stale writes.
+    const signedChanges=[
+      ['visualQuality',input?.visualQuality,latest?.visualQuality],
+      ['responsiveQuality',input?.responsiveQuality,latest?.responsiveQuality],
+      ['protectedAdminQa',input?.protectedAdminQa,latest?.protectedAdminQa],
+      ['certifiedExportSecurity',input?.certifiedExportSecurity,latest?.certifiedExportSecurity],
+      ['releaseAttestation',input?.releaseAttestation,latest?.releaseAttestation],
+    ] as const;
+    for(const [kind,incoming,stored] of signedChanges){
+      if(!incoming)continue;
+      const proposed:any=incoming;
+      const previousEvidence:any=stored;
+      const incomingRun=kind==='releaseAttestation'?proposed.visualQaRunId:proposed.runId;
+      const storedRun=kind==='releaseAttestation'?previousEvidence?.visualQaRunId:previousEvidence?.runId;
+      const order=productionReleaseRunOrder(incomingRun,storedRun||'');
+      if(order===null||order<0)throw new Error('STALE_RELEASE_EVIDENCE_RUN_ID');
+    }
+    return {
+      ...record,
+      // Never replace a concurrently written field with the older snapshot.
+      verification:input?.verification||latest?.verification||null,
+      syntheticProbeVerification:input?.syntheticProbeVerification||latest?.syntheticProbeVerification||null,
+      accountingVerification:input?.accountingVerification||latest?.accountingVerification||null,
+      visualQuality:input?.visualQuality||latest?.visualQuality||null,
+      responsiveQuality:input?.responsiveQuality||latest?.responsiveQuality||null,
+      rollbackProtection:input?.rollbackProtection||latest?.rollbackProtection||null,
+      releaseAttestation:input?.releaseAttestation||latest?.releaseAttestation||null,
+      certifiedExportSecurity:input?.certifiedExportSecurity||latest?.certifiedExportSecurity||null,
+      protectedAdminQa:input?.protectedAdminQa||latest?.protectedAdminQa||null,
+    };
+  };
+  const rows=await casMergeReleaseHistory(conditional,'deployments/releases',(current:any)=>{
+    const all:ProductionRelease[]=Array.isArray(current)?current:[];
+    const latest=all.find(row=>row.deployId===deployId)||null;
+    const merged=mergeLatest(latest);
+    return [merged,...all.filter(row=>row.deployId!==deployId)]
+      .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
+      .slice(0,100);
+  });
+  const committed=rows.find((row:ProductionRelease)=>row.deployId===deployId) as ProductionRelease;
+  // The per-deploy immutable-history lookup is updated with the same CAS
+  // contract. It cannot be overwritten by a slower callback from an old run.
+  const durable=await casMergeReleaseHistory(conditional,'deployments/releases/by-id/'+deployId,
+    (current:any)=>mergeLatest((current||null) as ProductionRelease|null));
   const currentAuditIndex=((await store.get(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,{type:'json'}).catch(()=>[]))||[]) as string[];
   const nextAuditIndex=[deployId,...currentAuditIndex.map((id)=>clean(id,120)).filter((id)=>id&&id!==deployId)];
-  await Promise.all([
-    store.setJSON('deployments/releases',next),
-    store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex),
-    // Durable per-deploy audit records are never trimmed when the dashboard's rolling
-    // release list is capped. This preserves the exact synthetic probe evidence for
-    // every production deploy by its immutable Netlify deploy id.
-    store.setJSON('deployments/releases/by-id/'+deployId,record),
-  ]);
-  return record;
+  await store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex);
+  if(durable.commit!==commit||durable.deployId!==deployId){
+    throw new Error('RELEASE_HISTORY_DURABLE_IDENTITY_READBACK_FAILED');
+  }
+  return committed;
 }
 
 export async function rollbackFailedProductionRelease(
