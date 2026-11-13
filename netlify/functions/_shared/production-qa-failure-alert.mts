@@ -1,4 +1,7 @@
-import { controlPlaneStore } from './tenant-storage';
+import type { Context } from '@netlify/functions';
+import { tenantStoreFor } from './tenant-storage';
+import { resolveTenant } from './tenant';
+import { tenantEnv } from './tenant-env';
 import { failedProductionQaJobs,validProductionQaFailureRun } from './production-qa-failure-policy.mjs';
 
 const REPO='AstroTat808/koasevents.com';
@@ -12,7 +15,8 @@ async function ghGet(token:string,path:string){
   if(!response.ok)throw new Error('GitHub API verification failed');
   return response.json();
 }
-export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unknown){
+export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unknown,context:Context){
+  const tenant=resolveTenant();
   if(String(claims?.event_name||'')!=='workflow_run'
      || !String(claims?.workflow_ref||'').includes('/.github/workflows/notify-production-qa-failures.yml@refs/heads/main')){
     return {ok:false,code:'INVALID_NOTIFICATION_WORKFLOW',status:403};
@@ -20,7 +24,7 @@ export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unkn
   const runId=text(runIdInput,20);
   if(!/^[0-9]{6,18}$/.test(runId))return {ok:false,code:'INVALID_RUN_ID',status:400};
   const expectedSha=text(claims?.sha,50);
-  const githubToken=text(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  const githubToken=text(tenantEnv(tenant,'KOA_GITHUB_READ_TOKEN','GITHUB_READ_TOKEN'),500);
   if(!githubToken)return {ok:false,code:'GITHUB_VERIFICATION_UNAVAILABLE',status:503};
   try{
     const [main,run,jobsResponse]=await Promise.all([
@@ -34,12 +38,12 @@ export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unkn
     }
     const failures=failedProductionQaJobs(run,jobsResponse?.jobs);
     if(!failures.length)return {ok:true,alerted:false,code:'NO_DECISIVE_PRODUCTION_JOB_FAILURE'};
-    const store=controlPlaneStore(STORE);
-    const key='sent/'+runId;
+    const store=tenantStoreFor(context,tenant,'systemHealth');
+    const key=STORE+'/sent/'+runId;
     const prior:any=await store.get(key,{type:'json'});
     if(prior?.status==='sent')return {ok:true,alerted:false,code:'ALREADY_SENT'};
-    const resendKey=text(Netlify.env.get('RESEND_API_KEY'),500);
-    const recipients=(text(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS')||Netlify.env.get('KOA_LEAD_EMAIL_TO')||'chris@sibel.org',500))
+    const resendKey=text(tenantEnv(tenant,'RESEND_API_KEY'),500);
+    const recipients=(text(tenantEnv(tenant,'HEALTH_ALERT_EMAILS','KOA_HEALTH_ALERT_EMAILS')||tenantEnv(tenant,'LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO')||'chris@sibel.org',500))
       .split(',').map(v=>v.trim()).filter(v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
     if(!resendKey||!recipients.length)return {ok:false,code:'EMAIL_CHANNEL_UNAVAILABLE',status:503};
     const runUrl='https://github.com/'+REPO+'/actions/runs/'+runId;
@@ -59,7 +63,7 @@ export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unkn
         'Idempotency-Key':'koa-production-qa-failure-'+runId,
       },
       body:JSON.stringify({
-        from:text(Netlify.env.get('KOA_HEALTH_ALERT_FROM')||Netlify.env.get('KOA_LEAD_EMAIL_FROM')||'Koa’s Events <leads@koasevents.com>',240),
+        from:text(tenantEnv(tenant,'HEALTH_ALERT_FROM','KOA_HEALTH_ALERT_FROM')||tenantEnv(tenant,'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM')||'Koa’s Events <leads@koasevents.com>',240),
         to:recipients,
         subject:'Koa’s Events: production QA failure — run #'+runId,
         text:lines.join('\n'),
