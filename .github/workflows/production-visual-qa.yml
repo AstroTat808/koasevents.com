@@ -90,6 +90,7 @@ jobs:
         run: |
           node scripts/test_production_monitoring_overview.mjs
           node scripts/test_production_certification_trigger.mjs
+          node scripts/test_production_qa_failure_alert.mjs
       - name: Structural build-safety gate
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
