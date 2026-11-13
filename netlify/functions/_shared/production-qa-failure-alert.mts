@@ -1,4 +1,3 @@
-import type { Context } from '@netlify/functions';
 import { controlPlaneStore } from './tenant-storage';
 import { failedProductionQaJobs,validProductionQaFailureRun } from './production-qa-failure-policy.mjs';
 
@@ -13,7 +12,7 @@ async function ghGet(token:string,path:string){
   if(!response.ok)throw new Error('GitHub API verification failed');
   return response.json();
 }
-export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unknown,context:Context){
+export async function sendVerifiedProductionQaFailure(claims:any,runIdInput:unknown){
   if(String(claims?.event_name||'')!=='workflow_run'
      || !String(claims?.workflow_ref||'').includes('/.github/workflows/notify-production-qa-failures.yml@refs/heads/main')){
     return {ok:false,code:'INVALID_NOTIFICATION_WORKFLOW',status:403};
