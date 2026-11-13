@@ -23,5 +23,7 @@ assert.match(handler,/if\(!token\)/);
 assert.match(handler,/eligibleProductionDeploy/);
 assert.match(handler,/Idempotency-Key/);
 assert.match(handler,/deploySucceeded/);
+assert.match(handler,/tenantStoreFor\(undefined,resolveTenant\(\),'systemHealth'\)/);
+assert.match(handler,/tenantEnv\(resolveTenant\(\),key\)/);
 assert.match(handler,/deployFailed/);
 console.log('Exact-main post-deploy certification and failure alert guard: PASS');
