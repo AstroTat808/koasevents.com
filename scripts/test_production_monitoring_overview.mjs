@@ -35,6 +35,14 @@ const missingEvidence = summarizeProductionMonitoring({
 },now);
 assert.equal(missingEvidence.release.state,'unknown');
 assert.equal(missingEvidence.deployment.state,'unknown');
+const unknownDeployState = summarizeProductionMonitoring({
+  ...good, deployments:{...good.deployments,current:{...good.deployments.current,deployStatus:''}}
+},now);
+assert.equal(unknownDeployState.deployment.state,'unknown','Unknown deploy state must not read as healthy');
+const missingQaCommit = summarizeProductionMonitoring({
+  ...good, deployments:{...good.deployments,latestQaForCurrentDeploy:{conclusion:'success'}}
+},now);
+assert.notEqual(missingQaCommit.release.state,'healthy','Unbound QA evidence cannot certify a release');
 const failure = summarizeProductionMonitoring({
   ...good,deployments:{...good.deployments,deploymentHealthy:false,latestQaForCurrentDeploy:{...good.deployments.latestQaForCurrentDeploy,conclusion:'failure'}},
   visualQuality:{...good.visualQuality,status:'failed',chromium:{failureCount:1},webkit:{failureCount:0}}
