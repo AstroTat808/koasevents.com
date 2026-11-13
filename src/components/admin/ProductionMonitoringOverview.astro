@@ -49,6 +49,7 @@
     el.className = 'mt-2 block text-sm font-semibold ' + (styles[item?.state] || styles.unknown);
   };
   window.addEventListener('koa:production-monitoring', (event) => {
+    if (!(event instanceof CustomEvent)) return;
     const data = event.detail || {};
     renderField('[data-prod-health]', data.health);
     renderField('[data-prod-deploy]', data.deployment);
