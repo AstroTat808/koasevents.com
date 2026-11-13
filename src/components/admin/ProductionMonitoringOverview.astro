@@ -1,0 +1,72 @@
+<section data-production-monitoring-overview class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]" aria-label="Production monitoring overview">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <p class="eyebrow text-[var(--koa-clay)]">Production operations</p>
+      <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Monitoring at a glance</h2>
+      <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/60">A consolidated view of protected health checks, exact-deploy certification, browser quality, and Image CDN coverage. Unknown is never presented as passing.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="https://app.netlify.com/projects/koasevents-website" target="_blank" rel="noopener noreferrer" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-semibold text-[var(--koa-forest)] hover:underline">Netlify</a>
+      <a href="https://github.com/AstroTat808/koasevents.com/actions/workflows/production-visual-qa.yml" target="_blank" rel="noopener noreferrer" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-semibold text-[var(--koa-forest)] hover:underline">Production QA runs</a>
+    </div>
+  </div>
+  <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <article class="rounded-xl bg-[var(--koa-ivory)] p-4" aria-live="polite">
+      <p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">System Health</p>
+      <strong data-prod-health class="mt-2 block text-sm font-semibold text-slate-700">Awaiting evidence</strong>
+      <p data-prod-health-meta class="mt-2 text-xs text-[var(--koa-ink)]/55">Protected health snapshot</p>
+    </article>
+    <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+      <p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Production deploy</p>
+      <strong data-prod-deploy class="mt-2 block text-sm font-semibold text-slate-700">Awaiting evidence</strong>
+      <p data-prod-deploy-meta class="mt-2 break-all font-mono text-[.64rem] text-[var(--koa-ink)]/55">Deploy / SHA unavailable</p>
+    </article>
+    <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+      <p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Signed release gate</p>
+      <strong data-prod-release class="mt-2 block text-sm font-semibold text-slate-700">Awaiting evidence</strong>
+      <p data-prod-release-meta class="mt-2 text-xs text-[var(--koa-ink)]/55">Exact-deploy attestation</p>
+    </article>
+    <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+      <p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Browser QA</p>
+      <strong data-prod-browser class="mt-2 block text-sm font-semibold text-slate-700">Awaiting evidence</strong>
+      <p data-prod-browser-meta class="mt-2 text-xs text-[var(--koa-ink)]/55">Chromium / WebKit · all themes</p>
+    </article>
+    <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+      <p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Image CDN 5xx</p>
+      <strong class="mt-2 block text-sm font-semibold text-amber-800">External edge watch</strong>
+      <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Hourly incident detection runs separately. View actual Netlify logs for asset-level counts; this tile does not imply zero errors.</p>
+    </article>
+  </div>
+</section>
+
+<script>
+  const root = document.querySelector('[data-production-monitoring-overview]');
+  const styles = { healthy:'text-emerald-800', failed:'text-red-800', unknown:'text-amber-800', external:'text-slate-700' };
+  const renderField = (selector, item) => {
+    const el = root?.querySelector(selector);
+    if (!(el instanceof HTMLElement)) return;
+    el.textContent = String(item?.label || 'Unavailable');
+    el.className = 'mt-2 block text-sm font-semibold ' + (styles[item?.state] || styles.unknown);
+  };
+  window.addEventListener('koa:production-monitoring', (event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const data = event.detail || {};
+    renderField('[data-prod-health]', data.health);
+    renderField('[data-prod-deploy]', data.deployment);
+    renderField('[data-prod-release]', data.release);
+    renderField('[data-prod-browser]', data.browsers);
+    const set = (selector, text) => {
+      const el = root?.querySelector(selector);
+      if(el) el.textContent = String(text);
+    };
+    set('[data-prod-health-meta]', data.health?.lastChecked
+      ? 'Checked ' + new Date(data.health.lastChecked).toLocaleString() + ' · ' + Number(data.health.confirmedIssues || 0) + ' confirmed alerts'
+      : 'No current health snapshot');
+    set('[data-prod-deploy-meta]', data.deployment?.deployId
+      ? String(data.deployment.deployId) + ' · ' + String(data.deployment.commit || 'SHA unverified').slice(0,12)
+      : 'Deploy ID unavailable');
+    set('[data-prod-release-meta]', data.release?.runId ? 'Run #' + String(data.release.runId) : 'Signed attestation required');
+    set('[data-prod-browser-meta]', data.browsers?.failures == null
+      ? 'Current deploy evidence unavailable' : String(data.browsers.failures) + ' browser failures');
+  });
+</script>

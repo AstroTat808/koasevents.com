@@ -31,17 +31,22 @@ requireMatch(
   !section.includes('current.get("failed")<'),
   'Never dilute the exact zero-failure release gate');
 
-// Certified production status must never be published by a scheduled run
-// before durable release history and signed PDF/JSON evidence are verified.
-const signedMainGate="(github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'";
+// Certified status must never be published before durable release history
+// and signed PDF/JSON evidence are verified. An explicitly dispatched run may
+// certify ONLY the canonical production URL; never a staging/alternate target.
+const signedMainGate="(github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.base_url == 'https://koasevents.com')) && github.ref == 'refs/heads/main'";
+requireMatch(signedMainGate.includes("inputs.base_url == 'https://koasevents.com'"),
+  'Manual release certification must be restricted to the canonical production URL');
+requireMatch(!workflow.includes("github.event_name == 'workflow_dispatch') && github.ref"),
+  'Do not permit unguarded manual workflow dispatch to certify an alternate base URL');
 const certifiedStep=workflow.indexOf('      - name: Publish certified production gate after durable attestation and export bytes');
 const historyStep=workflow.indexOf('      - name: Persist certified release attestation history');
 const bytesStep=workflow.indexOf('      - name: Verify actual certified PDF and JSON serializer bytes');
 const decisionStep=workflow.indexOf('      - name: Publish final fail-closed production release status');
 requireMatch(workflow.includes('    if: always() && '+signedMainGate),
-  'Signed final gate must run for main push/schedule but never untrusted alternate URLs');
+  'Signed final gate must run for main push/schedule/canonical-production dispatch only');
 requireMatch(workflow.includes('    name: Mark production release pending\n    if: '+signedMainGate),
-  'Main push/schedule must mark release pending');
+  'Canonical production push/schedule/dispatch must mark release pending');
 requireMatch(decisionStep>=0 && decisionStep<historyStep && historyStep<bytesStep && bytesStep<certifiedStep,
   'Release gate success must be published only after durable history and PDF/JSON byte verification');
 const preCertification=workflow.slice(decisionStep,historyStep);

@@ -1,0 +1,67 @@
+name: Certify Netlify production deployment
+
+# The Netlify platform handler is the primary trigger (using a separately
+# scoped Actions dispatch credential). This observes GitHub deployments as an
+# independent, credential-free fallback when Netlify publishes deployment
+# statuses to GitHub.
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: koa-netlify-certify-${{ github.event.deployment.sha }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch-exact-main-certification:
+    name: Dispatch signed exact-main production QA
+    if: github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify production Netlify identity and exact current main SHA
+        id: eligible
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha' > /tmp/koa-current-main-sha
+          python - <<'PY'
+          import json, os
+          from urllib.parse import urlparse
+          event = json.load(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8'))
+          deployment = event.get('deployment') or {}
+          status = event.get('deployment_status') or {}
+          environment = str(deployment.get('environment') or '').strip().lower()
+          deployed_sha = str(deployment.get('sha') or '').strip().lower()
+          current_main = open('/tmp/koa-current-main-sha', encoding='utf-8').read().strip()
+          urls = [status.get('target_url'), status.get('environment_url')]
+          hosts = [(urlparse(str(url)).hostname or '').lower() for url in urls if url]
+          # Permit the known production domain and Netlify-owned deployment
+          # evidence only; never dispatch on staging or third-party statuses.
+          netlify_host = any(host in ('app.netlify.com', 'koasevents.com')
+                             or host.endswith('.netlify.app') for host in hosts)
+          eligible = (
+            environment == 'production'
+            and status.get('state') == 'success'
+            and len(current_main) == 40
+            and deployed_sha == current_main
+            and netlify_host
+          )
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+            output.write('eligible=' + str(eligible).lower() + '\n')
+          print('Deployment status eligible for exact-main certification:', eligible)
+          PY
+
+      - name: Dispatch full Chromium and WebKit signed production certification
+        if: steps.eligible.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run production-visual-qa.yml --repo "${GITHUB_REPOSITORY}" --ref main
+          echo 'Exact-main Production visual QA workflow dispatch accepted.'

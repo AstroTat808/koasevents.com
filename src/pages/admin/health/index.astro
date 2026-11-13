@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
+import ProductionMonitoringOverview from '../../../components/admin/ProductionMonitoringOverview.astro';
 ---
 <BaseLayout noindex title="Koa’s Admin Health" description="System health, monitoring, and deployment history for Koa’s protected workspaces." canonical="https://koasevents.com/admin/health/">
   <main data-system-health-page class="min-h-screen bg-[var(--koa-sand)] py-12">
@@ -33,6 +34,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
       </div>
 
       <div data-app class="mt-8 hidden grid gap-6">
+        <ProductionMonitoringOverview />
         <section data-health-summary-grid class="health-summary-grid grid gap-4">
           <article data-overall-card class="health-summary-card health-summary-card--overall rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg">
             <button data-overall-action type="button" class="block w-full text-left focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)] disabled:cursor-default" aria-label="Show health issues">
@@ -1204,6 +1206,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
 
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
+    import { summarizeProductionMonitoring } from '../../../lib/production-monitoring-overview.mjs';
 
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -1747,6 +1750,7 @@ import GalleryCropHealth from '../../../components/GalleryCropHealth.astro';
       let unexpectedRenderFailure=false;
       try{
         render(payload||{});
+        window.dispatchEvent(new CustomEvent('koa:production-monitoring',{detail:summarizeProductionMonitoring(payload||{})}));
       }catch(error){
         console.error('[system-health] '+source+' detail rendering failed in '+currentDashboardRenderPanel+':',error);
         if(!payload?.current)throw error;

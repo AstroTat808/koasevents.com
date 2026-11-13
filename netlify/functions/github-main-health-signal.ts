@@ -27,6 +27,7 @@ import { isSuccessfulNetlifyState, productionDeployMatchesAttestation, productio
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { auditLiveCrmReadOnly } from './_shared/crm-readonly-production-source.mjs';
 import { runBrandedEmailProductionVerification } from './_shared/email-health';
+import { sendVerifiedProductionQaFailure } from './_shared/production-qa-failure-alert.mts';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -445,6 +446,14 @@ export default async (req:Request,context:Context) => {
 
   try{
     const claims:any=await verifyGithubOidc(token);
+    const body:any=await req.json().catch(()=>({}));
+    // A failure notification is not a production QA attestation. Do not
+    // overwrite durable GitHub main health identity with notifier metadata.
+    if(body?.action==='notify-production-qa-failure'){
+      const tenant=await resolveTenantAsync(req,context);
+      const notification=await runWithTenant(tenant,()=>sendVerifiedProductionQaFailure(claims,body?.runId,context));
+      return Response.json(notification,{status:notification.status||200,headers:{'Cache-Control':'no-store'}});
+    }
     const result=await recordGithubMainSignal(context,{
       sha:String(claims.sha||''),
       repository:String(claims.repository||''),
@@ -457,8 +466,6 @@ export default async (req:Request,context:Context) => {
       reportedAt:new Date().toISOString(),
       source:'github-actions-oidc',
     });
-
-    const body:any=await req.json().catch(()=>({}));
 
     if(body?.action==='verify-controlled-inline-email-logo'){
       let serving:null|{sha:string;deployId:string}=null;

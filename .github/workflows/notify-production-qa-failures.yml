@@ -1,0 +1,54 @@
+name: Production QA failure notifications
+
+# Event-native failure-only notification, complementing the hourly edge watch.
+# Running on the default branch is required for GitHub workflow_run events.
+on:
+  workflow_run:
+    workflows: ["Production visual QA"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  notify-production-failure:
+    name: Notify verified exact-main QA failure
+    if: >-
+      github.event.workflow_run.status == 'completed'
+      && github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.head_branch == 'main'
+      && github.event.workflow_run.event != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Submit OIDC-verified failed production run ID
+        env:
+          QA_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          python - <<'PY'
+          import json,os
+          with open('/tmp/koa-qa-failed-run.json','w',encoding='utf-8') as stream:
+            json.dump({'action':'notify-production-qa-failure','runId':os.environ['QA_RUN_ID']},stream)
+          PY
+          result="$(curl -sS --connect-timeout 10 --max-time 40 -w '%{http_code}' \
+            -o /tmp/koa-qa-failure-notifier-response.json \
+            -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-qa-failed-run.json \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          if [ "$result" != "200" ]; then
+            echo "::error::Verified production QA failure notification could not be delivered (HTTP $result)."
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          payload=json.load(open('/tmp/koa-qa-failure-notifier-response.json',encoding='utf-8'))
+          assert payload.get('ok') is True, 'Fail-closed notification endpoint rejected the run'
+          print('Production failure notification status:',payload.get('code') or 'delivered')
+          PY
