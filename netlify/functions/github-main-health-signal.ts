@@ -27,6 +27,7 @@ import { isSuccessfulNetlifyState, productionDeployMatchesAttestation, productio
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { auditLiveCrmReadOnly } from './_shared/crm-readonly-production-source.mjs';
 import { runBrandedEmailProductionVerification } from './_shared/email-health';
+import { sendVerifiedProductionQaFailure } from './_shared/production-qa-failure-alert.mts';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -459,6 +460,11 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='notify-production-qa-failure'){
+      const notification=await sendVerifiedProductionQaFailure(claims,body?.runId);
+      return Response.json(notification,{status:notification.status||200,headers:{'Cache-Control':'no-store'}});
+    }
 
     if(body?.action==='verify-controlled-inline-email-logo'){
       let serving:null|{sha:string;deployId:string}=null;
