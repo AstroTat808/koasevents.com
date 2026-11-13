@@ -26,7 +26,7 @@ export function summarizeProductionMonitoring(data = {}, now = Date.now()) {
   const healthLabel = !fresh ? 'Snapshot unavailable or stale' : healthOk
     ? 'Healthy · 0 failed checks' : 'Attention · ' + Number(current.failed || 0) + ' failed checks';
   const qaConclusion = status(qa.conclusion);
-  const qaExact = exactMain && (!qa.commit || sha(qa.commit) === publishedSha)
+  const qaExact = exactMain && sha(qa.commit) === publishedSha
     && (!qa.deployId || short(qa.deployId, 80) === deployId);
   const certified = Boolean(exactMain && deployments.deploymentHealthy === true
     && qaExact && qaConclusion === 'success');
@@ -50,8 +50,9 @@ export function summarizeProductionMonitoring(data = {}, now = Date.now()) {
   return Object.freeze({
     health: { state: healthState, label: healthLabel, confirmedIssues, lastChecked },
     deployment: {
-      state: exactMain && status(published.deployStatus) !== 'failed' ? 'healthy' : 'unknown',
-      label: exactMain ? 'Production matches main' : 'Exact production/main match unverified',
+      state: exactMain && ['ready','current','published'].includes(status(published.deployStatus)) ? 'healthy' : 'unknown',
+      label: exactMain && ['ready','current','published'].includes(status(published.deployStatus))
+        ? 'Production matches main' : 'Published production/main match unverified',
       deployId, commit: publishedSha, mainSha,
     },
     release: { state: releaseState, label: releaseLabel, runId: short(qa.runId || qa.id, 36) },
