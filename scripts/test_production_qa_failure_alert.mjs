@@ -25,6 +25,9 @@ const workflow=readFileSync('.github/workflows/notify-production-qa-failures.yml
 assert.match(entry,/notify-production-qa-failure/);
 assert.match(handler,/claims\?\.event_name/);
 assert.match(handler,/KOA_GITHUB_READ_TOKEN/);
+assert.match(handler,/tenantEnv\(tenant,'RESEND_API_KEY'\)/);
+assert.match(handler,/tenantStoreFor\(context,tenant,'systemHealth'\)/);
+assert.doesNotMatch(handler,/Netlify\.env\.get\('RESEND_API_KEY'\)/);
 assert.match(handler,/Idempotency-Key/);
 assert.match(workflow,/workflow_run:/);
 assert.match(workflow,/id-token: write/);
