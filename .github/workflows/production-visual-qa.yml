@@ -36,7 +36,7 @@ env:
 jobs:
   release-status-pending:
     name: Mark production release pending
-    if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.base_url == 'https://koasevents.com')) && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - name: Publish fail-closed pending status
@@ -86,6 +86,10 @@ jobs:
         run: python scripts/test_sanitized_protected_admin_qa.py
       - name: Verify narrowly scoped Cloudflare frame-noise classification
         run: python scripts/test_health_browser_frame_errors.py
+      - name: Verify consolidated production monitoring status and exact-main trigger policy
+        run: |
+          node scripts/test_production_monitoring_overview.mjs
+          node scripts/test_production_certification_trigger.mjs
       - name: Structural build-safety gate
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
@@ -532,7 +536,7 @@ jobs:
           rm -f "$verification_file"
           test "$http_status" = "200"
       - name: Verify live uncertified PDF and JSON exports are rejected
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.base_url == 'https://koasevents.com')) && github.ref == 'refs/heads/main'
         run: node scripts/verify_live_certified_export_rejections.mjs
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
@@ -1070,7 +1074,7 @@ jobs:
         run: node scripts/publish_responsive_release_evidence.mjs
   production-release-attestation:
     name: Final production release attestation
-    if: always() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.base_url == 'https://koasevents.com')) && github.ref == 'refs/heads/main'
     needs:
       - release-status-pending
       - source-build-audit
