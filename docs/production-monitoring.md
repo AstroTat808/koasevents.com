@@ -66,11 +66,26 @@ only deploy ID, commit, timestamp and Netlify project link and is idempotent
 per deploy ID. Never include provider error text, tokens, raw request logs,
 customer information or IP addresses.
 
-Browser QA and signed release gate failures are currently notified through
-existing System Health transitions and the hourly ChatGPT failure watch.
-These are **not instantaneous**; an event-native GitHub failure channel
-would require a separately approved notification integration. Do not claim
-an instant GitHub failure push exists until it is verified.
+**Completed GitHub production QA failures:** A separate
+`notify-production-qa-failures.yml` GitHub `workflow_run` trigger sends an
+OIDC-signed failure notification to the existing protected
+`/api/system-health/github-main-signal` endpoint. The server independently
+verifies that (1) the alerting workflow is the approved notifier on `main`,
+(2) the referenced production QA workflow is `completed` and `failure`,
+(3) its exact SHA equals GitHub's current `main`, (4) the failing job is a
+decisive production gate, and (5) manually dispatched runs exercised the
+canonical production gate instead of an alternate URL. The notifier sends a
+sanitized Resend email with SHA, failing jobs, run ID and evidence links.
+Delivery is idempotent by run ID and only occurs on confirmed failures.
+Stale, queued, cancelled, PR, and known replayed incidents are suppressed.
+This event-native path uses the site's existing `KOA_GITHUB_READ_TOKEN` and
+`RESEND_API_KEY`, not a GitHub email secret. Verify a real failed workflow
+event in production before considering it fully activated.
+
+Hourly Netlify **Image CDN edge 5xx** still uses the separate connected
+observability monitor, not real-time streaming or a public Netlify API;
+polling can take up to one hour to recognize a threshold. The dashboard
+truthfully labels this external dependency rather than inventing zero counts.
 
 ## Release safeguards
 
