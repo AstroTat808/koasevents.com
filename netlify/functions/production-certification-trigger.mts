@@ -1,6 +1,6 @@
 import type { DeploySucceededEvent, DeployFailedEvent } from '@netlify/functions';
 import { tenantStoreFor } from './_shared/tenant-storage';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { eligibleProductionDeploy, sanitizedDeployFailure, KoaRepo } from './_shared/production-certification-trigger.mjs';
 
@@ -101,7 +101,20 @@ async function dispatchCertifiedQa(event:DeploySucceededEvent){
     console.error('[production cert] production QA dispatch unavailable: '+message);
   }
 }
+// Netlify deploy lifecycle events have no incoming Request to authenticate.
+// Resolve this site's canonical hostname before any tenant-owned secret or
+// Blob access; never fan out a Koa deployment event across other tenants.
+async function withKoaEventTenant<T>(job:()=>Promise<T>):Promise<T>{
+  const tenant=await resolveTenantAsync(new Request('https://koasevents.com/'));
+  return runWithTenant(tenant,job);
+}
 export default {
-  async deploySucceeded(event:DeploySucceededEvent){await dispatchCertifiedQa(event);},
-  async deployFailed(event:DeployFailedEvent){await sendDeployFailureAlert(event);},
+  async deploySucceeded(event:DeploySucceededEvent){
+    if(String(event.deploy.context||'')!=='production')return;
+    await withKoaEventTenant(()=>dispatchCertifiedQa(event));
+  },
+  async deployFailed(event:DeployFailedEvent){
+    if(String(event.deploy.context||'')!=='production')return;
+    await withKoaEventTenant(()=>sendDeployFailureAlert(event));
+  },
 };
