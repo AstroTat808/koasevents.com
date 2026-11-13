@@ -462,7 +462,8 @@ export default async (req:Request,context:Context) => {
     const body:any=await req.json().catch(()=>({}));
 
     if(body?.action==='notify-production-qa-failure'){
-      const notification=await sendVerifiedProductionQaFailure(claims,body?.runId);
+      const tenant=await resolveTenantAsync(req,context);
+      const notification=await runWithTenant(tenant,()=>sendVerifiedProductionQaFailure(claims,body?.runId,context));
       return Response.json(notification,{status:notification.status||200,headers:{'Cache-Control':'no-store'}});
     }
 
