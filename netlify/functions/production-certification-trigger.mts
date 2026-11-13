@@ -1,10 +1,12 @@
 import type { DeploySucceededEvent, DeployFailedEvent } from '@netlify/functions';
-import { controlPlaneStore } from './_shared/tenant-storage';
+import { tenantStoreFor } from './_shared/tenant-storage';
+import { resolveTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
 import { eligibleProductionDeploy, sanitizedDeployFailure, KoaRepo } from './_shared/production-certification-trigger.mjs';
 
 const storeName='koa-production-certification-dispatch';
 const ghApi='https://api.github.com/repos/'+KoaRepo;
-function env(key:string){return String(Netlify.env.get(key)||'').trim();}
+function env(key:string){return String(tenantEnv(resolveTenant(),key)||'').trim();}
 function safeId(value:unknown){return String(value||'').trim().slice(0,100);}
 function headers(token:string){return {
   Authorization:'Bearer '+token,
@@ -68,8 +70,8 @@ async function dispatchCertifiedQa(event:DeploySucceededEvent){
   const deployId=safeId(event.deploy.id);
   const commitRef=safeId(event.deploy.commitRef);
   if(!/^[a-z0-9]{12,80}$/i.test(deployId)||!/^[0-9a-f]{40}$/.test(commitRef))return;
-  const store=controlPlaneStore(storeName);
-  const key='triggered/'+deployId;
+  const store=tenantStoreFor(undefined,resolveTenant(),'systemHealth');
+  const key=storeName+'/triggered/'+deployId;
   try{
     const prior:any=await store.get(key,{type:'json'});
     if(prior?.status==='dispatched')return;
